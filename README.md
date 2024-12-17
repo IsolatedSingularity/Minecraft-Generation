@@ -65,60 +65,33 @@ where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturba
   <summary><i>Village Distribution Python Function</i></summary>
 
 ```python
-#%% Village distribution and biome suitability [Overworld] - 차단하다
+# Define region parameters
+worldCoordinateRange = 10000  # (-10,000 to 10,000)
+regionBlockSize = 512  # Each region is 512x512 blocks
+numberOfRegionsPerAxis = worldCoordinateRange * 2 // regionBlockSize
 
-
-# Create figure and axes
-figureVillage, axesVillage = plt.subplots(figsize=(12, 12))
-axesVillage.set_facecolor(backgroundColor)
-figureVillage.patch.set_facecolor(backgroundColor)
-
-# Define world and region parameters
-worldCoordinateRange = 10000  # Total coordinate range for the world (-10,000 to 10,000)
-regionBlockSize = 512  # Size of each region in blocks (32x32 chunks)
-numberOfRegionsPerAxis = worldCoordinateRange * 2 // regionBlockSize  # Number of regions along one axis
-
-# Generate village positions with reduced density (one per region)
+# Initialize village positions
 villageXPositions = []
 villageZPositions = []
 
+# Generate villages
 for xRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
     for zRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
-        # Calculate the center of the current region
-        regionCenterX = xRegion * regionBlockSize + regionBlockSize // 2
-        regionCenterZ = zRegion * regionBlockSize + regionBlockSize // 2
+        centerX = xRegion * regionBlockSize + regionBlockSize // 2
+        centerZ = zRegion * regionBlockSize + regionBlockSize // 2
 
-        # Randomly decide if a village will spawn in this region (e.g., 40% chance)
-        if np.random.rand() < 0.4:  # Adjust probability as needed
-            villageXPositions.append(regionCenterX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
-            villageZPositions.append(regionCenterZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+        if np.random.rand() < 0.4:  # 40% spawn chance
+            villageXPositions.append(centerX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+            villageZPositions.append(centerZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
 
-# Generate biome suitability values (random for demonstration)
-biomeSuitabilityArray = np.random.rand(len(villageXPositions))
+# Compute biome suitability
+biomeSuitability = np.random.rand(len(villageXPositions))
 
-# Plot villages with BuPu colormap
-scatterPlot = axesVillage.scatter(villageXPositions, villageZPositions,
-                                  c=biomeSuitabilityArray,
-                                  cmap='BuPu',
-                                  alpha=0.6)
-
-# Customize axes appearance
-axesVillage.set_xlim(-worldCoordinateRange, worldCoordinateRange)
-axesVillage.set_ylim(-worldCoordinateRange, worldCoordinateRange)
-axesVillage.set_title('Village Distribution in the Overworld', color=textFontColor, pad=20)
-axesVillage.set_xlabel('X Coordinate', color=textFontColor)
-axesVillage.set_ylabel('Z Coordinate', color=textFontColor)
-axesVillage.grid(True, color=gridLineColor, linestyle='--', alpha=0.5)
-
-# Add colorbar
-colorBar = plt.colorbar(scatterPlot)
-colorBar.set_label('Biome Suitability', color=textFontColor)
-colorBar.ax.yaxis.set_tick_params(color=textFontColor)
-plt.setp(plt.getp(colorBar.ax.axes, 'yticklabels'), color=textFontColor)
-
-# Save plot to file with a generic download path
-plt.tight_layout()
-plt.savefig(os.path.join(downloadPath, "village_distribution.png"), dpi=1000, bbox_inches="tight", facecolor=backgroundColor)
+# Visualize village positions
+plt.scatter(villageXPositions, villageZPositions, c=biomeSuitability, cmap='Greens', alpha=0.6)
+plt.title("Village Distribution with Biome Suitability")
+plt.xlabel("X Coordinate")
+plt.ylabel("Z Coordinate")
 plt.show()
 ```
 
