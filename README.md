@@ -1,5 +1,5 @@
 # Minecraft Procedural Generation and Entity Pathing Analysis
-###### Collaborations and References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), community discussions on [Reddit](https://www.reddit.com/r/Minecraft/), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
+###### Collaborations and References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
 
 ![Ender Dragon Path](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/ender_dragon_pathing_graph_adjusted.png?raw=true)
 
@@ -11,8 +11,6 @@ This repository provides a deep exploration of Minecraft's procedural world gene
 2. **Stronghold Distribution in Rings:** Model strongholds placed in concentric rings around the origin. Randomize angular and radial positions to emulate in-game noise, while respecting the known ring parameters.
 
 3. **Ender Dragon Pathing Visualization:** Model the Ender Dragon's movement as a graph traversal problem. Nodes represent key positions (fountain, pillars, and center nodes), while edges encode flight path probabilities. Adjust node colors to visualize distances from the fountain.
-
-4. **Noise-Based Biome Mapping:** Implement temperature and humidity fields using Perlin-like sine/cosine functions. Threshold values determine biome suitability for villages, producing realistic transitions and fragmentation.
 
 Each feature is visualized and mathematically formalized, providing detailed insights into Minecraft’s world generation mechanics.
 
@@ -51,7 +49,6 @@ The following sections describe the implemented functions in great detail, with 
 
 ### 1. **Village Distribution with Biome Suitability**
 
-**Description:**
 This function generates a spatial distribution of villages across a procedurally generated Minecraft-like world. The world is divided into 32x32 chunk regions (each chunk spanning 512x512 blocks). A central point for each region is computed, and villages are spawned probabilistically, ensuring that only biomes with high suitability values allow village generation. 
 
 Biome suitability values are derived from noise-based temperature $$T(x,z)$$ and humidity $$H(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
@@ -105,7 +102,6 @@ plt.show()
 
 ### 2. **Stronghold Distribution in Rings**
 
-**Description:**
 Strongholds in Minecraft are placed in concentric rings centered around the origin. Each ring contains a specific number of strongholds, and their positions are determined based on polar coordinates. The algorithm generates strongholds by sampling their angular positions (with slight randomness) and radial distances within the bounds of each ring.
 
 This approach models Minecraft's behavior closely by respecting the ring radii while introducing randomness to emulate procedural generation. The use of polar coordinates simplifies the calculation of positions and ensures that the strongholds are distributed naturally within their respective rings.
@@ -150,7 +146,6 @@ plt.show()
 
 ### 3. **Ender Dragon Pathing Graph**
 
-**Description:**
 The Ender Dragon's movement in the End is modeled as a graph traversal problem. Nodes in the graph represent key positions, including the central fountain and the tops of the obsidian pillars that surround it. Each node is connected to the fountain by edges, which correspond to possible flight paths the dragon can take.
 
 Edges in the graph have probabilities proportional to the inverse degree of the connected vertices:
