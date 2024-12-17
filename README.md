@@ -12,8 +12,6 @@ This repository provides a deep exploration of Minecraft's procedural world gene
 
 3. **Ender Dragon Pathing Visualization:** Model the Ender Dragon's movement as a graph traversal problem. Nodes represent key positions (fountain, pillars, and center nodes), while edges encode flight path probabilities. Adjust node colors to visualize distances from the fountain.
 
-4. **Noise-Based Biome Mapping:** Implement temperature and humidity fields using Perlin-like sine/cosine functions. Threshold values determine biome suitability for villages, producing realistic transitions and fragmentation.
-
 Each feature is visualized and mathematically formalized, providing detailed insights into Minecraft’s world generation mechanics.
 
 ---
@@ -57,9 +55,7 @@ This function generates a spatial distribution of villages across a procedurally
 Biome suitability values are derived from noise-based temperature $$\mathcal{T}(x,z)$$ and humidity $$\mathcal{H}(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
 
 Mathematically:
-$$
-\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
-$$
+$$ \text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))$$
 
 where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
 
