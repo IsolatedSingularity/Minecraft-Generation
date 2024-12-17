@@ -54,9 +54,7 @@ This function generates a spatial distribution of villages across a procedurally
 Biome suitability values are derived from noise-based temperature $$T(x,z)$$ and humidity $$H(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
 
 Mathematically:
-$$
-\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
-$$
+$$ \text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta) $$
 
 where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
 
