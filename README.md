@@ -57,7 +57,9 @@ This function generates a spatial distribution of villages across a procedurally
 Biome suitability values are derived from noise-based temperature $$T(x,z)$$ and humidity $$H(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
 
 Mathematically:
-$$ \text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta)) $$
+$$
+\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
+$$
 
 where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
 
@@ -98,6 +100,51 @@ plt.show()
 
 **Output:**
 ![Village Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/village_distribution.png?raw=true)
+
+---
+
+### 2. **Stronghold Distribution in Rings**
+
+**Description:**
+Strongholds in Minecraft are placed in concentric rings centered around the origin. Each ring contains a specific number of strongholds, and their positions are determined based on polar coordinates. The algorithm generates strongholds by sampling their angular positions (with slight randomness) and radial distances within the bounds of each ring.
+
+This approach models Minecraft's behavior closely by respecting the ring radii while introducing randomness to emulate procedural generation. The use of polar coordinates simplifies the calculation of positions and ensures that the strongholds are distributed naturally within their respective rings.
+
+Mathematically:
+$$
+(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))
+$$
+
+where $$\theta$$ is sampled with a slight perturbation, and $$r$$ is uniformly sampled within each ring's radius bounds.
+
+<details>
+  <summary><i>Stronghold Ring Python Function</i></summary>
+
+```python
+# Ring definitions
+ringDefinitions = [
+    {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
+    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'},
+]
+
+# Generate strongholds
+for ring in ringDefinitions:
+    r_min, r_max = ring['radius']
+    count = ring['count']
+    angles = np.linspace(0, 2*np.pi, count, endpoint=False) + np.random.normal(0, np.pi/(count*2), count)
+    radii = np.random.uniform(r_min, r_max, count)
+    x_positions = radii * np.cos(angles)
+    z_positions = radii * np.sin(angles)
+
+    plt.scatter(x_positions, z_positions, color=ring['color'], s=100)
+
+plt.title("Stronghold Distribution in Rings")
+plt.show()
+```
+</details>
+
+**Output:**
+![Stronghold Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/stronghold_distribution.png?raw=true)
 
 ---
 
