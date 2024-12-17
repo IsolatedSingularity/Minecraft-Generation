@@ -64,7 +64,7 @@ where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturba
 <details>
   <summary><i>Village Distribution Python Function</i></summary>
 
-python
+```python
 #%% Village distribution and biome suitability [Overworld] - 차단하다
 
 
@@ -120,7 +120,7 @@ plt.setp(plt.getp(colorBar.ax.axes, 'yticklabels'), color=textFontColor)
 plt.tight_layout()
 plt.savefig(os.path.join(downloadPath, "village_distribution.png"), dpi=1000, bbox_inches="tight", facecolor=backgroundColor)
 plt.show()
-
+```
 
 
 </details>
@@ -145,7 +145,7 @@ where $$\theta$$ is sampled with a slight perturbation, and $$r$$ is uniformly s
 <details>
   <summary><i>Stronghold Ring Python Function</i></summary>
 
-python
+```python
 # Ring definitions
 ringDefinitions = [
     {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
@@ -165,7 +165,7 @@ for ring in ringDefinitions:
 
 plt.title("Stronghold Distribution in Rings")
 plt.show()
-
+```
 
 </details>
 
@@ -188,7 +188,7 @@ Node distances from the center (fountain) are visualized using a colormap, provi
 <details>
   <summary><i>Ender Dragon Path Python Function</i></summary>
 
-python
+```python
 # Define nodes
 outerNodeAngles = np.linspace(0, 2 * np.pi, 12, endpoint=False)
 outerNodes = [(100 * np.cos(a), 100 * np.sin(a)) for a in outerNodeAngles]
@@ -207,7 +207,7 @@ distances = [np.linalg.norm(node) for node in outerNodes]
 nx.draw(G, pos={n: n for n in G.nodes}, node_color=distances, cmap='cool', with_labels=False)
 plt.title("Ender Dragon Pathing Graph")
 plt.show()
-
+```
 
 </details>
 
