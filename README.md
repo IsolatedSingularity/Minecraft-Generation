@@ -24,11 +24,11 @@ Each feature is visualized and mathematically formalized, providing detailed ins
 We generate temperature $$T$$ and humidity $$H$$ fields using a combination of sine, cosine, and noise functions:
 
 $$
-T(x,z) = \sin\left(\frac{x}{3000}\right) + 0.5 \cos\left(\frac{z}{2000}\right) + 0.3 \sin\left(\frac{x+z}{1000}\right) + 0.2 \cos\left(\frac{x-z}{1500}\right) + \mathcal{N}(0,0.1)
+T(x,z) = \sin\left(\frac{x}{3000}\right) + 0.5 \cos\left(\frac{z}{2000}\right) + 0.3 \sin\left(\frac{x+z}{1000}\right) + \mathcal{N}(0,0.1)
 $$
 
 $$
-H(x,z) = \cos\left(\frac{x}{3500}\right) + 0.4 \sin\left(\frac{z}{2500}\right) + 0.3 \cos\left(\frac{x+2z}{1800}\right) + 0.2 \sin\left(\frac{2x-z}{1200}\right) + \mathcal{N}(0,0.1)
+H(x,z) = \cos\left(\frac{x}{3500}\right) + 0.4 \sin\left(\frac{z}{2500}\right) + \mathcal{N}(0,0.1)
 $$
 
 These fields are thresholded to assign biome suitability for villages:
@@ -52,20 +52,16 @@ The following sections describe the implemented functions in great detail, with 
 ### 1. **Village Distribution with Biome Suitability**
 
 **Description:**
-This function simulates village placement across a massive world region, ensuring villages appear only in suitable biomes. The world is divided into 32x32 chunk regions (512x512 blocks each). For each region:
+This function generates a spatial distribution of villages across a procedurally generated Minecraft-like world. The world is divided into 32x32 chunk regions (each chunk spanning 512x512 blocks). A central point for each region is computed, and villages are spawned probabilistically, ensuring that only biomes with high suitability values allow village generation. 
 
-- The center is calculated as the average position of the region's boundaries.
-- A probability threshold (e.g., 40%) determines if a village spawns.
-- Biome suitability is computed using pre-defined noise-based temperature/humidity fields.
-- Random perturbations are applied to village positions within each region to avoid overly regular patterns.
+Biome suitability values are derived from noise-based temperature $$T(x,z)$$ and humidity $$H(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
 
-Mathematically, suitability depends on thresholded $$T(x,z)$$ and $$H(x,z)$$, and village positions are generated based on the equations:
-
+Mathematically:
 $$
 \text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
 $$
 
-where $$x_r, z_r$$ are the region centers and $$\delta$$ represents random perturbations.
+where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
 
 <details>
   <summary><i>Village Distribution Python Function</i></summary>
@@ -83,19 +79,21 @@ villageZPositions = []
 # Generate villages
 for xRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
     for zRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
-        regionCenterX = xRegion * regionBlockSize + regionBlockSize // 2
-        regionCenterZ = zRegion * regionBlockSize + regionBlockSize // 2
+        centerX = xRegion * regionBlockSize + regionBlockSize // 2
+        centerZ = zRegion * regionBlockSize + regionBlockSize // 2
 
         if np.random.rand() < 0.4:  # 40% spawn chance
-            villageXPositions.append(regionCenterX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
-            villageZPositions.append(regionCenterZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+            villageXPositions.append(centerX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+            villageZPositions.append(centerZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
 
 # Compute biome suitability
 biomeSuitability = np.random.rand(len(villageXPositions))
 
-# Plot village positions
-plt.scatter(villageXPositions, villageZPositions, c=biomeSuitability, cmap='BuPu', alpha=0.6)
-plt.title("Village Distribution in the Overworld")
+# Visualize village positions
+plt.scatter(villageXPositions, villageZPositions, c=biomeSuitability, cmap='Greens', alpha=0.6)
+plt.title("Village Distribution with Biome Suitability")
+plt.xlabel("X Coordinate")
+plt.ylabel("Z Coordinate")
 plt.show()
 ```
 </details>
@@ -108,14 +106,16 @@ plt.show()
 ### 2. **Stronghold Distribution in Rings**
 
 **Description:**
-Strongholds generate in concentric rings centered at the world origin, with fixed counts and radii per ring. The positions are defined using polar coordinates:
+Strongholds in Minecraft generate in predefined concentric rings, centered around the world origin. Each ring contains a fixed number of strongholds, with positions randomized both radially and angularly to create natural variability. 
 
+This function mimics the generation process using polar coordinates. The radial positions are sampled uniformly within a given range, and angular positions are perturbed to introduce randomness. This ensures strongholds are well-distributed while avoiding overly symmetrical patterns. Such models are critical for analyzing stronghold accessibility and clustering effects.
+
+Mathematically:
 $$
 (r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))
 $$
 
-Radial positions are uniformly sampled within ring bounds, while angular positions are perturbed to add randomness:
-
+Angular perturbations are:
 $$
 \theta_i = \theta_i^{(0)} + \mathcal{N}(0, \sigma)
 $$
@@ -124,17 +124,16 @@ $$
   <summary><i>Stronghold Ring Python Function</i></summary>
 
 ```python
-# Ring definitions
-ringDefinitions = [
+# Define ring parameters
+rings = [
     {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
-    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'},
+    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'}
 ]
 
 # Generate strongholds
-for ring in ringDefinitions:
-    r_min, r_max = ring['radius']
-    count = ring['count']
-    angles = np.linspace(0, 2*np.pi, count, endpoint=False) + np.random.normal(0, np.pi/(count*2), count)
+for ring in rings:
+    r_min, r_max, count = ring['radius'][0], ring['radius'][1], ring['count']
+    angles = np.linspace(0, 2 * np.pi, count, endpoint=False) + np.random.normal(0, np.pi / count, count)
     radii = np.random.uniform(r_min, r_max, count)
     x_positions = radii * np.cos(angles)
     z_positions = radii * np.sin(angles)
@@ -142,6 +141,8 @@ for ring in ringDefinitions:
     plt.scatter(x_positions, z_positions, color=ring['color'], s=100)
 
 plt.title("Stronghold Distribution in Rings")
+plt.xlabel("X Coordinate")
+plt.ylabel("Z Coordinate")
 plt.show()
 ```
 </details>
@@ -154,8 +155,9 @@ plt.show()
 ### 3. **Ender Dragon Pathing Graph**
 
 **Description:**
-The Ender Dragon’s movement is modeled as a graph with nodes representing critical positions and edges defining flight paths. Node distances are visualized using a colormap based on their Euclidean distance:
+The Ender Dragon’s movement in the End is modeled as a graph. Nodes represent key locations, such as the fountain and the tops of obsidian pillars. Edges connect these nodes, encoding the dragon’s flight paths. This visualization helps analyze the dragon's AI behavior, critical points, and path traversal probabilities.
 
+Node colors represent distances from the center fountain:
 $$
 \text{Distance} = \sqrt{x^2 + z^2}
 $$
@@ -164,20 +166,20 @@ $$
   <summary><i>Ender Dragon Path Python Function</i></summary>
 
 ```python
-# Define node positions
-outerNodeAngles = np.linspace(0, 2*np.pi, 12, endpoint=False)
-outerNodes = [(100*np.cos(a), 100*np.sin(a)) for a in outerNodeAngles]
+# Define nodes
+outerNodeAngles = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+outerNodes = [(100 * np.cos(a), 100 * np.sin(a)) for a in outerNodeAngles]
 centerNode = (0, 0)
 
-# Graph
+# Build graph
 G = nx.Graph()
 G.add_nodes_from(outerNodes + [centerNode])
 G.add_edges_from([(centerNode, node) for node in outerNodes])
 
-# Color nodes based on distance
-colors = [np.linalg.norm(node) for node in outerNodes]
-nx.draw(G, pos={n: n for n in G.nodes}, node_color=colors, cmap='winter', with_labels=False)
-plt.title("Ender Dragon Path in the End")
+# Color nodes
+distances = [np.linalg.norm(node) for node in outerNodes]
+nx.draw(G, pos={n: n for n in G.nodes}, node_color=distances, cmap='cool', with_labels=False)
+plt.title("Ender Dragon Pathing Graph")
 plt.show()
 ```
 </details>
@@ -188,12 +190,14 @@ plt.show()
 ---
 
 ## Caveats
-- The biome suitability map uses heuristic noise functions, which are simplified compared to Minecraft’s actual Perlin noise.
-- The Ender Dragon’s path probabilities are static; real behavior depends on its state (e.g., circling, perching).
+- Biome suitability is based on simplified sine/cosine noise rather than Perlin noise, leading to less organic transitions.
+- Dragon pathing is static and does not include real-time behavior changes.
+- Stronghold placement assumes perfectly concentric rings.
 
 ## Next Steps
-- Incorporate Perlin noise for biome transitions.
-- Extend the dragon path model with Markov chains to simulate dynamic behavior.
+- Replace heuristic noise with Perlin noise for more realistic biome transitions.
+- Extend the Ender Dragon model using Markov chains for dynamic behavior.
+- Simulate larger worlds efficiently with parallel computation for scalability.
 
 ## References
 1. [Minecraft Wiki: Village](https://minecraft.wiki/)
