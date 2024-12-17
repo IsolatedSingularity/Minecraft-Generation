@@ -57,9 +57,7 @@ This function generates a spatial distribution of villages across a procedurally
 Biome suitability values are derived from noise-based temperature $$\mathcal{T}(x,z)$$ and humidity $$\mathcal{H}(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
 
 Mathematically:
-$$
-\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
-$$
+$$\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))$$
 
 where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
 
@@ -111,9 +109,7 @@ Strongholds in Minecraft are placed in concentric rings centered around the orig
 This approach models Minecraft's behavior closely by respecting the ring radii while introducing randomness to emulate procedural generation. The use of polar coordinates simplifies the calculation of positions and ensures that the strongholds are distributed naturally within their respective rings.
 
 Mathematically:
-$$
-(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))
-$$
+$$(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))$$
 
 where $$\theta$$ is sampled with a slight perturbation, and $$r$$ is uniformly sampled within each ring's radius bounds.
 
@@ -154,9 +150,7 @@ plt.show()
 The Ender Dragon's movement in the End is modeled as a graph traversal problem. Nodes in the graph represent key positions, including the central fountain and the tops of the obsidian pillars that surround it. Each node is connected to the fountain by edges, which correspond to possible flight paths the dragon can take.
 
 Edges in the graph have probabilities proportional to the inverse degree of the connected vertices:
-$$
-P(i \to j) = \frac{1}{\text{deg}(j)}
-$$
+$$P(i \to j) = \frac{1}{\text{deg}(j)}$$
 where $$\text{deg}(j)$$ is the number of edges connected to vertex $$j$$. This reflects the Ender Dragon's tendency to choose paths toward less-connected nodes, balancing traversal efficiency and randomness.
 
 Node distances from the center (fountain) are visualized using a colormap, providing a heatmap-like representation of traversal difficulty.
