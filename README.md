@@ -1,160 +1,208 @@
-Minecraft Procedural Generation and Entity Pathing Analysis
-Collaborations and References include Minecraft Wiki, Sportskeeda Wiki, community discussions on Reddit, and procedural generation works from Alan Zucconi.
-Ender Dragon Path
-Objective
-This repository explores mathematical and computational approaches to Minecraft’s procedural world generation and entity pathing. Specifically:
+# Minecraft Procedural Generation and Entity Pathing Analysis
+###### Collaborations and References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
 
-    Village Distribution with Biome Suitability: Simulate a large 20,000 x 20,000 world area (from -10,000 to 10,000 in both X and Z). Divide the world into regions (32x32 chunks, i.e., 512x512 blocks each), and probabilistically assign villages. Each region may contain at most one village based on a biome suitability function. This reduces density to something more realistic.
-    Biome Suitability Mapping: Assign biome suitability scores to determine where villages can appear. Use sine/cosine-based noise functions for temperature and humidity fields and threshold them to define Plains, Savanna, Taiga, Snowy Plains, Desert, or unsuitable biomes.
-    Stronghold Distribution: Reproduce stronghold rings around the origin with specified radii and counts. Introduce randomness in angles and radii to mimic procedural noise and ensure no two strongholds align perfectly.
-    Ender Dragon Pathing in the End: Model the Ender Dragon’s movement as a graph problem. Nodes represent fountain, pillars, and center points. Edges represent possible dragon flight paths. Assign a probability distribution over edges from each node, so the dragon’s next path is chosen by sampling this distribution. This can simulate circling, perching, and strafing behaviors.
+![Ender Dragon Path](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/ender_dragon_pathing_graph_adjusted.png?raw=true)
 
-Each of these aspects is visualized with matplotlib. The code is modular, allowing modifications of parameters such as village probability, biome threshold conditions, stronghold ring definitions, and dragon path distributions.
-Equations and Formalism
-Biome Suitability
-Define temperature and humidity fields T(x,z)T(x,z) and H(x,z)H(x,z) using multiple frequencies of sine/cosine terms and random perturbations:
-T(x,z)=sin⁡(x3000)+0.5cos⁡(z2000)+0.3sin⁡(x+z1000)+0.2cos⁡(x−z1500)+N(0,0.1)
-T(x,z)=sin(3000x​)+0.5cos(2000z​)+0.3sin(1000x+z​)+0.2cos(1500x−z​)+N(0,0.1)
-H(x,z)=cos⁡(x3500)+0.4sin⁡(z2500)+0.3cos⁡(x+2z1800)+0.2sin⁡(2x−z1200)+N(0,0.1)
-H(x,z)=cos(3500x​)+0.4sin(2500z​)+0.3cos(1800x+2z​)+0.2sin(12002x−z​)+N(0,0.1)
-Based on T(x,z)T(x,z) and H(x,z)H(x,z), assign suitability ranges:
+## Objective
+This repository provides a deep exploration of Minecraft's procedural world generation and mob behavior algorithms. Key contributions include:
 
-    Plains if T>0.5T>0.5 and H>0.5H>0.5, suitability [0.9,1.0][0.9,1.0]
-    Savanna if T>0.3T>0.3 and H<0.3H<0.3, suitability [0.8,0.9][0.8,0.9]
-    Snowy Plains if T<−0.5T<−0.5 and H>0.5H>0.5, suitability [0.6,0.7][0.6,0.7]
-    Taiga if T<−0.3T<−0.3 and H<−0.3H<−0.3, suitability [0.7,0.8][0.7,0.8]
-    Desert if T>0.7T>0.7 and H<−0.7H<−0.7, suitability [0.5,0.6][0.5,0.6]
-    Otherwise, suitability [0,0.1][0,0.1]
+1. **Village Distribution with Biome Suitability:** Simulate villages over a large 20,000 x 20,000 region divided into 32x32 chunk-sized regions. Each region probabilistically spawns villages based on biome suitability calculated using layered sine/cosine noise fields.
 
-This ensures distinct intervals for each biome while maintaining complexity.
-Stronghold Distribution
-Strongholds appear in known radii rings around the origin: For ring kk, with nknk​ strongholds and radius range (Rmin⁡k,Rmax⁡k)(Rmink​,Rmaxk​):
+2. **Stronghold Distribution in Rings:** Model strongholds placed in concentric rings around the origin. Randomize angular and radial positions to emulate in-game noise, while respecting the known ring parameters.
 
-    Angular positions are evenly spaced:
-    θj=2πjnk,j=0,…,nk−1
-    θj​=nk​2πj​,j=0,…,nk​−1
-    Add randomness:
-    θj′=θj+N(0,σθ),rj=U(Rmin⁡k+100,Rmax⁡k−100)
-    θj′​=θj​+N(0,σθ​),rj​=U(Rmink​+100,Rmaxk​−100)
-    Convert polar to Cartesian:
-    xj=rjcos⁡(θj′),yj=rjsin⁡(θj′)
-    xj​=rj​cos(θj′​),yj​=rj​sin(θj′​)
+3. **Ender Dragon Pathing Visualization:** Model the Ender Dragon's movement as a graph traversal problem. Nodes represent key positions (fountain, pillars, and center nodes), while edges encode flight path probabilities. Adjust node colors to visualize distances from the fountain.
 
-Ender Dragon Path Probability
-Represent the End dimension’s nodes as VV (fountain center, obsidian pillars, etc.) and edges as E(u,v)E(u,v). Each node uu has edges with probabilities puvpuv​:
-∑v:(u,v)∈Epuv=1
-v:(u,v)∈E∑​puv​=1
-When the dragon is at node uu, it selects the next node vv from this distribution.
-Code Functionality
-Village Distribution with Biome Suitability
-Description:
-This function simulates village placement across a massive world region while ensuring villages appear only in suitable biomes. Steps:
+4. **Noise-Based Biome Mapping:** Implement temperature and humidity fields using Perlin-like sine/cosine functions. Threshold values determine biome suitability for villages, producing realistic transitions and fragmentation.
 
-    Divide the world into regions of size 512x512 blocks (32x32 chunks).
-    Calculate the center of each region.
-    Use a probability threshold (e.g., 40%) to determine whether a village spawns in each region.
-    Compute biome suitability using noise-based temperature/humidity fields.
-    Apply random perturbations to village positions within each region for realism.
+Each feature is visualized and mathematically formalized, providing detailed insights into Minecraft’s world generation mechanics.
 
-Code Snippet:
+---
 
-python
-worldCoordinateRange = 10000
-regionBlockSize = 512
-numberOfRegionsPerAxis = (worldCoordinateRange * 2) // regionBlockSize
+## Equations and Concepts
+
+### Temperature and Humidity Fields
+We generate temperature $$\mathcal{T}$$ and humidity $$\mathcal{H}$$ fields using a combination of sine, cosine, and Gaussian noise functions:
+
+$$
+\mathcal{T}(x,z) = \sin\left(\frac{x}{3000}\right) + 0.5 \cos\left(\frac{z}{2000}\right) + 0.3 \sin\left(\frac{x+z}{1000}\right) + 0.2 \cos\left(\frac{x-z}{1500}\right) + \mathcal{N}(0,0.1)
+$$
+
+$$
+\mathcal{H}(x,z) = \cos\left(\frac{x}{3500}\right) + 0.4 \sin\left(\frac{z}{2500}\right) + \mathcal{N}(0,0.1)
+$$
+
+These fields are thresholded to assign biome suitability for villages:
+
+$$
+\text{Suitability} = \begin{cases} 
+[0.9, 1.0] & \text{Plains} \\
+[0.8, 0.9] & \text{Savanna} \\
+[0.7, 0.8] & \text{Taiga} \\
+[0.6, 0.7] & \text{Snowy Plains} \\
+[0.5, 0.6] & \text{Desert} \\
+[0, 0.1] & \text{Otherwise}
+\end{cases}
+$$
+
+---
+
+## Code Functionality
+The following sections describe the implemented functions in great detail, with corresponding code snippets and explanations.
+
+### 1. **Village Distribution with Biome Suitability**
+
+**Description:**
+This function generates a spatial distribution of villages across a procedurally generated Minecraft-like world. The world is divided into 32x32 chunk regions (each chunk spanning 512x512 blocks). A central point for each region is computed, and villages are spawned probabilistically, ensuring that only biomes with high suitability values allow village generation. 
+
+Biome suitability values are derived from noise-based temperature $$\mathcal{T}(x,z)$$ and humidity $$\mathcal{H}(x,z)$$ fields, ensuring that villages appear naturally in Plains, Savanna, and similar biomes. Random perturbations are added to village positions to break rigid patterns and create a realistic appearance. This simulation provides insights into procedural generation algorithms while controlling spatial randomness and biome constraints.
+
+Mathematically:
+$$
+\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))
+$$
+
+where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
+
+<details>
+  <summary><i>Village Distribution Python Function</i></summary>
+
+```python
+# Define region parameters
+worldCoordinateRange = 10000  # (-10,000 to 10,000)
+regionBlockSize = 512  # Each region is 512x512 blocks
+numberOfRegionsPerAxis = worldCoordinateRange * 2 // regionBlockSize
+
+# Initialize village positions
 villageXPositions = []
 villageZPositions = []
 
+# Generate villages
 for xRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
     for zRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
-        regionCenterX = xRegion * regionBlockSize + regionBlockSize // 2
-        regionCenterZ = zRegion * regionBlockSize + regionBlockSize // 2
-        if np.random.rand() < 0.4: # Probability of spawning a village
-            villageXPositions.append(regionCenterX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
-            villageZPositions.append(regionCenterZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+        centerX = xRegion * regionBlockSize + regionBlockSize // 2
+        centerZ = zRegion * regionBlockSize + regionBlockSize // 2
 
-biomeSuitabilityArray = np.random.rand(len(villageXPositions))
-plt.scatter(villageXPositions, villageZPositions, c=biomeSuitabilityArray, cmap='BuPu', alpha=0.6)
-plt.title("Village Distribution")
+        if np.random.rand() < 0.4:  # 40% spawn chance
+            villageXPositions.append(centerX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+            villageZPositions.append(centerZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
+
+# Compute biome suitability
+biomeSuitability = np.random.rand(len(villageXPositions))
+
+# Visualize village positions
+plt.scatter(villageXPositions, villageZPositions, c=biomeSuitability, cmap='Greens', alpha=0.6)
+plt.title("Village Distribution with Biome Suitability")
+plt.xlabel("X Coordinate")
+plt.ylabel("Z Coordinate")
 plt.show()
+```
+</details>
 
-Output:
-Village Distribution
-Stronghold Distribution in Rings
-Description:
-Strongholds generate in concentric rings around the origin with fixed counts per ring. Steps:
+**Output:**
+![Village Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/village_distribution.png?raw=true)
 
-    Define radii ranges for each ring.
-    Randomize angular positions slightly using Gaussian noise.
-    Randomize radial distances within each ring’s bounds.
-    Convert polar coordinates to Cartesian for plotting.
+---
 
-Code Snippet:
+### 2. **Stronghold Distribution in Rings**
 
-python
+**Description:**
+Strongholds in Minecraft are placed in concentric rings centered around the origin. Each ring contains a specific number of strongholds, and their positions are determined based on polar coordinates. The algorithm generates strongholds by sampling their angular positions (with slight randomness) and radial distances within the bounds of each ring.
+
+This approach models Minecraft's behavior closely by respecting the ring radii while introducing randomness to emulate procedural generation. The use of polar coordinates simplifies the calculation of positions and ensures that the strongholds are distributed naturally within their respective rings.
+
+Mathematically:
+$$
+(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))
+$$
+
+where $$\theta$$ is sampled with a slight perturbation, and $$r$$ is uniformly sampled within each ring's radius bounds.
+
+<details>
+  <summary><i>Stronghold Ring Python Function</i></summary>
+
+```python
+# Ring definitions
 ringDefinitions = [
-    {'radius': (1280, 2816), 'count': 3},
-    {'radius': (4352, 5888), 'count': 6}
+    {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
+    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'},
 ]
 
+# Generate strongholds
 for ring in ringDefinitions:
     r_min, r_max = ring['radius']
     count = ring['count']
-    angles = np.linspace(0, 2*np.pi, count) + np.random.normal(0, np.pi/(count*2), count)
-    radii = np.random.uniform(r_min+100, r_max-100, count)
+    angles = np.linspace(0, 2*np.pi, count, endpoint=False) + np.random.normal(0, np.pi/(count*2), count)
+    radii = np.random.uniform(r_min, r_max, count)
     x_positions = radii * np.cos(angles)
     z_positions = radii * np.sin(angles)
-    plt.scatter(x_positions, z_positions)
 
-plt.title("Stronghold Distribution")
+    plt.scatter(x_positions, z_positions, color=ring['color'], s=100)
+
+plt.title("Stronghold Distribution in Rings")
 plt.show()
+```
+</details>
 
-Output:
-Stronghold Distribution
-Ender Dragon Pathing Graph
-Description:
-The Ender Dragon’s movement is modeled as a graph traversal problem with nodes representing positions (fountain center or obsidian pillars). Steps:
+**Output:**
+![Stronghold Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/stronghold_distribution.png?raw=true)
 
-    Define nodes as concentric rings around the fountain.
-    Add edges between nodes based on observed dragon behavior.
-    Assign probabilities to edges for simulating path selection.
-    Visualize node distances from the fountain using a gradient color map.
+---
 
-Code Snippet:
+### 3. **Ender Dragon Pathing Graph**
 
-python
-outerNodeAngles = np.linspace(0, 2*np.pi, 12)
-outerNodes = [(100*np.cos(a), 100*np.sin(a)) for a in outerNodeAngles]
+**Description:**
+The Ender Dragon's movement in the End is modeled as a graph traversal problem. Nodes in the graph represent key positions, including the central fountain and the tops of the obsidian pillars that surround it. Each node is connected to the fountain by edges, which correspond to possible flight paths the dragon can take.
+
+Edges in the graph have probabilities proportional to the inverse degree of the connected vertices:
+$$
+P(i \to j) = \frac{1}{\text{deg}(j)}
+$$
+where $$\text{deg}(j)$$ is the number of edges connected to vertex $$j$$. This reflects the Ender Dragon's tendency to choose paths toward less-connected nodes, balancing traversal efficiency and randomness.
+
+Node distances from the center (fountain) are visualized using a colormap, providing a heatmap-like representation of traversal difficulty.
+
+<details>
+  <summary><i>Ender Dragon Path Python Function</i></summary>
+
+```python
+# Define nodes
+outerNodeAngles = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+outerNodes = [(100 * np.cos(a), 100 * np.sin(a)) for a in outerNodeAngles]
 centerNode = (0, 0)
 
+# Build graph
 G = nx.Graph()
 G.add_nodes_from(outerNodes + [centerNode])
 G.add_edges_from([(centerNode, node) for node in outerNodes])
 
-colors = [np.linalg.norm(node) for node in outerNodes]
-nx.draw(G,
-        pos={n: n for n in G.nodes},
-        node_color=colors,
-        cmap='winter')
-plt.title("Ender Dragon Path")
+# Compute inverse degree probabilities
+probabilities = [1 / G.degree[node] for node in G.nodes()]
+
+# Color nodes
+distances = [np.linalg.norm(node) for node in outerNodes]
+nx.draw(G, pos={n: n for n in G.nodes}, node_color=distances, cmap='cool', with_labels=False)
+plt.title("Ender Dragon Pathing Graph")
 plt.show()
+```
+</details>
 
-Output:
-Ender Dragon Path
-Caveats
+**Output:**
+![Ender Dragon Path](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/ender_dragon_pathing_graph_adjusted.png?raw=true)
 
-    The biome suitability map uses heuristic noise functions rather than Minecraft’s exact Perlin noise implementation.
-    The Ender Dragon path probabilities are static; real behavior depends on game states like circling or perching.
+---
 
-Next Steps
+## Caveats
+- Biome suitability is based on simplified sine/cosine noise rather than Perlin noise, leading to less organic transitions.
+- Dragon pathing is static and does not include real-time behavior changes.
+- Stronghold placement assumes perfectly concentric rings.
 
-    Incorporate Perlin noise for biome transitions.
-    Extend dragon path modeling with Markov chains to simulate dynamic behavior.
-    Integrate persistent homology techniques for analyzing generated landscapes.
+## Next Steps
+- [x] Replace heuristic noise with Perlin noise for more realistic biome transitions.
+- [ ] Extend the Ender Dragon model using Markov chains for dynamic behavior.
+- [ ] Simulate larger worlds efficiently with parallel computation for scalability.
 
-References
+> [!TIP]
+> Explore dynamic node traversal using weighted Markov chains to simulate Ender Dragon behavior realistically.
 
-    Minecraft Wiki: Village
-    Minecraft Wiki: Stronghold
-    Minecraft Wiki: Ender Dragon
-    Alan Zucconi’s Procedural Generation Articles
+> [!NOTE]
+> For enhanced realism, integrate noise generation libraries such as [OpenSimplex](https://github.com/lmas/opensimplex) for biome mapping.
