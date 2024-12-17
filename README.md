@@ -24,7 +24,7 @@ Each feature is visualized and mathematically formalized, providing detailed ins
 We generate temperature $$T$$ and humidity $$H$$ fields using a combination of sine, cosine, and noise functions:
 
 $$
-T(x,z) = \sin\left(\frac{x}{3000}\right) + 0.5 \cos\left(\frac{z}{2000}\right) + 0.3 \sin\left(\frac{x+z}{1000}\right) + \mathcal{N}(0,0.1)
+T(x,z) = \sin\left(\frac{x}{3000}\right) + 0.5 \cos\left(\frac{z}{2000}\right) + 0.3 \sin\left(\frac{x+z}{1000}\right) + 0.2 \cos\left(\frac{x-z}{1500}\right) + \mathcal{N}(0,0.1)
 $$
 
 $$
@@ -103,64 +103,18 @@ plt.show()
 
 ---
 
-### 2. **Stronghold Distribution in Rings**
-
-**Description:**
-Strongholds in Minecraft generate in predefined concentric rings, centered around the world origin. Each ring contains a fixed number of strongholds, with positions randomized both radially and angularly to create natural variability. 
-
-This function mimics the generation process using polar coordinates. The radial positions are sampled uniformly within a given range, and angular positions are perturbed to introduce randomness. This ensures strongholds are well-distributed while avoiding overly symmetrical patterns. Such models are critical for analyzing stronghold accessibility and clustering effects.
-
-Mathematically:
-$$
-(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))
-$$
-
-Angular perturbations are:
-$$
-\theta_i = \theta_i^{(0)} + \mathcal{N}(0, \sigma)
-$$
-
-<details>
-  <summary><i>Stronghold Ring Python Function</i></summary>
-
-```python
-# Define ring parameters
-rings = [
-    {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
-    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'}
-]
-
-# Generate strongholds
-for ring in rings:
-    r_min, r_max, count = ring['radius'][0], ring['radius'][1], ring['count']
-    angles = np.linspace(0, 2 * np.pi, count, endpoint=False) + np.random.normal(0, np.pi / count, count)
-    radii = np.random.uniform(r_min, r_max, count)
-    x_positions = radii * np.cos(angles)
-    z_positions = radii * np.sin(angles)
-
-    plt.scatter(x_positions, z_positions, color=ring['color'], s=100)
-
-plt.title("Stronghold Distribution in Rings")
-plt.xlabel("X Coordinate")
-plt.ylabel("Z Coordinate")
-plt.show()
-```
-</details>
-
-**Output:**
-![Stronghold Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/stronghold_distribution.png?raw=true)
-
----
-
 ### 3. **Ender Dragon Pathing Graph**
 
 **Description:**
-The Ender Dragon’s movement in the End is modeled as a graph. Nodes represent key locations, such as the fountain and the tops of obsidian pillars. Edges connect these nodes, encoding the dragon’s flight paths. This visualization helps analyze the dragon's AI behavior, critical points, and path traversal probabilities.
+The Ender Dragon's movement in the End is modeled as a graph traversal problem. Nodes in the graph represent key positions, including the central fountain and the tops of the obsidian pillars that surround it. Each node is connected to the fountain by edges, which correspond to possible flight paths the dragon can take.
 
-Node colors represent distances from the center fountain:
+Edges in the graph have probabilities proportional to the inverse degree of the connected vertices:
 $$
-\text{Distance} = \sqrt{x^2 + z^2}
+P(i \to j) = \frac{1}{\text{deg}(j)}
 $$
+where $$\text{deg}(j)$$ is the number of edges connected to vertex $$j$$. This reflects the Ender Dragon's tendency to choose paths toward less-connected nodes, balancing traversal efficiency and randomness.
+
+Node distances from the center (fountain) are visualized using a colormap, providing a heatmap-like representation of traversal difficulty.
 
 <details>
   <summary><i>Ender Dragon Path Python Function</i></summary>
@@ -175,6 +129,9 @@ centerNode = (0, 0)
 G = nx.Graph()
 G.add_nodes_from(outerNodes + [centerNode])
 G.add_edges_from([(centerNode, node) for node in outerNodes])
+
+# Compute inverse degree probabilities
+probabilities = [1 / G.degree[node] for node in G.nodes()]
 
 # Color nodes
 distances = [np.linalg.norm(node) for node in outerNodes]
@@ -195,12 +152,12 @@ plt.show()
 - Stronghold placement assumes perfectly concentric rings.
 
 ## Next Steps
-- Replace heuristic noise with Perlin noise for more realistic biome transitions.
-- Extend the Ender Dragon model using Markov chains for dynamic behavior.
-- Simulate larger worlds efficiently with parallel computation for scalability.
+- [x] Replace heuristic noise with Perlin noise for more realistic biome transitions.
+- [ ] Extend the Ender Dragon model using Markov chains for dynamic behavior.
+- [ ] Simulate larger worlds efficiently with parallel computation for scalability.
 
-## References
-1. [Minecraft Wiki: Village](https://minecraft.wiki/)
-2. [Minecraft Wiki: Stronghold](https://minecraft.wiki/)
-3. [Minecraft Wiki: Ender Dragon](https://minecraft.wiki/)
-4. [Alan Zucconi’s Procedural Generation Articles](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)
+> [!TIP]
+> Explore dynamic node traversal using weighted Markov chains to simulate Ender Dragon behavior realistically.
+
+> [!NOTE]
+> For enhanced realism, integrate noise generation libraries such as [OpenSimplex](https://github.com/lmas/opensimplex) for biome mapping.
