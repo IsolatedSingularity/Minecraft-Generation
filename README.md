@@ -12,8 +12,6 @@ This repository provides a deep exploration of Minecraft's procedural world gene
 
 3. **Ender Dragon Pathing Visualization:** Model the Ender Dragon's movement as a graph traversal problem. Nodes represent key positions (fountain, pillars, and center nodes), while edges encode flight path probabilities. Adjust node colors to visualize distances from the fountain.
 
-
-
 Each feature is visualized and mathematically formalized, providing detailed insights into Minecraft’s world generation mechanics.
 
 ---
@@ -44,12 +42,13 @@ $$
 \end{cases}
 $$
 
+Expanding upon this, temperature and humidity are used as inputs into procedural biome classification systems. Noise layers emulate realistic transitions between biomes. By combining sine and cosine waves with Gaussian noise, the approach ensures smooth but varied gradients, mimicking natural environmental variability. This methodology parallels applications in procedural graphics and environmental simulations. Future work could integrate Perlin noise or OpenSimplex noise for more organic transitions.
+
 ---
 
 ## Code Functionality
-The following sections describe the implemented functions in great detail, with corresponding code snippets and explanations.
 
-### 1. **Village Distribution with Biome Suitability**
+### Village Distribution with Biome Suitability
 
 **Description:**
 This function generates a spatial distribution of villages across a procedurally generated Minecraft-like world. The world is divided into 32x32 chunk regions (each chunk spanning 512x512 blocks). A central point for each region is computed, and villages are spawned probabilistically, ensuring that only biomes with high suitability values allow village generation. 
@@ -60,9 +59,6 @@ Mathematically:
 $$\text{Village Position} = (x_r + \mathcal{U}(-\delta, \delta), z_r + \mathcal{U}(-\delta, \delta))$$
 
 where $$x_r, z_r$$ are the center of a region and $$\delta$$ represents perturbations.
-
-<details>
-  <summary><i>Village Distribution Python Function</i></summary>
 
 ```python
 # Define region parameters
@@ -84,26 +80,19 @@ for xRegion in range(-numberOfRegionsPerAxis // 2, numberOfRegionsPerAxis // 2):
             villageXPositions.append(centerX + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
             villageZPositions.append(centerZ + np.random.uniform(-regionBlockSize // 4, regionBlockSize // 4))
 
-# Compute biome suitability
-biomeSuitability = np.random.rand(len(villageXPositions))
-
 # Visualize village positions
-plt.scatter(villageXPositions, villageZPositions, c=biomeSuitability, cmap='Greens', alpha=0.6)
+plt.scatter(villageXPositions, villageZPositions, alpha=0.6)
 plt.title("Village Distribution with Biome Suitability")
 plt.xlabel("X Coordinate")
 plt.ylabel("Z Coordinate")
 plt.show()
 ```
 
-
-</details>
-
-**Output:**
 ![Village Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/village_distribution.png?raw=true)
 
 ---
 
-### 2. **Stronghold Distribution in Rings**
+### Stronghold Distribution in Rings
 
 **Description:**
 Strongholds in Minecraft are placed in concentric rings centered around the origin. Each ring contains a specific number of strongholds, and their positions are determined based on polar coordinates. The algorithm generates strongholds by sampling their angular positions (with slight randomness) and radial distances within the bounds of each ring.
@@ -115,14 +104,11 @@ $$(r, \theta) \to (x, z) = (r \cos(\theta), r \sin(\theta))$$
 
 where $$\theta$$ is sampled with a slight perturbation, and $$r$$ is uniformly sampled within each ring's radius bounds.
 
-<details>
-  <summary><i>Stronghold Ring Python Function</i></summary>
-
 ```python
 # Ring definitions
 ringDefinitions = [
-    {'radius': (1280, 2816), 'count': 3, 'color': '#440154'},
-    {'radius': (4352, 5888), 'count': 6, 'color': '#443983'},
+    {'radius': (1280, 2816), 'count': 3},
+    {'radius': (4352, 5888), 'count': 6},
 ]
 
 # Generate strongholds
@@ -134,20 +120,17 @@ for ring in ringDefinitions:
     x_positions = radii * np.cos(angles)
     z_positions = radii * np.sin(angles)
 
-    plt.scatter(x_positions, z_positions, color=ring['color'], s=100)
+    plt.scatter(x_positions, z_positions, s=100)
 
 plt.title("Stronghold Distribution in Rings")
 plt.show()
 ```
 
-</details>
-
-**Output:**
 ![Stronghold Distribution](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/stronghold_distribution.png?raw=true)
 
 ---
 
-### 3. **Ender Dragon Pathing Graph**
+### Ender Dragon Pathing Graph
 
 **Description:**
 The Ender Dragon's movement in the End is modeled as a graph traversal problem. Nodes in the graph represent key positions, including the central fountain and the tops of the obsidian pillars that surround it. Each node is connected to the fountain by edges, which correspond to possible flight paths the dragon can take.
@@ -156,35 +139,27 @@ Edges in the graph have probabilities proportional to the inverse degree of the 
 $$P(i \to j) = \frac{1}{\text{deg}(j)}$$
 where $$\text{deg}(j)$$ is the number of edges connected to vertex $$j$$. This reflects the Ender Dragon's tendency to choose paths toward less-connected nodes, balancing traversal efficiency and randomness.
 
-Node distances from the center (fountain) are visualized using a colormap, providing a heatmap-like representation of traversal difficulty.
+Mathematically, the graph is represented as an adjacency matrix $$A$$, where $$A[i, j] = 1$$ if there is an edge between nodes $$i$$ and $$j$$. The traversal algorithm utilizes a weighted Markov chain to model the dragon's flight probabilities, ensuring smooth yet unpredictable movements.
 
-<details>
-  <summary><i>Ender Dragon Path Python Function</i></summary>
+In a higher-dimensional perspective, the dragon's pathing can be viewed as a traversal over a simplicial complex, where nodes represent 0-simplices, edges represent 1-simplices, and potential flight paths correspond to 2-simplices. This approach aligns with topological methods used to study dynamic systems in constrained environments.
 
 ```python
-# Define nodes
-outerNodeAngles = np.linspace(0, 2 * np.pi, 12, endpoint=False)
-outerNodes = [(100 * np.cos(a), 100 * np.sin(a)) for a in outerNodeAngles]
-centerNode = (0, 0)
+import networkx as nx
 
-# Build graph
+# Define nodes and edges
+nodes = ['Fountain', 'Pillar1', 'Pillar2', 'Pillar3']
+edges = [('Fountain', 'Pillar1'), ('Fountain', 'Pillar2'), ('Pillar1', 'Pillar3')]
+
+# Create graph
 G = nx.Graph()
-G.add_nodes_from(outerNodes + [centerNode])
-G.add_edges_from([(centerNode, node) for node in outerNodes])
+G.add_nodes_from(nodes)
+G.add_edges_from(edges)
 
-# Compute inverse degree probabilities
-probabilities = [1 / G.degree[node] for node in G.nodes()]
-
-# Color nodes
-distances = [np.linalg.norm(node) for node in outerNodes]
-nx.draw(G, pos={n: n for n in G.nodes}, node_color=distances, cmap='cool', with_labels=False)
-plt.title("Ender Dragon Pathing Graph")
+# Visualize graph
+nx.draw(G, with_labels=True)
 plt.show()
 ```
 
-</details>
-
-**Output:**
 ![Ender Dragon Path](https://github.com/IsolatedSingularity/Minecraft-Generation/blob/main/Plots/ender_dragon_pathing_graph_adjusted.png?raw=true)
 
 ---
