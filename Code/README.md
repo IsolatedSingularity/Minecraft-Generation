@@ -4,22 +4,68 @@ This directory contains the complete Python implementation for analyzing and vis
 
 ## Module Architecture
 
-### Core Animation Systems
+### Core Library (`core/`)
 
-#### `minecraftAnimations.py`
-**Primary Functions**: Real-time animation systems for core Minecraft algorithms
-- **Structure Placement Animation**: Visualizes grid-based village placement with salt-based randomization
-- **Dragon Pathfinding Animation**: Dynamic visualization of Ender Dragon AI state transitions
-- **Algorithm Demonstrations**: Step-by-step breakdowns of generation mechanics
+The `core/` module provides centralized utilities for all generation algorithms:
+
+| Module | Purpose |
+|--------|---------|
+| `constants.py` | Minecraft generation constants, colors, ring definitions |
+| `lcg.py` | Linear Congruential Generator (Java Random implementation) |
+| `noise.py` | Perlin noise generation for terrain simulation |
 
 ```python
-class MinecraftAnimator:
-    def animate_structure_placement(self, save_path):
-        """Animate village placement using authentic grid algorithms"""
-    
-    def animate_dragon_pathfinding(self, save_path):
-        """Real-time dragon AI behavioral state visualization"""
+from core import MinecraftLCG, generate_region_seed, simple_perlin_noise
+from core.constants import STRONGHOLD_RINGS, BIOME_COLORS
 ```
+
+### Primary Visualizations
+
+#### `dragon_pathfinding.py`
+**Enhanced Ender Dragon AI Visualization**
+
+Real-time simulation of dragon behavior with:
+- 25+ pathfinding nodes across outer, inner, and center rings
+- 7 behavioral states with probability-weighted transitions
+- Crystal destruction mechanics affecting perch probability
+- Graph-based navigation with weighted edges
+
+```python
+class EnderDragonAI:
+    def get_perch_probability(self):
+        """P(perch) = 1 / (3 + crystals_alive)"""
+        return 1.0 / (3.0 + self.crystals_alive)
+```
+
+**Output**: `Plots/dragon_pathfinding.gif` (200 DPI, 20 FPS)
+
+#### `structure_placement.py`
+**Village Placement Algorithm Animation**
+
+Step-by-step visualization of structure generation:
+- Spiral scan from spawn through region grid
+- Salt-based seed calculation with hex display
+- Biome suitability evaluation
+- Real-time spawn probability visualization
+
+**Output**: `Plots/structure_placement.gif` (200 DPI, 15 FPS)
+
+#### `stronghold_distribution.py`
+**Stronghold Ring Visualization**
+
+Publication-quality static plot showing:
+- 128 strongholds across 8 concentric rings
+- Polar coordinate mathematics
+- Distance scale for route planning
+
+**Output**: `Plots/stronghold_rings.png` (300 DPI)
+
+### Legacy Animation Systems
+
+#### `minecraftAnimations.py`
+**Primary Functions**: Original animation systems for core Minecraft algorithms
+- **Structure Placement Animation**: Grid-based village placement
+- **Dragon Pathfinding Animation**: Basic AI state transitions
 
 **Key Features**:
 - Authentic Linear Congruential Generator implementation
