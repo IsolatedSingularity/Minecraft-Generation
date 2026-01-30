@@ -178,12 +178,13 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
     sim = StructurePlacementSimulator(world_seed=42, world_size=8000)
     
     # Create figure
-    fig = plt.figure(figsize=(16, 9))
+    fig = plt.figure(figsize=(18, 9))
     fig.patch.set_facecolor(COLORS['background'])
     
-    # Layout
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.5, 1], height_ratios=[1, 1],
-                         hspace=0.15, wspace=0.1)
+    # Layout - wider right column to prevent overlap
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.4, 1], height_ratios=[1.2, 1],
+                         hspace=0.25, wspace=0.15,
+                         left=0.05, right=0.95, top=0.92, bottom=0.08)
     
     ax_map = fig.add_subplot(gs[:, 0])
     ax_algo = fig.add_subplot(gs[0, 1])
@@ -224,14 +225,14 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
                                      edgecolors='white', linewidth=1,
                                      cmap='YlOrBr', zorder=6, alpha=0.9)
     
-    # Algorithm panel
-    ax_algo.set_xlim(0, 10)
-    ax_algo.set_ylim(0, 10)
+    # Algorithm panel - with proper margins
+    ax_algo.set_xlim(-0.5, 11)
+    ax_algo.set_ylim(-0.5, 10.5)
     ax_algo.set_title('Placement Algorithm', color=COLORS['text'],
-                     fontsize=14, fontweight='bold')
+                     fontsize=14, fontweight='bold', pad=10)
     ax_algo.axis('off')
     
-    # Algorithm steps
+    # Algorithm steps with better spacing
     algo_steps = [
         "1. Calculate Region Seed",
         "2. Check Spawn Probability",
@@ -241,35 +242,35 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
     
     step_texts = []
     for i, step in enumerate(algo_steps):
-        txt = ax_algo.text(0.5, 9 - i*1.5, step, color=COLORS['text'],
-                          fontsize=11, alpha=0.5)
+        txt = ax_algo.text(0.3, 9.5 - i*1.3, step, color=COLORS['text'],
+                          fontsize=10, alpha=0.5)
         step_texts.append(txt)
     
-    # Seed calculation display
-    seed_box = FancyBboxPatch((0.3, 3.5), 9.4, 2.5, boxstyle="round,pad=0.1",
+    # Seed calculation display - properly positioned
+    seed_box = FancyBboxPatch((0.2, 3.8), 10.3, 2.2, boxstyle="round,pad=0.1",
                              facecolor=COLORS['grid'], alpha=0.5)
     ax_algo.add_patch(seed_box)
     
-    seed_formula = ax_algo.text(5, 5.5, 
+    seed_formula = ax_algo.text(5.25, 5.3, 
         "S = (seed + x²·4987142 + x·5947611\n     + z²·4392871 + z·389711 + salt) mod 2³²",
-        ha='center', va='center', color=COLORS['accent'], fontsize=9,
+        ha='center', va='center', color=COLORS['accent'], fontsize=8,
         family='monospace')
-    seed_result = ax_algo.text(5, 4, '', ha='center', va='center',
-                              color=COLORS['village'], fontsize=11,
+    seed_result = ax_algo.text(5.25, 4.2, '', ha='center', va='center',
+                              color=COLORS['village'], fontsize=10,
                               family='monospace', fontweight='bold')
     
-    # Result indicator
-    result_text = ax_algo.text(5, 1.5, '', ha='center', va='center',
-                              fontsize=14, fontweight='bold')
+    # Result indicator - properly positioned
+    result_text = ax_algo.text(5.25, 1.5, '', ha='center', va='center',
+                              fontsize=13, fontweight='bold')
     
-    # Stats panel
-    ax_stats.set_xlim(0, 10)
-    ax_stats.set_ylim(0, 6)
+    # Stats panel - with proper margins
+    ax_stats.set_xlim(-0.5, 11)
+    ax_stats.set_ylim(-0.5, 6.5)
     ax_stats.set_title('Generation Statistics', color=COLORS['text'],
-                      fontsize=14, fontweight='bold')
+                      fontsize=14, fontweight='bold', pad=10)
     ax_stats.axis('off')
     
-    stats_text = ax_stats.text(0.5, 5.5, '', color=COLORS['text'], fontsize=11,
+    stats_text = ax_stats.text(0.3, 5.8, '', color=COLORS['text'], fontsize=10,
                               verticalalignment='top', family='monospace')
     
     # Biome distribution bars
@@ -283,8 +284,8 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
     biome_bars = {}
     
     for i, (biome, color) in enumerate(biome_colors.items()):
-        ax_stats.text(0.5, 2.5 - i*0.6, biome, color=COLORS['text'], fontsize=9)
-        bar = FancyBboxPatch((2.5, 2.3 - i*0.6), 0.1, 0.4,
+        ax_stats.text(0.3, 2.8 - i*0.6, biome, color=COLORS['text'], fontsize=9)
+        bar = FancyBboxPatch((2.3, 2.6 - i*0.6), 0.1, 0.4,
                             boxstyle="round,pad=0.02",
                             facecolor=color, alpha=0.8)
         ax_stats.add_patch(bar)

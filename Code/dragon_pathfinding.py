@@ -355,7 +355,7 @@ def create_dragon_pathfinding_animation(save_path, frames=300, dpi=200, fps=20):
     ax_arena.set_xlim(-130, 130)
     ax_arena.set_ylim(-130, 130)
     ax_arena.set_aspect('equal')
-    ax_arena.set_title('The End - Dragon AI Pathfinding', color=COLORS['text'], 
+    ax_arena.set_title('The End — Dragon Pathfinding Behavior', color=COLORS['text'], 
                       fontsize=16, fontweight='bold', pad=15)
     ax_arena.axis('off')
     
@@ -411,8 +411,14 @@ def create_dragon_pathfinding_animation(save_path, frames=300, dpi=200, fps=20):
     # State diagram
     ax_states.set_xlim(0, 10)
     ax_states.set_ylim(0, 8)
-    ax_states.set_title('AI State Machine', color=COLORS['text'], 
+    ax_states.set_title('Behavioral State Machine', color=COLORS['text'], 
                        fontsize=14, fontweight='bold')
+    
+    # Draw bright grid behind state buttons
+    for i in range(11):
+        ax_states.axvline(i, color=COLORS['accent'], alpha=0.15, linewidth=0.5, zorder=0)
+    for i in range(9):
+        ax_states.axhline(i, color=COLORS['accent'], alpha=0.15, linewidth=0.5, zorder=0)
     ax_states.axis('off')
     
     state_positions = {
