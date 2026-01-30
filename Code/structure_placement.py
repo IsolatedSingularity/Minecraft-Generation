@@ -177,14 +177,14 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
     # Initialize
     sim = StructurePlacementSimulator(world_seed=42, world_size=8000)
     
-    # Create figure
-    fig = plt.figure(figsize=(18, 9))
+    # Create figure - wider aspect ratio for better spacing
+    fig = plt.figure(figsize=(20, 9))
     fig.patch.set_facecolor(COLORS['background'])
     
-    # Layout - wider right column to prevent overlap
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.4, 1], height_ratios=[1.2, 1],
-                         hspace=0.25, wspace=0.15,
-                         left=0.05, right=0.95, top=0.92, bottom=0.08)
+    # Layout - significantly wider right column to prevent text overlap
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.3, 1], height_ratios=[1.2, 1],
+                         hspace=0.35, wspace=0.25,
+                         left=0.04, right=0.97, top=0.92, bottom=0.08)
     
     ax_map = fig.add_subplot(gs[:, 0])
     ax_algo = fig.add_subplot(gs[0, 1])
@@ -225,8 +225,8 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
                                      edgecolors='white', linewidth=1,
                                      cmap='YlOrBr', zorder=6, alpha=0.9)
     
-    # Algorithm panel - with proper margins
-    ax_algo.set_xlim(-0.5, 11)
+    # Algorithm panel - with proper margins and expanded bounds
+    ax_algo.set_xlim(-0.5, 12.5)
     ax_algo.set_ylim(-0.5, 10.5)
     ax_algo.set_title('Placement Algorithm', color=COLORS['text'],
                      fontsize=14, fontweight='bold', pad=10)
@@ -242,29 +242,29 @@ def create_structure_placement_animation(save_path, frames=200, dpi=200, fps=15)
     
     step_texts = []
     for i, step in enumerate(algo_steps):
-        txt = ax_algo.text(0.3, 9.5 - i*1.3, step, color=COLORS['text'],
+        txt = ax_algo.text(0.5, 9.5 - i*1.3, step, color=COLORS['text'],
                           fontsize=10, alpha=0.5)
         step_texts.append(txt)
     
-    # Seed calculation display - properly positioned
-    seed_box = FancyBboxPatch((0.2, 3.8), 10.3, 2.2, boxstyle="round,pad=0.1",
+    # Seed calculation display - properly positioned with more room
+    seed_box = FancyBboxPatch((0.3, 3.5), 11.5, 2.5, boxstyle="round,pad=0.1",
                              facecolor=COLORS['grid'], alpha=0.5)
     ax_algo.add_patch(seed_box)
     
-    seed_formula = ax_algo.text(5.25, 5.3, 
+    seed_formula = ax_algo.text(6.0, 5.3, 
         "S = (seed + x²·4987142 + x·5947611\n     + z²·4392871 + z·389711 + salt) mod 2³²",
-        ha='center', va='center', color=COLORS['accent'], fontsize=8,
+        ha='center', va='center', color=COLORS['accent'], fontsize=9,
         family='monospace')
-    seed_result = ax_algo.text(5.25, 4.2, '', ha='center', va='center',
+    seed_result = ax_algo.text(6.0, 4.0, '', ha='center', va='center',
                               color=COLORS['village'], fontsize=10,
                               family='monospace', fontweight='bold')
     
     # Result indicator - properly positioned
-    result_text = ax_algo.text(5.25, 1.5, '', ha='center', va='center',
+    result_text = ax_algo.text(6.0, 1.2, '', ha='center', va='center',
                               fontsize=13, fontweight='bold')
     
-    # Stats panel - with proper margins
-    ax_stats.set_xlim(-0.5, 11)
+    # Stats panel - with proper margins and expanded bounds
+    ax_stats.set_xlim(-0.5, 12.5)
     ax_stats.set_ylim(-0.5, 6.5)
     ax_stats.set_title('Generation Statistics', color=COLORS['text'],
                       fontsize=14, fontweight='bold', pad=10)
