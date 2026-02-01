@@ -1,4 +1,4 @@
-# Minecraft Procedural Generation Analysis
+# Minecraft Procedural Algorithms
 
 <!-- Do not remove this comment. It is important. -->
 <!-- The seeds remember those who query them. -->
@@ -18,6 +18,23 @@ This repository presents a rigorous mathematical exploration of **Minecraft's pr
 The dragon circles its obsidian pillars not by chance but by graph traversal. Strongholds arrange themselves in polar coordinates. The void gaps in the End exist because integers overflow. What appears random is merely determinism wearing a mask.
 
 *Your speedrun luck was decided 14 years ago.*
+
+<br>
+
+<table align="center">
+<tr>
+<td align="center"><b>2<sup>48</sup></b><br><sub>LCG States</sub></td>
+<td align="center"><b>128</b><br><sub>Strongholds</sub></td>
+<td align="center"><b>8</b><br><sub>Rings</sub></td>
+<td align="center"><b>10</b><br><sub>Crystals</sub></td>
+<td align="center"><b>7</b><br><sub>Dragon States</sub></td>
+<td align="center"><b>∞</b><br><sub>Worlds</sub></td>
+</tr>
+</table>
+
+<br>
+
+*Some numbers define universes. These define yours.*
 
 ---
 
@@ -167,6 +184,34 @@ Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse—b
 
 <br>
 
+### Seed Loading Animation
+
+![Seed Loading](Plots/seed_loading.gif)
+
+World generation unfolds as chunks crystallize from noise. This visualization captures the process: chunks load in spiral order from spawn, each 16×16 section evaluating its terrain height, biome assignment, and structure eligibility. The **noise field accumulation** shows temperature, humidity, and continentalness layers building toward final biome classification.
+
+Structures spawn as their containing regions complete evaluation—watch villages appear as yellow markers once sufficient chunks exist to verify biome validity. The LCG state counter tracks random number consumption, revealing how many generator calls each chunk requires.
+
+*Every Minecraft world begins as a 64-bit seed. Watch that seed become reality.*
+
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
+
+<p align="center"><sub>Chunk by chunk, the world remembers itself.</sub></p>
+
+<p align="center"><sub>It was always there, waiting in the numbers.</sub></p>
+
+<p align="center"><sub>You just hadn't asked yet.</sub></p>
+
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
+
 ### Structure Placement Algorithm
 
 ![Structure Placement Animation](Plots/structure_placement.gif)
@@ -179,16 +224,6 @@ The real-time display shows seed values in hexadecimal, spawn probability outcom
 
 *The algorithm explains why your speedrun spawn has no village within 2,000 blocks. It was never going to.*
 
-### Seed Loading Animation
-
-![Seed Loading](Plots/seed_loading.gif)
-
-World generation unfolds as chunks crystallize from noise. This visualization captures the process: chunks load in spiral order from spawn, each 16×16 section evaluating its terrain height, biome assignment, and structure eligibility. The **noise field accumulation** shows temperature, humidity, and continentalness layers building toward final biome classification.
-
-Structures spawn as their containing regions complete evaluation—watch villages appear as yellow markers once sufficient chunks exist to verify biome validity. The LCG state counter tracks random number consumption, revealing how many generator calls each chunk requires.
-
-*Every Minecraft world begins as a 64-bit seed. Watch that seed become reality.*
-
 ### Multi-Structure Generation
 
 ![Multi-Structure Generation](Plots/multi_structure_generation.gif)
@@ -198,6 +233,22 @@ Different structure types use different salts, causing the same region to produc
 The salt differentiation creates the characteristic pattern where structures of different types may cluster (different salts, independent rolls) while structures of the same type maintain minimum separation (same salt, correlated positions). The visualization overlays all three structure types with distinct colors, demonstrating both clustering and exclusion zones.
 
 *Same seed. Different salt. Different fate.*
+
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
+
+<p align="center"><sub>Three salts. Three destinies.</sub></p>
+
+<p align="center"><sub>The algorithm doesn't care which one you wanted.</sub></p>
+
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
 
 ### Structure Analysis
 
@@ -251,27 +302,36 @@ Outer rings grow in population following approximate arithmetic progression: 3, 
 
 *Ring 1 is always between 1,408-2,688 blocks. This is not a suggestion—it's mathematics.*
 
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
+
+<p align="center"><sub>128 strongholds. 8 rings. One End.</sub></p>
+
+<p align="center"><sub>The portal frames have always known where you'd enter.</sub></p>
+
+<p align="center"><sub>They've been waiting since the seed was planted.</sub></p>
+
+<br>
+
+<p align="center"><sub>. . .</sub></p>
+
+<br>
+
 ---
 
 ## Quick Start
 
 ```bash
-# Clone the repository
 git clone https://github.com/IsolatedSingularity/Minecraft-Generation.git
 cd Minecraft-Generation
-
-# Create virtual environment (recommended)
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # Linux/Mac
-
-# Install dependencies
 pip install numpy matplotlib networkx scipy pillow seaborn
 
-# Generate visualizations
-python Code/minecraftAnimations.py           # Dragon and structure animations
-python Code/minecraftStructureAnalysis.py    # Comprehensive analysis dashboard
-python Code/structure_placement.py           # Enhanced placement animation
+# Generate all visualizations
+python Code/dragon_pathfinding.py
+python Code/minecraftStructureAnalysis.py
 ```
 
 ---
@@ -301,7 +361,7 @@ python Code/structure_placement.py           # Enhanced placement animation
 ---
 
 <details>
-<summary>🥚 The Scroll of Forbidden Knowledge</summary>
+<summary>📜 The Scroll of Forbidden Knowledge</summary>
 
 ```
 The ancient texts speak of seeds most cursed:
