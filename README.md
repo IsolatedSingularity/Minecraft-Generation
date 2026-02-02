@@ -17,7 +17,6 @@ This repository presents a rigorous mathematical exploration of **Minecraft's pr
 
 The dragon circles its obsidian pillars not by chance but by graph traversal. Strongholds arrange themselves in polar coordinates. The void gaps in the End exist because integers overflow. What appears random is merely determinism wearing a mask.
 
-*Your speedrun luck was decided 14 years ago.*
 
 <br>
 
@@ -399,3 +398,4 @@ Isn't it?
 ```
 
 </details>
+
