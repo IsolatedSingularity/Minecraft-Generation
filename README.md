@@ -160,7 +160,7 @@ Twenty End Gateways form a larger ring at radius 96 blocks, their positions calc
 
 $$\mathbf{g}_k = \left( \lfloor 96 \cos(\pi k / 10) \rfloor, \lfloor 96 \sin(\pi k / 10) \rfloor \right), \quad k \in \{0, 1, \ldots, 19\}$$
 
-Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse—but not truly infinite. At $r = 370,720$ blocks, integer arithmetic overflow creates a void gap where no islands spawn. A second gap appears at $r = 524,288$ blocks. These are not bugs but *consequences of binary representation*.
+Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse, but not truly infinite. At $r = 370,720$ blocks, integer arithmetic overflow creates a void gap where no islands spawn. A second gap appears at $r = 524,288$ blocks. These are not bugs but *consequences of binary representation*.
 
 *The End has edges. The numbers told it where to stop.*
 
@@ -190,7 +190,7 @@ Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse—b
 
 World generation unfolds as chunks crystallize from noise. This visualization captures the process: chunks load in spiral order from spawn, each 16×16 section evaluating its terrain height, biome assignment, and structure eligibility. The **noise field accumulation** shows temperature, humidity, and continentalness layers building toward final biome classification.
 
-Structures spawn as their containing regions complete evaluation—watch villages appear as yellow markers once sufficient chunks exist to verify biome validity. The LCG state counter tracks random number consumption, revealing how many generator calls each chunk requires.
+Structures spawn as their containing regions complete evaluation; watch villages appear as yellow markers once sufficient chunks exist to verify biome validity. The LCG state counter tracks random number consumption, revealing how many generator calls each chunk requires.
 
 *Every Minecraft world begins as a 64-bit seed. Watch that seed become reality.*
 
@@ -218,7 +218,7 @@ Structures spawn as their containing regions complete evaluation—watch village
 
 This animation deconstructs Minecraft's village generation algorithm frame by frame. Regions evaluate in **spiral order** expanding from world spawn, each step revealing the seed calculation, probability test, and biome suitability check that determine whether a structure emerges.
 
-The spiral scan pattern ensures players encounter structures distributed somewhat evenly around spawn rather than clustered in one direction. The algorithm computes a 32-bit region seed, extracts random samples for position offset, then validates against biome requirements. Villages demand Plains, Desert, Savanna, or Taiga—other biomes reject placement regardless of probability success.
+The spiral scan pattern ensures players encounter structures distributed somewhat evenly around spawn rather than clustered in one direction. The algorithm computes a 32-bit region seed, extracts random samples for position offset, then validates against biome requirements. Villages demand Plains, Desert, Savanna, or Taiga; other biomes reject placement regardless of probability success.
 
 The real-time display shows seed values in hexadecimal, spawn probability outcomes, and accumulating statistics. Watch the spawn rate stabilize around 25% as regions accumulate, the law of large numbers smoothing individual variance.
 
@@ -256,7 +256,7 @@ The salt differentiation creates the characteristic pattern where structures of 
 
 A comprehensive multi-panel dashboard synthesizing the mathematical foundations discussed above. **Biome parameter maps** render temperature, humidity, and continentalness noise fields as continuous color gradients, revealing the multi-scale structure underlying biome boundaries. **Structure distribution plots** overlay calculated positions on the biome field, demonstrating the correlation between placement and terrain parameters.
 
-Distance histograms from spawn quantify the statistical distribution of structure accessibility—the curves explain why some seeds feel "lucky" while others seem barren. Generation formulas provide exact mathematical specifications for each algorithm component.
+Distance histograms from spawn quantify the statistical distribution of structure accessibility; the curves explain why some seeds feel "lucky" while others seem barren. Generation formulas provide exact mathematical specifications for each algorithm component.
 
 *The numbers never lied. We just didn't know how to read them.*
 
@@ -296,11 +296,11 @@ $$r_{ij} = r_{\min,i} + \mathcal{U}(0, r_{\max,i} - r_{\min,i})$$
 
 $$\theta_{ij} = \frac{2\pi j}{n_i} + \mathcal{N}(0, \sigma_\theta)$$
 
-The first ring contains exactly 3 strongholds between 1,408 and 2,688 blocks—the **speedrunner's constraint**. Eye of Ender triangulation exploits this bounded domain, requiring only two throws to uniquely determine the stronghold position through intersection of bearing lines.
+The first ring contains exactly 3 strongholds between 1,408 and 2,688 blocks: the **speedrunner's constraint**. Eye of Ender triangulation exploits this bounded domain, requiring only two throws to uniquely determine the stronghold position through intersection of bearing lines.
 
 Outer rings grow in population following approximate arithmetic progression: 3, 6, 10, 15, 21, 28, 36, then 9 in the final ring. The visualization renders all eight rings with distinct colors, angular distribution analysis, and distance scale overlays for route planning.
 
-*Ring 1 is always between 1,408-2,688 blocks. This is not a suggestion—it's mathematics.*
+*Ring 1 is always between 1,408-2,688 blocks. This is not a suggestion. It's mathematics.*
 
 <br>
 
@@ -338,10 +338,10 @@ python Code/minecraftStructureAnalysis.py
 
 ## References
 
-1. **[Minecraft Wiki](https://minecraft.wiki/)** — Definitive game mechanics documentation
-2. **[Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)** — Procedural generation deep dives
-3. **Java Random Implementation** — OpenJDK LCG source code analysis
-4. **MCSR Community** — Speedrunning optimization research and seed analysis
+1. **[Minecraft Wiki](https://minecraft.wiki/)**: Definitive game mechanics documentation
+2. **[Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)**: Procedural generation deep dives
+3. **Java Random Implementation**: OpenJDK LCG source code analysis
+4. **MCSR Community**: Speedrunning optimization research and seed analysis
 
 ---
 
@@ -350,7 +350,7 @@ python Code/minecraftStructureAnalysis.py
 ---
 
 > [!TIP]
-> For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie—your throws do.
+> For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie. Your throws do.
 
 > [!NOTE]  
 > All visualizations use authentic Minecraft algorithms verified against game decompilation. Seeds produce results identical to Java Edition.
