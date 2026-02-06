@@ -111,7 +111,7 @@ where $\mathcal{B}_{\text{valid}}$ is the set of valid biomes for the structure 
 
 ### Perlin Noise and Fractal Brownian Motion
 
-Terrain generation employs **multi-octave Perlin noise**, where the base noise function $\eta: \mathbb{R}^2 \to [-1, 1]$ uses gradient interpolation on a regular lattice. For position $(x, y)$, the cell coordinates $(i, j) = (\lfloor x \rfloor, \lfloor y \rfloor)$ and fractional parts $(u, v) = (x - i, y - j)$ yield:
+Terrain generation employs **multi-octave Perlin noise**, where the base noise function is $\eta: \mathbb{R}^2 \to [-1, 1]$ and uses gradient interpolation on a regular lattice. For position $(x, y)$, the cell coordinates $(i, j) = (\lfloor x \rfloor, \lfloor y \rfloor)$ and fractional parts $(u, v) = (x - i, y - j)$ yield:
 
 $$\eta(x, y) = \text{lerp}\left(\text{lerp}(g_{00} \cdot d_{00}, g_{10} \cdot d_{10}, s(u)), \text{lerp}(g_{01} \cdot d_{01}, g_{11} \cdot d_{11}, s(u)), s(v)\right)$$
 
@@ -398,4 +398,5 @@ Isn't it?
 ```
 
 </details>
+
 
