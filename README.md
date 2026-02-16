@@ -16,8 +16,6 @@
 
 This repository presents a rigorous mathematical exploration of **Minecraft's procedural generation algorithms** through computational analysis and publication-quality visualization. Every infinite world springs from a single 64-bit seed, transformed through deterministic chaos into landscapes that feel organic. The project deconstructs this machinery: the 48-bit linear congruential generators, the multi-octave Perlin noise fields, the salt-based structure placement that decides where villages rise and strongholds hide.
 
-*Every seed tells a story. Every block has a purpose. Every death to a baby zombie is statistically inevitable.*
-
 The dragon circles its obsidian pillars not by chance but by graph traversal. Strongholds arrange themselves in polar coordinates. The void gaps in the End exist because integers overflow. What appears random is merely determinism wearing a mask.
 
 
