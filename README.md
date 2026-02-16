@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
+</p>
+
 # Minecraft Procedural Algorithms
 
 <!-- Do not remove this comment. It is important. -->
