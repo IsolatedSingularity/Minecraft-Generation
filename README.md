@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
-</p>
-
 # Minecraft Procedural Algorithms
 
 <!-- Do not remove this comment. It is important. -->
@@ -11,6 +7,10 @@
 ###### Mathematical exploration of Minecraft's world generation algorithms. References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
 
 ![Ender Dragon Pathfinding](Plots/dragon_pathfinding.gif)
+
+<p align="center">
+  <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
+</p>
 
 ---
 
