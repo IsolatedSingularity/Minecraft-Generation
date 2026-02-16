@@ -8,9 +8,7 @@
 
 ![Ender Dragon Pathfinding](Plots/dragon_pathfinding.gif)
 
-<p align="center">
-  <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
-</p>
+
 
 ---
 
@@ -38,7 +36,9 @@ The dragon circles its obsidian pillars not by chance but by graph traversal. St
 
 <br>
 
-*Some numbers define universes. These define yours.*
+<p align="center">
+  <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
+</p>
 
 ---
 
