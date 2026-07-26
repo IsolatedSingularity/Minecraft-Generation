@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -29,3 +29,10 @@ Jenova/
 Jenova/
 
 Jenova/
+
+# Kilo Code / Agent Configuration
+.kilo/
+.kilocodeignore
+AGENTS.md
+Jenova/
+
