@@ -39,26 +39,29 @@ class EnderDragonAI:
 
 **Output**: `Plots/dragon_pathfinding.gif` (200 DPI, 20 FPS)
 
-#### `structure_placement.py`
-**Village Placement Algorithm Animation**
+#### structure_placement.py
+**Java 1.16.1 Village Candidate Animation**
 
-Step-by-step visualization of structure generation:
-- Spiral scan from spawn through region grid
-- Salt-based seed calculation with hex display
-- Biome suitability evaluation
-- Real-time spawn probability visualization
+The generator shows one exact candidate attempt per 32 x 32 chunk region:
 
-**Output**: `Plots/structure_placement.gif` (200 DPI, 15 FPS)
+- Java-compatible region seed with village salt 10387312
+- Two Java Random nextInt(24) offsets
+- Explicit 24 x 24 chunk candidate window
+- Separate biome-pass preview and biome-reject states
 
-#### `stronghold_distribution.py`
-**Stronghold Ring Visualization**
+**Output**: Plots/structure_placement.gif
 
-Publication-quality static plot showing:
-- 128 strongholds across 8 concentric rings
-- Polar coordinate mathematics
-- Distance scale for route planning
+#### stronghold_distribution.py
+**Java 1.16.1 Stronghold Candidate Rings**
 
-**Output**: `Plots/stronghold_rings.png` (300 DPI)
+The generator follows the pre-1.19.3 Java ring iterator shared with the static structure dashboard:
+
+- 128 seeded candidates across eight rings
+- Ring counts 3, 6, 10, 15, 21, 28, 36, 9
+- First-ring candidate range 1,408 to 2,688 blocks
+- Approximate candidates shown before the 112-block biome search
+
+**Output**: Plots/stronghold_rings.png
 
 ### Legacy Animation Systems
 
@@ -95,25 +98,15 @@ class MinecraftExtendedAnimator:
 
 ### Analysis Frameworks
 
-#### `minecraftStructureAnalysis.py`
-**Primary Functions**: Static analysis engine for comprehensive structure visualization
-- **Six-Panel Comprehensive Analysis**: Temperature/humidity fields, biome classification, village distribution, stronghold rings, and combined mapping
-- **Mathematical Foundation Visualization**: Demonstrates authentic Minecraft algorithms with scientific accuracy
+#### minecraftStructureAnalysis.py
+**Primary Functions**: Static Java 1.16.1 candidate and structure analysis
 
-```python
-class MinecraftStructureAnalyzer:
-    def visualize_comprehensive_structure_analysis(self):
-        """Create 6-panel comprehensive structure analysis"""
-    
-    def generate_biome_noise_fields(self):
-        """Generate temperature/humidity using Perlin noise algorithms"""
-```
+The six-panel dashboard separates exact seeded candidate placement from the compact biome-layer preview. It includes:
 
-**Technical Implementation**:
-- Authentic Java Random LCG implementation with 48-bit precision
-- Polar coordinate mathematics for stronghold ring placement
-- Grid-based structure placement with deterministic randomization
-- Publication-quality static visualization generation
+- Village candidate grid and candidate-distance distribution
+- Complete eight-ring stronghold candidate geometry
+- Ring population comparison
+- Formula and scope notes embedded in the figure
 
 #### `minecraftMathematicalAnalysis.py`
 **Primary Functions**: Mathematical foundation analysis and speedrunning optimization
@@ -172,12 +165,18 @@ LCG_MODULUS = 2**48
 VILLAGE_SALT = 10387312
 FORTRESS_SALT = 30084232
 
-# Stronghold Ring Parameters
+# Stronghold Ring Parameters for Java 1.16.1
 STRONGHOLD_RINGS = [
-    {'count': 3, 'min_radius': 1280, 'max_radius': 2816},
+    {'count': 3, 'min_radius': 1408, 'max_radius': 2688},
     {'count': 6, 'min_radius': 4352, 'max_radius': 5888},
-    {'count': 10, 'min_radius': 7424, 'max_radius': 8960}
+    {'count': 10, 'min_radius': 7424, 'max_radius': 8960},
+    {'count': 15, 'min_radius': 10496, 'max_radius': 12032},
+    {'count': 21, 'min_radius': 13568, 'max_radius': 15104},
+    {'count': 28, 'min_radius': 16640, 'max_radius': 18176},
+    {'count': 36, 'min_radius': 19712, 'max_radius': 21248},
+    {'count': 9, 'min_radius': 22784, 'max_radius': 24320},
 ]
+
 ```
 
 ### Performance Characteristics
@@ -201,33 +200,27 @@ def lcg_next(seed):
 ```
 
 ### Structure Placement Algorithm
-Salt-based deterministic randomization for village/fortress placement:
 
-```python
-def generate_structure_seed(world_seed, chunk_x, chunk_z, salt):
-    """Calculate structure seed using Minecraft's exact formula"""
-    return (world_seed + 
-            chunk_x * chunk_x * 4987142 + 
-            chunk_x * 5947611 + 
-            chunk_z * chunk_z * 4392871 + 
-            chunk_z * 389711 + 
-            salt) & 0xFFFFFFFF
-```
+For Java 1.16.1 village candidates, use the 48-bit Java seed setup and the fixed structure-set window:
+
+worldSeed + regionX * 341873128712 + regionZ * 132897987541 + 10387312
+candidateChunkX = regionX * 32 + nextInt(24)
+candidateChunkZ = regionZ * 32 + nextInt(24)
+
+This is one candidate attempt per region. Biome viability is a separate check.
 
 ### Stronghold Ring Mathematics
-Polar coordinate placement with angular distribution:
 
-```python
-def calculate_stronghold_position(ring_index, stronghold_index):
-    """Calculate stronghold position using polar coordinates"""
-    ring = STRONGHOLD_RINGS[ring_index]
-    angle_base = (2 * π * stronghold_index) / ring['count']
-    angle_variance = π / ring['count']
-    radius = random_uniform(ring['min_radius'], ring['max_radius'])
-    return (radius * cos(angle), radius * sin(angle))
-```
+Use the shared generator in Code/core/strongholds.py:
 
-## Usage Examples
+- Seed a Java 1.16.1 LCG from the world seed
+- Start at 128 chunks with +/-40 chunk radius jitter
+- Increase each ring center by 192 chunks
+- Advance evenly within each ring
+- Rotate each new ring with the next LCG double
+- Keep the final eight-ring population at 128 candidates
+
+The final stronghold location still comes from the vanilla biome search.
 
 ### Basic Animation Generation
 ```python

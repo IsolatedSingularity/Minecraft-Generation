@@ -1,230 +1,248 @@
-"""
-Stronghold Ring Distribution Visualization
+"""Java 1.16.1 stronghold candidate-ring visualization.
 
-Creates a publication-quality visualization of Minecraft's stronghold
-placement algorithm with concentric rings and polar coordinate mathematics.
+The ring geometry follows the pre-1.19.3 Java iterator. Points are the
+approximate candidates before the vanilla biome search, which can move the
+final structure within a 112-block search radius.
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, Wedge, FancyArrowPatch
-from matplotlib.lines import Line2D
 import os
 
-# ============================================================================
-# VISUAL CONFIGURATION
-# ============================================================================
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Wedge, FancyBboxPatch
+import numpy as np
+
+from core.constants import MINECRAFT_VERSION, STRONGHOLD_RINGS, TOTAL_STRONGHOLDS
+from core.strongholds import generate_stronghold_candidates
+
 
 plt.style.use('dark_background')
 
 COLORS = {
-    'background': '#0D1117',
-    'grid': '#21262D',
-    'text': '#E6EDF3',
-    'accent': '#58A6FF',
-    'spawn': '#FF4444',
+    'background': '#0B1020',
+    'panel': '#111A2E',
+    'panel_alt': '#17233B',
+    'grid': '#263653',
+    'text': '#E8EEF9',
+    'muted': '#93A4C3',
+    'accent': '#7DD3FC',
+    'warning': '#FCD34D',
 }
 
-RING_COLORS = [
-    '#FF6B6B',  # Ring 1 - Coral
-    '#4ECDC4',  # Ring 2 - Teal
-    '#45B7D1',  # Ring 3 - Sky Blue
-    '#96CEB4',  # Ring 4 - Sage
-    '#FFEAA7',  # Ring 5 - Yellow
-    '#DDA0DD',  # Ring 6 - Plum
-    '#87CEEB',  # Ring 7 - Light Blue
-    '#F0E68C',  # Ring 8 - Khaki
-]
-
-# ============================================================================
-# STRONGHOLD GENERATION
-# ============================================================================
-
-STRONGHOLD_RINGS = [
-    {'count': 3, 'min_radius': 1280, 'max_radius': 2816},
-    {'count': 6, 'min_radius': 4352, 'max_radius': 5888},
-    {'count': 10, 'min_radius': 7424, 'max_radius': 8960},
-    {'count': 15, 'min_radius': 10496, 'max_radius': 12032},
-    {'count': 21, 'min_radius': 13568, 'max_radius': 15104},
-    {'count': 28, 'min_radius': 16640, 'max_radius': 18176},
-    {'count': 36, 'min_radius': 19712, 'max_radius': 21248},
-    {'count': 9, 'min_radius': 22784, 'max_radius': 24320},
-]
+RING_COLORS = [ring['color'] for ring in STRONGHOLD_RINGS]
 
 
-def generate_strongholds(seed=42):
-    """Generate all 128 stronghold positions."""
-    np.random.seed(seed)
-    strongholds = []
-    
-    for ring_idx, ring in enumerate(STRONGHOLD_RINGS):
-        count = ring['count']
-        min_r = ring['min_radius']
-        max_r = ring['max_radius']
-        color = RING_COLORS[ring_idx]
-        
-        # Base angle with slight randomization
-        base_angle = np.random.uniform(0, 2*np.pi / count)
-        
-        for i in range(count):
-            # Angular distribution with jitter
-            angle = base_angle + i * 2*np.pi / count
-            angle += np.random.normal(0, np.pi / (count * 4))
-            
-            # Radius within ring bounds
-            radius = np.random.uniform(min_r, max_r)
-            
-            x = radius * np.cos(angle)
-            z = radius * np.sin(angle)
-            
-            strongholds.append({
-                'x': x,
-                'z': z,
-                'radius': radius,
-                'angle': angle,
-                'ring': ring_idx + 1,
-                'color': color,
-            })
-    
-    return strongholds
+def add_ring_band(ax, ring, alpha=0.10, linewidth=1.0):
+    color = ring['color']
+    ax.add_patch(Wedge(
+        (0, 0), ring['max_radius'], 0, 360,
+        width=ring['max_radius'] - ring['min_radius'],
+        facecolor=color, edgecolor='none', alpha=alpha,
+    ))
+    ax.add_patch(Circle(
+        (0, 0), ring['min_radius'], fill=False, color=color,
+        alpha=0.55, linewidth=linewidth, linestyle='--',
+    ))
+    ax.add_patch(Circle(
+        (0, 0), ring['max_radius'], fill=False, color=color,
+        alpha=0.80, linewidth=linewidth,
+    ))
 
 
-def create_stronghold_distribution(save_path, dpi=300):
-    """Create publication-quality stronghold distribution plot."""
-    print("=" * 60)
-    print("STRONGHOLD RING DISTRIBUTION")
-    print("=" * 60)
-    
-    # Generate data
-    strongholds = generate_strongholds(seed=42)
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=(14, 14))
-    fig.patch.set_facecolor(COLORS['background'])
-    ax.set_facecolor(COLORS['background'])
-    
-    # Set up axes
-    max_radius = STRONGHOLD_RINGS[-1]['max_radius'] + 2000
-    ax.set_xlim(-max_radius, max_radius)
-    ax.set_ylim(-max_radius, max_radius)
-    ax.set_aspect('equal')
-    
-    # Title
-    ax.set_title('Stronghold Distribution in the Overworld\n128 Strongholds Across 8 Concentric Rings',
-                color=COLORS['text'], fontsize=18, fontweight='bold', pad=20)
-    
-    # Draw rings
-    for ring_idx, ring in enumerate(STRONGHOLD_RINGS):
-        color = RING_COLORS[ring_idx]
-        
-        # Ring band (wedge)
-        wedge = Wedge((0, 0), ring['max_radius'], 0, 360,
-                     width=ring['max_radius'] - ring['min_radius'],
-                     color=color, alpha=0.15)
-        ax.add_patch(wedge)
-        
-        # Ring boundaries
-        inner_circle = Circle((0, 0), ring['min_radius'], fill=False,
-                             color=color, alpha=0.5, linewidth=1.5,
-                             linestyle='--')
-        outer_circle = Circle((0, 0), ring['max_radius'], fill=False,
-                             color=color, alpha=0.5, linewidth=1.5)
-        ax.add_patch(inner_circle)
-        ax.add_patch(outer_circle)
-        
-        # Ring label
-        label_angle = np.pi / 4 + ring_idx * 0.15
-        label_r = (ring['min_radius'] + ring['max_radius']) / 2
-        label_x = label_r * np.cos(label_angle)
-        label_z = label_r * np.sin(label_angle)
-        ax.annotate(f'Ring {ring_idx + 1}\n({ring["count"]})',
-                   xy=(label_x, label_z), ha='center', va='center',
-                   color=color, fontsize=10, fontweight='bold',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor=COLORS['background'],
-                            edgecolor=color, alpha=0.9))
-    
-    # Draw strongholds
-    for sh in strongholds:
-        ax.scatter(sh['x'], sh['z'], c=sh['color'], s=120, alpha=0.9,
-                  edgecolors='white', linewidth=1.5, zorder=5)
-    
-    # Spawn point
-    ax.scatter(0, 0, c=COLORS['spawn'], s=400, marker='*',
-              edgecolors='white', linewidth=2, zorder=10, label='World Spawn')
-    
-    # Cardinal directions
-    for angle, label in [(0, 'E (+X)'), (np.pi/2, 'N (-Z)'), 
-                         (np.pi, 'W (-X)'), (3*np.pi/2, 'S (+Z)')]:
-        r = max_radius - 1000
-        x = r * np.cos(angle)
-        z = r * np.sin(angle)
-        ax.annotate(label, xy=(x, z), ha='center', va='center',
-                   color=COLORS['text'], fontsize=12, fontweight='bold',
-                   alpha=0.7)
-    
-    # Distance scale
-    scale_y = -max_radius + 1500
-    for dist in [5000, 10000, 15000, 20000]:
-        ax.axhline(scale_y, xmin=0.5, xmax=0.5+dist/(2*max_radius),
-                  color=COLORS['text'], alpha=0.5, linewidth=2)
-        ax.text(dist, scale_y - 800, f'{dist:,}', ha='center',
-               color=COLORS['text'], fontsize=9)
-    ax.text(10000, scale_y - 1800, 'Distance (blocks)', ha='center',
-           color=COLORS['text'], fontsize=10)
-    
-    # Statistics box
-    total_strongholds = sum(ring['count'] for ring in STRONGHOLD_RINGS)
-    stats_text = (
-        f"Total Strongholds: {total_strongholds}\n"
-        f"First Ring Distance: 1,280 - 2,816 blocks\n"
-        f"Last Ring Distance: 22,784 - 24,320 blocks\n"
-        f"Angular Distribution: θ = 2π·i/n + random"
+def create_stronghold_distribution(save_path, dpi=300, seed=42):
+    """Render the Java 1.16.1 stronghold candidate distribution."""
+    candidates = generate_stronghold_candidates(seed)
+    max_radius = STRONGHOLD_RINGS[-1]['max_radius'] + 1800
+
+    fig = plt.figure(figsize=(18, 10), facecolor=COLORS['background'])
+    gs = fig.add_gridspec(
+        10, 12, left=0.04, right=0.97, top=0.88, bottom=0.07,
+        hspace=0.70, wspace=0.70,
     )
-    ax.text(-max_radius + 1000, max_radius - 1000, stats_text,
-           color=COLORS['text'], fontsize=11, verticalalignment='top',
-           family='monospace',
-           bbox=dict(boxstyle='round,pad=0.5', facecolor=COLORS['background'],
-                    edgecolor=COLORS['accent'], alpha=0.9))
-    
-    # Legend
-    legend_elements = [
-        Line2D([0], [0], marker='*', color='w', markerfacecolor=COLORS['spawn'],
-               markersize=15, label='World Spawn', linestyle='None'),
-    ]
-    for ring_idx, ring in enumerate(STRONGHOLD_RINGS):
-        legend_elements.append(
-            Line2D([0], [0], marker='o', color='w', 
-                   markerfacecolor=RING_COLORS[ring_idx],
-                   markersize=10, 
-                   label=f'Ring {ring_idx+1} ({ring["count"]} strongholds)',
-                   linestyle='None')
+    ax_map = fig.add_subplot(gs[:, :8])
+    ax_info = fig.add_subplot(gs[:7, 8:])
+    ax_zoom = fig.add_subplot(gs[7:, 8:])
+
+    for ax in (ax_map, ax_info, ax_zoom):
+        ax.set_facecolor(COLORS['panel'])
+        for spine in ax.spines.values():
+            spine.set_color(COLORS['grid'])
+            spine.set_linewidth(1.0)
+
+    fig.suptitle(
+        f'STRONGHOLD CANDIDATE RINGS  |  {MINECRAFT_VERSION}',
+        color=COLORS['text'], fontsize=21, fontweight='bold',
+        x=0.04, ha='left',
+    )
+    fig.text(
+        0.97, 0.895,
+        'Seeded Java ring iterator, shown before the biome search',
+        color=COLORS['muted'], fontsize=10, ha='right',
+    )
+
+    ax_map.set_xlim(-max_radius, max_radius)
+    ax_map.set_ylim(-max_radius, max_radius)
+    ax_map.set_aspect('equal')
+    ax_map.set_title(
+        '128 APPROXIMATE CANDIDATES  /  WORLD ORIGIN (0, 0)',
+        color=COLORS['text'], fontsize=12, fontweight='bold',
+        loc='left', pad=12,
+    )
+    ax_map.set_xlabel('Block X', color=COLORS['muted'])
+    ax_map.set_ylabel('Block Z', color=COLORS['muted'])
+    ax_map.tick_params(colors=COLORS['muted'], labelsize=8)
+    ax_map.grid(color=COLORS['grid'], linewidth=0.5, alpha=0.38)
+
+    for ring in STRONGHOLD_RINGS:
+        add_ring_band(ax_map, ring)
+
+    for index, ring in enumerate(STRONGHOLD_RINGS):
+        mid_radius = (ring['min_radius'] + ring['max_radius']) / 2.0
+        label_angle = np.deg2rad(28 + index * 2.4)
+        ax_map.text(
+            mid_radius * np.cos(label_angle),
+            mid_radius * np.sin(label_angle),
+            f'R{index + 1}  n={ring["count"]}',
+            color=ring['color'], fontsize=8, fontweight='bold',
+            ha='center', va='center',
+            bbox=dict(
+                boxstyle='round,pad=0.25', facecolor=COLORS['panel'],
+                edgecolor=ring['color'], alpha=0.92, linewidth=0.8,
+            ),
+            zorder=6,
         )
-    
-    ax.legend(handles=legend_elements, loc='lower right',
-             facecolor=COLORS['background'], edgecolor=COLORS['grid'],
-             labelcolor=COLORS['text'], fontsize=9)
-    
-    # Grid
-    ax.grid(True, color=COLORS['grid'], alpha=0.3, linestyle='--')
-    ax.set_xlabel('X Coordinate (blocks)', color=COLORS['text'], fontsize=12)
-    ax.set_ylabel('Z Coordinate (blocks)', color=COLORS['text'], fontsize=12)
-    ax.tick_params(colors=COLORS['text'])
-    
-    # Save
-    plt.tight_layout()
-    print(f"Saving to: {save_path}")
-    plt.savefig(save_path, dpi=dpi, facecolor=COLORS['background'],
-               bbox_inches='tight')
-    print("✓ Saved successfully!")
+
+    for ring_index, ring in enumerate(STRONGHOLD_RINGS, start=1):
+        ring_points = [item for item in candidates if item['ring'] == ring_index]
+        ax_map.scatter(
+            [item['x'] for item in ring_points],
+            [item['z'] for item in ring_points],
+            s=38 if ring_index > 1 else 78,
+            color=ring['color'],
+            edgecolors=COLORS['text'] if ring_index == 1 else 'none',
+            linewidths=0.7,
+            alpha=0.96,
+            zorder=7,
+        )
+
+    first_ring = candidates[:STRONGHOLD_RINGS[0]['count']]
+    for item in first_ring:
+        ax_map.plot(
+            [0, item['x']], [0, item['z']],
+            color=COLORS['warning'], alpha=0.42, linewidth=0.8, zorder=3,
+        )
+
+    ax_map.scatter(
+        [0], [0], marker='*', s=220, color=COLORS['warning'],
+        edgecolors=COLORS['text'], linewidths=1.2, zorder=9,
+    )
+    ax_map.text(
+        0.98, 0.03, 'colors encode ring  |  highlighted spokes = first ring',
+        transform=ax_map.transAxes, ha='right', color=COLORS['muted'],
+        fontsize=8,
+    )
+
+    ax_info.axis('off')
+    ax_info.text(
+        0.04, 0.94, 'RING MODEL', transform=ax_info.transAxes,
+        color=COLORS['text'], fontsize=12, fontweight='bold',
+    )
+    info_box = FancyBboxPatch(
+        (0.04, 0.72), 0.92, 0.15, transform=ax_info.transAxes,
+        boxstyle='round,pad=0.012', facecolor='#203454',
+        edgecolor=COLORS['accent'], linewidth=1.2,
+    )
+    ax_info.add_patch(info_box)
+    ax_info.text(
+        0.08, 0.81, 'SPEEDRUN RING', transform=ax_info.transAxes,
+        color=COLORS['accent'], fontsize=9, fontweight='bold',
+    )
+    ax_info.text(
+        0.08, 0.755, '3 candidates  |  1,408 - 2,688 blocks',
+        transform=ax_info.transAxes, color=COLORS['text'], fontsize=10,
+        family='monospace',
+    )
+    ax_info.text(
+        0.04, 0.66,
+        f'world seed        {seed}\n'
+        f'candidate count   {TOTAL_STRONGHOLDS}\n'
+        f'candidate search  +/-112 blocks\n'
+        f'coordinate frame   origin, not player spawn',
+        transform=ax_info.transAxes, color=COLORS['muted'], fontsize=9,
+        linespacing=1.6, family='monospace',
+    )
+
+    table_y = 0.48
+    ax_info.text(
+        0.04, table_y + 0.055, 'RING     COUNT     CANDIDATE RANGE',
+        transform=ax_info.transAxes, color=COLORS['muted'],
+        fontsize=8, family='monospace',
+    )
+    for index, ring in enumerate(STRONGHOLD_RINGS):
+        y = table_y - index * 0.047
+        ax_info.text(
+            0.04, y, f'{index + 1:>2}       {ring["count"]:>3}',
+            transform=ax_info.transAxes, color=ring['color'],
+            fontsize=8, family='monospace',
+        )
+        ax_info.text(
+            0.37, y,
+            f'{ring["min_radius"]:,} - {ring["max_radius"]:,}',
+            transform=ax_info.transAxes, color=COLORS['text'],
+            fontsize=8, family='monospace',
+        )
+
+    ax_info.text(
+        0.04, 0.04,
+        'The ring iterator fixes the count and angular spacing.\n'
+        'Biome search selects the final valid location.',
+        transform=ax_info.transAxes, color=COLORS['muted'], fontsize=8,
+        linespacing=1.5,
+    )
+
+    ax_zoom.set_xlim(-3200, 3200)
+    ax_zoom.set_ylim(-3200, 3200)
+    ax_zoom.set_aspect('equal')
+    ax_zoom.set_title(
+        'FIRST RING DETAIL  /  112-BLOCK SEARCH RADIUS',
+        color=COLORS['text'], fontsize=10, fontweight='bold',
+        loc='left', pad=10,
+    )
+    ax_zoom.tick_params(colors=COLORS['muted'], labelsize=7)
+    ax_zoom.grid(color=COLORS['grid'], linewidth=0.5, alpha=0.4)
+    add_ring_band(ax_zoom, STRONGHOLD_RINGS[0], alpha=0.16, linewidth=0.9)
+    for item in first_ring:
+        ax_zoom.add_patch(Circle(
+            (item['x'], item['z']), 112, fill=False,
+            color=COLORS['warning'], alpha=0.48, linewidth=0.8,
+            linestyle=':',
+        ))
+        ax_zoom.scatter(
+            [item['x']], [item['z']], s=65, color=item['color'],
+            edgecolors=COLORS['text'], linewidths=0.8, zorder=4,
+        )
+        ax_zoom.text(
+            item['x'], item['z'], str(item['ring_index']),
+            color=COLORS['text'], fontsize=8, fontweight='bold',
+            ha='center', va='center', zorder=5,
+        )
+    ax_zoom.scatter(
+        [0], [0], marker='*', s=90, color=COLORS['warning'],
+        edgecolors=COLORS['text'], linewidths=0.8,
+    )
+    ax_zoom.set_xlabel('Block X', color=COLORS['muted'], fontsize=8)
+    ax_zoom.set_ylabel('Block Z', color=COLORS['muted'], fontsize=8)
+
+    fig.savefig(
+        save_path, dpi=dpi, facecolor=COLORS['background'],
+        edgecolor='none', bbox_inches='tight',
+    )
     plt.close(fig)
-    
     return save_path
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    plots_dir = os.path.join(os.path.dirname(script_dir), "Plots")
+    plots_dir = os.path.join(os.path.dirname(script_dir), 'Plots')
     os.makedirs(plots_dir, exist_ok=True)
-    
-    output_path = os.path.join(plots_dir, "stronghold_rings.png")
-    create_stronghold_distribution(output_path, dpi=300)
+    output_path = os.path.join(plots_dir, 'stronghold_rings.png')
+    create_stronghold_distribution(output_path)

@@ -30,6 +30,8 @@ PALETTE = {
 # WORLD GENERATION PARAMETERS
 # ============================================================================
 
+MINECRAFT_VERSION = 'Java 1.16.1'
+
 CHUNK_SIZE = 16  # Blocks per chunk
 
 # Village generation
@@ -52,7 +54,9 @@ MONUMENT_SALT = 10387313
 # ============================================================================
 
 STRONGHOLD_RINGS = [
-    {'count': 3, 'min_radius': 1280, 'max_radius': 2816, 'color': '#FF6B6B'},
+    # Java 1.16.1 candidate ranges. The final structure location is selected
+    # by a biome search around the approximate candidate.
+    {'count': 3, 'min_radius': 1408, 'max_radius': 2688, 'color': '#FF6B6B'},
     {'count': 6, 'min_radius': 4352, 'max_radius': 5888, 'color': '#4ECDC4'},
     {'count': 10, 'min_radius': 7424, 'max_radius': 8960, 'color': '#45B7D1'},
     {'count': 15, 'min_radius': 10496, 'max_radius': 12032, 'color': '#96CEB4'},

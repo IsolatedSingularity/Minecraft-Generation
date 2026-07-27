@@ -96,21 +96,17 @@ class JavaLCG:
 
 ### Structure Placement Theory
 
-Structure positioning employs a **region-based salt system** ensuring deterministic yet seemingly random distribution. The world divides into regions of size $S \times S$ chunks, where each region's seed derives from the world seed through:
+For Java 1.16.1, village placement starts with a fixed structure set: 32 x 32 chunks per region, separation 8, and a 24 x 24 chunk candidate window.
 
-$$S_{\text{region}} = S_{\text{world}} + R_x \cdot K_1 + R_z \cdot K_2 + \sigma$$
+$$S_{\text{region}} = S_{\text{world}} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigma$$
 
-The constants $K_1 = 341873128712$ and $K_2 = 132897987541$ are chosen to minimize correlation between adjacent regions, while the salt $\sigma$ differentiates structure types. Within each region, the structure position $(c_x, c_z)$ follows a **triangular distribution** for natural clustering:
+Java Random is seeded from this value, then draws:
 
-$$c_x = R_x \cdot S + \left\lfloor \frac{T_1 + T_2}{2} \right\rfloor, \quad c_z = R_z \cdot S + \left\lfloor \frac{T_3 + T_4}{2} \right\rfloor$$
+$$c_x = R_x \cdot 32 + J_x, \quad c_z = R_z \cdot 32 + J_z$$
 
-where $T_i \sim \mathcal{U}(0, S - \text{sep})$ are uniform random variables. The triangular sum concentrates structures toward region centers, creating the characteristic clustering visible in village distributions.
+where $J_x$ and $J_z$ are independent \texttt{nextInt(24)} values. There is one candidate attempt per region. A separate biome check decides whether the candidate can generate as a village, so the final rate is not simply the separation divided by the spacing.
 
-The spawn probability for a given region involves a **threshold test** against the separation parameter:
-
-$$P(\text{spawn}) = \mathbb{1}[\text{LCG.nextInt}(S) < \text{sep}] \cdot \mathbb{1}[\text{biome} \in \mathcal{B}_{\text{valid}}]$$
-
-where $\mathcal{B}_{\text{valid}}$ is the set of valid biomes for the structure type.
+The refreshed animation makes that boundary visible: exact candidate placement first, readable biome-pass preview second.
 
 ### Perlin Noise and Fractal Brownian Motion
 
@@ -190,41 +186,23 @@ Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse, bu
 
 ![Seed Loading](Plots/seed_loading.gif)
 
-World generation unfolds as chunks crystallize from noise. This visualization captures the process: chunks load in spiral order from spawn, each 16×16 section evaluating its terrain height, biome assignment, and structure eligibility. The **noise field accumulation** shows temperature, humidity, and continentalness layers building toward final biome classification.
+This animation traces a world seed through the Java 1.16.1 loading story. The left panel reveals sampled chunks in an outward spiral, while the right panels separate the seed, the 48-bit Java LCG state, the biome-layer preview, and the run status.
 
-Structures spawn as their containing regions complete evaluation; watch villages appear as yellow markers once sufficient chunks exist to verify biome validity. The LCG state counter tracks random number consumption, revealing how many generator calls each chunk requires.
+The seed and LCG display use the exact Java Random recurrence. The biome colors are intentionally labeled as a compact layer preview, because a small educational animation is not a replacement for the complete vanilla 1.16.1 biome engine.
 
-*Every Minecraft world begins as a 64-bit seed. Watch that seed become reality.*
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-<p align="center"><sub>Chunk by chunk, the world remembers itself.</sub></p>
-
-<p align="center"><sub>It was always there, waiting in the numbers.</sub></p>
-
-<p align="center"><sub>You just hadn't asked yet.</sub></p>
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
+*The seed is fixed. The reveal is the explanation.*
 
 ### Structure Placement Algorithm
 
 ![Structure Placement Animation](Plots/structure_placement.gif)
 
-This animation deconstructs Minecraft's village generation algorithm frame by frame. Regions evaluate in **spiral order** expanding from world spawn, each step revealing the seed calculation, probability test, and biome suitability check that determine whether a structure emerges.
+This animation isolates the Java 1.16.1 village candidate stage. The world is divided into 32 x 32 chunk regions. Each region gets one deterministic candidate, generated with:
 
-The spiral scan pattern ensures players encounter structures distributed somewhat evenly around spawn rather than clustered in one direction. The algorithm computes a 32-bit region seed, extracts random samples for position offset, then validates against biome requirements. Villages demand Plains, Desert, Savanna, or Taiga; other biomes reject placement regardless of probability success.
+$$S = \text{worldSeed} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigma$$
 
-The real-time display shows seed values in hexadecimal, spawn probability outcomes, and accumulating statistics. Watch the spawn rate stabilize around 25% as regions accumulate, the law of large numbers smoothing individual variance.
+Java Random then selects two offsets with `nextInt(24)`, producing a candidate chunk in the region's 24 x 24 chunk window. The gold points show candidates that pass the animation's readable biome-layer preview; red crosses show the biome gate rejecting the candidate.
 
-*The algorithm explains why your speedrun spawn has no village within 2,000 blocks. It was never going to.*
+This is a clearer boundary than the old plot: candidate placement is exact for 1.16.1, while full biome viability remains a separate generation step.
 
 ### Multi-Structure Generation
 
@@ -256,53 +234,25 @@ The salt differentiation creates the characteristic pattern where structures of 
 
 ![Structure Analysis](Plots/structure_analysis.png)
 
-A comprehensive multi-panel dashboard synthesizing the mathematical foundations discussed above. **Biome parameter maps** render temperature, humidity, and continentalness noise fields as continuous color gradients, revealing the multi-scale structure underlying biome boundaries. **Structure distribution plots** overlay calculated positions on the biome field, demonstrating the correlation between placement and terrain parameters.
+The refreshed six-panel analysis separates the two things that were previously mixed together: exact seeded structure candidates and a compact biome-layer preview. It shows the 1.16.1 village candidate grid, candidate distances, the complete eight-ring stronghold geometry, ring populations, and the formulas that connect the panels.
 
-Distance histograms from spawn quantify the statistical distribution of structure accessibility; the curves explain why some seeds feel "lucky" while others seem barren. Generation formulas provide exact mathematical specifications for each algorithm component.
-
-*The numbers never lied. We just didn't know how to read them.*
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-<p align="center"><sub>Have we met before?</sub></p>
-
-<p align="center"><sub>Your seed looks familiar.</sub></p>
-
-<br>
-
-<p align="center"><sub>No, that's not right.</sub></p>
-
-<p align="center"><sub>I would remember a generation like yours.</sub></p>
-
-<br>
-
-<p align="center"><sub>Wouldn't I?</sub></p>
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
+Stronghold points are labeled as approximate candidates before the vanilla biome search. This keeps the plot useful for speedrunning while making its accuracy boundary explicit.
 
 ### Stronghold Ring Distribution
 
 ![Stronghold Distribution](Plots/stronghold_rings.png)
 
-The 128 strongholds of a Minecraft world arrange themselves in **eight concentric rings** around world spawn, their positions governed by polar coordinate mathematics with carefully tuned jitter. For ring $i$ with $n_i$ strongholds, each stronghold $j$ locates at:
+This plot now uses the Java 1.16.1 stronghold ring iterator, centered on world origin '(0, 0)', not the player's spawn point. The seeded candidate geometry contains 128 strongholds across eight rings with populations:
 
-$$r_{ij} = r_{\min,i} + \mathcal{U}(0, r_{\max,i} - r_{\min,i})$$
+$$3,\ 6,\ 10,\ 15,\ 21,\ 28,\ 36,\ 9$$
 
-$$\theta_{ij} = \frac{2\pi j}{n_i} + \mathcal{N}(0, \sigma_\theta)$$
+For ring number $i$, indexed from zero, the approximate radius in chunks is:
 
-The first ring contains exactly 3 strongholds between 1,408 and 2,688 blocks: the **speedrunner's constraint**. Eye of Ender triangulation exploits this bounded domain, requiring only two throws to uniquely determine the stronghold position through intersection of bearing lines.
+$$r_i = 128 + 192i + \left(\mathcal{U}(0,1) - \frac{1}{2}\right) \cdot 80$$
 
-Outer rings grow in population following approximate arithmetic progression: 3, 6, 10, 15, 21, 28, 36, then 9 in the final ring. The visualization renders all eight rings with distinct colors, angular distribution analysis, and distance scale overlays for route planning.
+The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The remaining ring ranges are shown directly in the figure. Java 1.16.1 then searches around each candidate for a valid biome, so the plotted points are the exact seeded ring candidates, not claims about final portal-room coordinates.
 
-*Ring 1 is always between 1,408-2,688 blocks. This is not a suggestion. It's mathematics.*
+*The ring is deterministic. The biome search is the last step.*
 
 <br>
 
@@ -355,7 +305,7 @@ python Code/minecraftStructureAnalysis.py
 > For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie. Your throws do.
 
 > [!NOTE]  
-> All visualizations use authentic Minecraft algorithms verified against game decompilation. Seeds produce results identical to Java Edition.
+> These four refreshed assets target Java 1.16.1. Candidate formulas and stronghold ring geometry use Java-compatible RNG. Biome panels are labeled compact previews, not bit-perfect full-world biome generation. No Bedrock behavior is represented.
 
 > [!CAUTION]
 > Side effects of understanding these algorithms include: inability to enjoy "random" generation, compulsive seed analysis, and explaining to non-players why 48-bit integers matter.
