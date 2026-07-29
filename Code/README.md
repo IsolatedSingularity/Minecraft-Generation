@@ -98,6 +98,16 @@ class MinecraftExtendedAnimator:
 
 ### Analysis Frameworks
 
+#### `archive/minecraftStructureAnalysis.py`
+**Primary Functions**: Static Java 1.16.1 candidate and structure analysis
+
+This former six-panel dashboard is archived and no longer belongs to the active render pipeline. It includes:
+
+- Village candidate grid and candidate-distance distribution
+- Complete eight-ring stronghold candidate geometry
+- Ring population comparison
+- Formula and scope notes embedded in the figure
+
 #### `minecraftMathematicalAnalysis.py`
 **Primary Functions**: Mathematical foundation analysis and speedrunning optimization
 - **LCG Pattern Analysis**: Linear Congruential Generator behavior visualization
@@ -175,6 +185,7 @@ STRONGHOLD_RINGS = [
 |--------|------------|--------------|-------------|
 | `minecraftAnimations.py` | O(n²) regions | 2-4 GB | 30-60 seconds |
 | `minecraftExtendedAnimations.py` | O(n³) temporal | 4-8 GB | 90-180 seconds |
+| `archive/minecraftStructureAnalysis.py` | O(n²) spatial | 1-2 GB | 15-30 seconds |
 | `minecraftMathematicalAnalysis.py` | O(n log n) | 512 MB - 1 GB | 10-20 seconds |
 
 ## Algorithm Implementations
@@ -239,10 +250,17 @@ extended_animator.animate_comprehensive_analysis(frames=200)
 extended_animator.animate_speedrunning_analysis(frames=150)
 ```
 
+### Static Visualization
+```python
+from archive.minecraftStructureAnalysis import MinecraftStructureAnalyzer
 
-### Archived Renderer
+# High-resolution static analysis
+analyzer = MinecraftStructureAnalyzer(world_seed=42, world_size=20000)
 
-The former six-panel structure-analysis dashboard is preserved at `Code/archive/minecraftStructureAnalysis.py`. It is no longer part of the active render pipeline or README visualization sequence.
+# Generate comprehensive structure visualization
+analyzer.visualize_comprehensive_structure_analysis()
+```
+
 ## Examples Directory
 
 The `Examples/` subdirectory contains reference implementations demonstrating:

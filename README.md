@@ -140,11 +140,12 @@ The Ender Dragon navigates a **directed acyclic graph** embedded in the End dime
 
 The dragon's behavioral state machine operates on seven distinct states, each with characteristic movement patterns. **HOLDING** produces the familiar circling at maximum radius, the dragon tracing lazy arcs while surveying its domain. **STRAFING** triggers aggressive linear charges accompanied by acid breath. **APPROACH**, **LANDING**, and **PERCHING** execute the critical touchdown sequence that speedrunners exploit, the probability of initiating this sequence following $P = 1/(3 + n_{\text{crystals}})$ where destroyed crystals increase perch likelihood. **TAKEOFF** and **CHARGING** complete the cycle, returning the dragon to its orbital patterns.
 
-The visualization renders the path graph in real time while the right-hand RPG-style state wheel tracks behavior. With all ten crystals alive, every state node is linked like a fully connected stat build. Each destroyed crystal removes part of that network, while the central ring updates the exact perch probability and the surviving crystal count.
+The visualization renders the path graph in real time while the RPG-style state wheel tracks behavior. With all ten crystals alive, every state node is linked like a fully connected stat build. Each destroyed crystal removes part of that network, while the central ring updates the exact perch probability and surviving crystal count.
 
 #### Phase Details
 
-These three clips isolate the movement families compressed into the main loop. The first follows wide holding arcs and attack transitions, the second traces the inward landing sequence and perch, and the third shows how the dragon reconnects with the outer graph after takeoff.
+These clips separate the movement families compressed into the main loop. The first follows holding arcs and attack transitions, the second traces the landing sequence and perch, and the third shows the dragon reconnecting with the outer graph after takeoff.
+
 <table>
 <tr>
 <th>Holding, Strafing, and Charging</th>
@@ -162,7 +163,7 @@ These three clips isolate the movement families compressed into the main loop. T
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The ensemble now begins empty and gradually accumulates 420 seeded dragon approaches over roughly sixteen seconds. Pale blue density marks repeatedly occupied routes, while the brighter green strokes identify the newest approaches so the field can be read as it forms. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
+The ensemble begins empty and gradually accumulates 420 seeded dragon approaches over roughly sixteen seconds. Pale blue density marks repeatedly occupied routes, while brighter green strokes identify recent approaches so the field can be read as it forms. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
 
 *The dragon doesn't hunt you. It follows an algorithm. Your death was a graph traversal.*
 
@@ -208,7 +209,7 @@ Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse, bu
 
 ![Seed Loading](Plots/seed_loading.gif)
 
-This animation presents the Java 1.16.1 loading story as one focused chunk field. Generation statuses travel outward as a dependency wave, and the compact control strip below shows which stage is currently advancing.
+This animation presents the Java 1.16.1 loading story as one focused chunk field. Generation statuses travel outward as a dependency wave, and the compact control strip below shows which stage is advancing.
 
 The population-seed mixing and status order are exact. The apparent timing is a deterministic educational schedule rather than a wall-clock profiler trace.
 
@@ -224,7 +225,7 @@ $$S = \text{worldSeed} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigm
 
 Java Random then selects two offsets with `nextInt(24)`, producing a candidate chunk in the region's 24 x 24 chunk window. House-shaped markers show the deterministic candidates, while the blue outline follows the active region and its legal placement window.
 
-The terrain is a faint deterministic context layer for orientation, not a bit-exact biome claim. Candidate placement remains exact for Java 1.16.1, while full terrain and biome viability remain separate generation steps.
+The faint terrain provides deterministic visual context, not a bit-exact biome claim. Candidate placement remains exact for Java 1.16.1, while full terrain and biome viability remain separate generation steps.
 
 ### Multi-Structure Generation
 
@@ -232,7 +233,7 @@ The terrain is a faint deterministic context layer for orientation, not a bit-ex
 
 This animation compares Java 1.16.1 Nether fortress, bastion-remnant, and ruined-portal candidates. Fortresses and bastions share 27-chunk regions with separation 4 and salt $30084232$; one shared candidate is classified with the source-faithful 2:3 fortress-to-bastion split. Ruined portals use independent 25-chunk regions with separation 10 and salt $34222645$.
 
-The colored Nether terrain is a deterministic context layer, not bit-exact Nether biome generation. Castle, shield, and portal symbols distinguish the exact candidate-stage outputs, while the right-side legend keeps the plot area unobstructed.
+The colored Nether terrain is deterministic context, not bit-exact Nether biome generation. Castle, shield, and portal symbols distinguish the candidate-stage outputs, with a legend beside the plot.
 
 *Same seed. Different salt. Different fate.*
 
@@ -252,6 +253,7 @@ The colored Nether terrain is a deterministic context layer, not bit-exact Nethe
 
 <br>
 
+
 ### Stronghold Ring Distribution
 
 ![Stronghold Distribution](Plots/stronghold_rings.png)
@@ -265,7 +267,8 @@ For ring number $i$, indexed from zero, the approximate radius in chunks is:
 $$r_i = 128 + 192i + \left(\mathcal{U}(0,1) - \frac{1}{2}\right) \cdot 80$$
 
 The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The remaining ring ranges are shown directly in the figure. Java 1.16.1 then searches around each candidate for a valid biome, so the plotted points are the exact seeded ring candidates, not claims about final portal-room coordinates.
-The right subplot repeats a two-throw triangulation experiment 1,800 times with independent Gaussian bearing noise of $\sigma_\theta = 1.2^\circ$. The point cloud shows how angular error spreads the estimate; the star is the true candidate, the X is the median estimate, and the dashed circle is the 112-block biome-search radius. This noise model is an uncertainty demonstration, not a vanilla generation rule.
+
+The right subplot repeats a two-throw triangulation experiment 1,800 times with independent Gaussian bearing noise of $\sigma_\theta = 1.2^\circ$. The point cloud shows how angular error spreads the estimate; the star is the true candidate, the X is the median estimate, and the dashed circle is the 112-block biome-search radius. This uncertainty model is not a vanilla generation rule.
 
 *The ring is deterministic. The biome search is the last step.*
 
@@ -296,7 +299,7 @@ git clone https://github.com/IsolatedSingularity/Minecraft-Generation.git
 cd Minecraft-Generation
 pip install numpy matplotlib networkx scipy pillow seaborn
 
-# Generate all visualizations
+# Generate all maintained visualizations
 python Code/render_all.py
 ```
 
