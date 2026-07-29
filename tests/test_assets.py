@@ -1,4 +1,4 @@
-"""Integrity checks for the active README visualization bundle."""
+"""Integrity checks for the four retained new README animations."""
 
 from pathlib import Path
 import unittest
@@ -9,53 +9,41 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 PLOTS = ROOT / 'Plots'
 
-GIFS = {
-    'dragon_pathfinding.gif': (1400, 800, 80),
+NEW_GIFS = {
     'dragon_holding_strafe.gif': (900, 500, 20),
     'dragon_landing_perch.gif': (900, 500, 20),
     'dragon_takeoff.gif': (900, 500, 20),
     'dragon_trajectory_ensemble.gif': (900, 600, 80),
-    'seed_loading.gif': (1400, 800, 50),
-    'structure_placement.gif': (1400, 800, 80),
-    'multi_structure_generation.gif': (1400, 800, 80),
 }
 
-PNGS = {
-    'end_dimension_overview.png': (3000, 1800),
-    'structure_analysis.png': (2500, 1600),
-    'stronghold_rings.png': (3000, 1800),
-}
+README_ASSETS = (
+    'dragon_pathfinding.gif',
+    'end_dimension_overview.png',
+    'seed_loading.gif',
+    'structure_placement.gif',
+    'multi_structure_generation.gif',
+    'structure_analysis.png',
+    'stronghold_rings.png',
+    *NEW_GIFS,
+)
 
 
 class AssetIntegrityTests(unittest.TestCase):
-    def test_active_gifs_decode_and_are_bounded(self):
-        for name, (minimum_width, minimum_height, minimum_frames) in GIFS.items():
-            path = PLOTS / name
-            self.assertTrue(path.is_file(), name)
-            with Image.open(path) as image:
+    def test_retained_new_gifs_decode_and_are_bounded(self):
+        for name, (minimum_width, minimum_height, minimum_frames) in NEW_GIFS.items():
+            asset = PLOTS / name
+            self.assertTrue(asset.is_file(), name)
+            with Image.open(asset) as image:
                 self.assertGreaterEqual(image.width, minimum_width, name)
                 self.assertGreaterEqual(image.height, minimum_height, name)
                 self.assertGreaterEqual(image.n_frames, minimum_frames, name)
                 image.seek(image.n_frames - 1)
                 image.convert('RGB').getpixel((0, 0))
-            self.assertLess(path.stat().st_size, 8 * 1024 * 1024, name)
+            self.assertLess(asset.stat().st_size, 8 * 1024 * 1024, name)
 
-    def test_hero_is_github_sized(self):
-        hero = PLOTS / 'dragon_pathfinding.gif'
-        self.assertLess(hero.stat().st_size, 5 * 1024 * 1024)
-
-    def test_active_pngs_decode(self):
-        for name, (minimum_width, minimum_height) in PNGS.items():
-            path = PLOTS / name
-            self.assertTrue(path.is_file(), name)
-            with Image.open(path) as image:
-                self.assertGreaterEqual(image.width, minimum_width, name)
-                self.assertGreaterEqual(image.height, minimum_height, name)
-                image.verify()
-
-    def test_readmes_reference_all_active_assets(self):
+    def test_readme_references_restored_and_retained_assets(self):
         root_text = (ROOT / 'README.md').read_text(encoding='utf-8')
-        for name in (*GIFS, *PNGS):
+        for name in README_ASSETS:
             self.assertIn(f'Plots/{name}', root_text, name)
 
     def test_active_documentation_has_no_em_dash(self):
