@@ -1,37 +1,28 @@
-"""Java 1.16.1 stronghold rings with high-noise triangulation spread."""
+"""Java 1.16.1 stronghold rings with a triangulation simulation."""
 
 from pathlib import Path
 import math
 
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Circle, Wedge
+from matplotlib.patches import Circle, Polygon, Wedge
 import numpy as np
 
 from core.constants import STRONGHOLD_RINGS
 from core.strongholds import generate_stronghold_candidates
-from core.style import COLORS, addSoftShadow, apply_style, style_axis
+from core.style import COLORS, apply_style, style_axis
 
 
 apply_style()
 
 RING_COLORS = [
-    '#FF6B6B', '#FF9F43', '#F4C542', '#77C66E',
-    '#45C8B7', '#4A90E2', '#9C8CF2', '#D780D6',
+    '#FB7185', '#F59E72', '#F6C85F', '#A5D66A',
+    '#43D9C2', '#65C7F7', '#A78BFA', '#E879F9',
 ]
 
 
 def _panel_label(ax, label):
-    badge = ax.text(
-        0.025, 0.965, label, transform=ax.transAxes,
-        va='top', color=COLORS['blue'], fontsize=9.0, fontweight='bold',
-        bbox=dict(
-            boxstyle='round,pad=0.35', facecolor=COLORS['panel'],
-            edgecolor=COLORS['grid'], alpha=0.96,
-        ),
-        zorder=20,
-    )
-    addSoftShadow(badge.get_bbox_patch(), offset=(1.0, -1.0), alpha=0.16)
+    ax.text(0.02, 0.975, label, transform=ax.transAxes,
+            va='top', color=COLORS['text'], fontsize=11, fontweight='bold')
 
 
 def _ring_band(ax, ring, color, alpha=0.08):
@@ -42,12 +33,22 @@ def _ring_band(ax, ring, color, alpha=0.08):
     ))
     ax.add_patch(Circle(
         (0, 0), ring['min_radius'], fill=False,
-        edgecolor=color, linewidth=0.5, linestyle=':', alpha=0.48,
+        edgecolor=color, linewidth=0.5, linestyle=':', alpha=0.45,
     ))
     ax.add_patch(Circle(
         (0, 0), ring['max_radius'], fill=False,
-        edgecolor=color, linewidth=0.7, alpha=0.66,
+        edgecolor=color, linewidth=0.7, alpha=0.62,
     ))
+
+
+def _bearing_polygon(origin, angle, length, half_width):
+    left = angle - half_width
+    right = angle + half_width
+    return np.array([
+        origin,
+        origin + length * np.array([math.cos(left), math.sin(left)]),
+        origin + length * np.array([math.cos(right), math.sin(right)]),
+    ])
 
 
 def _line_intersection(point_a, angle_a, point_b, angle_b):
@@ -61,9 +62,7 @@ def _line_intersection(point_a, angle_a, point_b, angle_b):
     return point_a + scale * direction_a
 
 
-def _triangulation_samples(
-    target, seed=42, samples=1800, sigma_degrees=1.2,
-):
+def _triangulation_samples(target, seed=42, samples=700, sigma_degrees=0.35):
     target = np.asarray(target, dtype=float)
     perpendicular = np.array([-target[1], target[0]])
     perpendicular /= max(np.linalg.norm(perpendicular), 1.0)
@@ -79,9 +78,9 @@ def _triangulation_samples(
             throw_a, angle_a + random.normal(0.0, sigma),
             throw_b, angle_b + random.normal(0.0, sigma),
         )
-        if point is not None and np.linalg.norm(point - target) < 2500:
+        if point is not None and np.linalg.norm(point - target) < 1500:
             intersections.append(point)
-    return np.asarray(intersections)
+    return throw_a, throw_b, angle_a, angle_b, np.asarray(intersections)
 
 
 def create_stronghold_distribution(save_path, dpi=220, seed=42):
@@ -89,15 +88,17 @@ def create_stronghold_distribution(save_path, dpi=220, seed=42):
     first_ring = candidates[:3]
     target_item = min(first_ring, key=lambda item: item['radius'])
     target = np.array([target_item['x'], target_item['z']], dtype=float)
-    intersections = _triangulation_samples(target, seed)
+    throw_a, throw_b, angle_a, angle_b, intersections = _triangulation_samples(target, seed)
 
-    figure = plt.figure(figsize=(15.5, 7.8), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(15.5, 9.4), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[1.15, 1.0],
-        left=0.055, right=0.98, top=0.91, bottom=0.10, wspace=0.16,
+        2, 2, width_ratios=[1.72, 1.0], height_ratios=[1.0, 0.86],
+        left=0.055, right=0.98, top=0.97, bottom=0.08,
+        wspace=0.18, hspace=0.24,
     )
-    ring_axis = figure.add_subplot(grid[0, 0])
-    noise_axis = figure.add_subplot(grid[0, 1])
+    ring_axis = figure.add_subplot(grid[:, 0])
+    bearing_axis = figure.add_subplot(grid[0, 1])
+    zoom_axis = figure.add_subplot(grid[1, 1])
 
     max_radius = STRONGHOLD_RINGS[-1]['max_radius'] + 1700
     for index, ring in enumerate(STRONGHOLD_RINGS):
@@ -107,105 +108,83 @@ def create_stronghold_distribution(save_path, dpi=220, seed=42):
             [item['x'] for item in subset],
             [item['z'] for item in subset],
             s=30 if index else 56, c=RING_COLORS[index],
-            edgecolors=COLORS['panel'] if index == 0 else 'none',
-            linewidths=0.65, alpha=0.94, zorder=5,
+            edgecolors=COLORS['text'] if index == 0 else 'none',
+            linewidths=0.45, alpha=0.92, zorder=5,
         )
         angle = math.radians(24 + index * 1.8)
         midpoint = (ring['min_radius'] + ring['max_radius']) / 2.0
         ring_axis.text(
             midpoint * math.cos(angle), midpoint * math.sin(angle),
             f'R{index + 1}', color=RING_COLORS[index], fontsize=7,
-            ha='center', va='center', fontweight='bold',
+            ha='center', va='center',
         )
     for item in first_ring:
-        ring_axis.plot(
-            [0, item['x']], [0, item['z']],
-            color=COLORS['gold'], linewidth=0.65, alpha=0.46,
-        )
-    ring_axis.scatter(
-        [0], [0], marker='+', s=82, c=COLORS['text'], linewidths=1.0,
-    )
+        ring_axis.plot([0, item['x']], [0, item['z']],
+                       color=COLORS['gold'], linewidth=0.55, alpha=0.38)
+    ring_axis.scatter([0], [0], marker='+', s=80, c=COLORS['text'], linewidths=1.0)
     ring_axis.set_xlim(-max_radius, max_radius)
     ring_axis.set_ylim(-max_radius, max_radius)
     ring_axis.set_xlabel('Block X')
     ring_axis.set_ylabel('Block Z')
-    ring_axis.set_title('Stronghold candidate rings', loc='left', pad=12, fontsize=11)
     style_axis(ring_axis, equal=True, grid=True)
-    _panel_label(ring_axis, 'A')
+    _panel_label(ring_axis, '(a)')
+
+    length = float(np.linalg.norm(target) * 1.18)
+    half_width = math.radians(0.55)
+    bearing_axis.add_patch(Polygon(
+        _bearing_polygon(throw_a, angle_a, length, half_width),
+        facecolor=COLORS['blue'], edgecolor='none', alpha=0.14,
+    ))
+    bearing_axis.add_patch(Polygon(
+        _bearing_polygon(throw_b, angle_b, length, half_width),
+        facecolor=COLORS['violet'], edgecolor='none', alpha=0.14,
+    ))
+    for point, angle, color in (
+        (throw_a, angle_a, COLORS['blue']),
+        (throw_b, angle_b, COLORS['violet']),
+    ):
+        bearing_axis.plot(
+            [point[0], point[0] + length * math.cos(angle)],
+            [point[1], point[1] + length * math.sin(angle)],
+            color=color, linewidth=1.0, alpha=0.85,
+        )
+        bearing_axis.scatter([point[0]], [point[1]], s=52, c=color,
+                             edgecolors=COLORS['text'], linewidths=0.4, zorder=5)
+    bearing_axis.scatter([target[0]], [target[1]], s=70, c=COLORS['coral'],
+                         edgecolors=COLORS['text'], linewidths=0.6, zorder=6)
+    all_points = np.vstack([throw_a, throw_b, target])
+    padding = 250
+    bearing_axis.set_xlim(all_points[:, 0].min() - padding, all_points[:, 0].max() + padding)
+    bearing_axis.set_ylim(all_points[:, 1].min() - padding, all_points[:, 1].max() + padding)
+    bearing_axis.set_xlabel('Block X')
+    bearing_axis.set_ylabel('Block Z')
+    style_axis(bearing_axis, equal=True, grid=True)
+    _panel_label(bearing_axis, '(b)')
 
     distances = np.linalg.norm(intersections - target, axis=1)
-    confidence = np.exp(-distances / max(float(np.percentile(distances, 80)), 1.0))
-    point_colors = np.empty((len(intersections), 4))
-    blue_rgba = np.array(plt.matplotlib.colors.to_rgba(COLORS['blue']))
-    green_rgba = np.array(plt.matplotlib.colors.to_rgba(COLORS['green']))
-    point_colors[:, :3] = (
-        confidence[:, None] * green_rgba[:3]
-        + (1.0 - confidence[:, None]) * blue_rgba[:3]
+    zoom_axis.scatter(
+        intersections[:, 0], intersections[:, 1], s=10,
+        c=distances, cmap='magma', alpha=0.34, edgecolors='none',
     )
-    point_colors[:, 3] = 0.18 + 0.34 * confidence
-    noise_axis.scatter(
-        intersections[:, 0], intersections[:, 1], s=12,
-        c=point_colors, edgecolors='none', rasterized=True, zorder=3,
-    )
-    noise_axis.add_patch(Circle(
+    zoom_axis.add_patch(Circle(
         target, 112, fill=False, edgecolor=COLORS['gold'],
-        linewidth=1.15, linestyle='--', alpha=0.95, zorder=6,
+        linewidth=1.0, linestyle='--', alpha=0.9,
     ))
-    noise_axis.scatter(
-        [target[0]], [target[1]], s=96, c=COLORS['coral'], marker='*',
-        edgecolors=COLORS['panel'], linewidths=0.75, zorder=7,
-    )
+    zoom_axis.scatter([target[0]], [target[1]], s=70, c=COLORS['coral'],
+                      edgecolors=COLORS['text'], linewidths=0.6, zorder=5)
     median = np.median(intersections, axis=0)
-    noise_axis.scatter(
-        [median[0]], [median[1]], s=72, marker='X',
-        c=COLORS['green'], edgecolors=COLORS['panel'],
-        linewidths=0.75, zorder=8,
-    )
-    zoom_radius = max(520.0, float(np.percentile(distances, 97.5)))
-    noise_axis.set_xlim(target[0] - zoom_radius, target[0] + zoom_radius)
-    noise_axis.set_ylim(target[1] - zoom_radius, target[1] + zoom_radius)
-    noise_axis.set_xlabel('Estimated block X')
-    noise_axis.set_ylabel('Estimated block Z')
-    noise_axis.set_title(
-        'High-noise triangulation spread', loc='left', pad=12, fontsize=11,
-    )
-    style_axis(noise_axis, equal=True, grid=True)
-    _panel_label(noise_axis, 'B')
-    noise_axis.text(
-        0.975, 0.965, r'$\sigma_\theta = 1.2^\circ$  |  1,800 trials',
-        transform=noise_axis.transAxes, ha='right', va='top',
-        color=COLORS['muted'], fontsize=7.8,
-    )
-    legend = noise_axis.legend(
-        handles=[
-            Line2D(
-                [0], [0], marker='o', linestyle='None',
-                markerfacecolor=COLORS['blue'], markeredgecolor='none',
-                markersize=6, label='Noisy intersections',
-            ),
-            Line2D(
-                [0], [0], marker='*', linestyle='None',
-                markerfacecolor=COLORS['coral'], markeredgecolor=COLORS['panel'],
-                markersize=9, label='True candidate',
-            ),
-            Line2D(
-                [0], [0], marker='X', linestyle='None',
-                markerfacecolor=COLORS['green'], markeredgecolor=COLORS['panel'],
-                markersize=7, label='Median estimate',
-            ),
-            Line2D(
-                [0], [0], color=COLORS['gold'], linestyle='--',
-                label='112-block biome search radius',
-            ),
-        ],
-        loc='lower right', fontsize=7.8, borderpad=0.8, labelspacing=0.65,
-    )
-    addSoftShadow(legend.get_frame(), offset=(1.6, -1.6), alpha=0.18)
+    zoom_axis.scatter([median[0]], [median[1]], s=55, marker='x',
+                      c=COLORS['cyan'], linewidths=1.2, zorder=6)
+    zoom_radius = max(260.0, float(np.percentile(distances, 97)))
+    zoom_axis.set_xlim(target[0] - zoom_radius, target[0] + zoom_radius)
+    zoom_axis.set_ylim(target[1] - zoom_radius, target[1] + zoom_radius)
+    zoom_axis.set_xlabel('Block X')
+    zoom_axis.set_ylabel('Block Z')
+    style_axis(zoom_axis, equal=True, grid=True)
+    _panel_label(zoom_axis, '(c)')
 
-    figure.savefig(
-        save_path, dpi=dpi, facecolor=COLORS['background'],
-        edgecolor='none', bbox_inches='tight',
-    )
+    figure.savefig(save_path, dpi=dpi, facecolor=COLORS['background'],
+                   edgecolor='none', bbox_inches='tight')
     plt.close(figure)
     return str(save_path)
 

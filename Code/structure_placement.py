@@ -5,31 +5,16 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.colors import Normalize
-from matplotlib.lines import Line2D
-from matplotlib.markers import MarkerStyle
-from matplotlib.patches import Patch, Rectangle
-from matplotlib.path import Path as MarkerPath
+from matplotlib.patches import Rectangle
 import numpy as np
 
 from core.constants import VILLAGE_SPACING
 from core.rendering import optimize_gif
 from core.structures import VILLAGE, candidate_in_region
-from core.style import COLORS, addSoftShadow, apply_style, style_axis
-from core.terrain import addTerrainBackdrop
+from core.style import COLORS, apply_style
 
 
 apply_style()
-
-HOUSE_MARKER = MarkerPath(
-    [
-        (-0.78, -0.72), (0.78, -0.72), (0.78, 0.08),
-        (0.0, 0.82), (-0.78, 0.08), (-0.78, -0.72),
-    ],
-    [
-        MarkerPath.MOVETO, MarkerPath.LINETO, MarkerPath.LINETO,
-        MarkerPath.LINETO, MarkerPath.LINETO, MarkerPath.CLOSEPOLY,
-    ],
-)
 
 
 def spiral_regions(radius):
@@ -56,75 +41,90 @@ def create_structure_placement_animation(
     limit = (region_radius + 0.65) * spacing
 
     figure, axis = plt.subplots(figsize=(12.8, 7.2), facecolor=COLORS['background'])
-    figure.subplots_adjust(left=0.10, right=0.90, top=0.95, bottom=0.11)
+    figure.subplots_adjust(left=0.09, right=0.92, top=0.965, bottom=0.10)
     axis.set_xlim(-limit, limit)
     axis.set_ylim(-limit, limit)
+    axis.set_aspect('equal')
     axis.set_xlabel('Chunk X')
     axis.set_ylabel('Chunk Z')
-    style_axis(axis, equal=True, grid=False)
-    addTerrainBackdrop(axis, limit, seed, dimension='overworld', alpha=0.34)
+    axis.tick_params(colors=COLORS['muted'], labelsize=8)
+    for spine in axis.spines.values():
+        spine.set_color(COLORS['grid'])
 
     for region_x in range(-region_radius, region_radius + 1):
         for region_z in range(-region_radius, region_radius + 1):
+            color = COLORS['panel'] if (region_x + region_z) % 2 == 0 else COLORS['panel_alt']
             axis.add_patch(Rectangle(
                 (region_x * spacing, region_z * spacing), spacing, spacing,
-                facecolor=COLORS['panel'], edgecolor=COLORS['grid'],
-                linewidth=0.58, alpha=0.16, zorder=0,
+                facecolor=color, edgecolor=COLORS['grid'],
+                linewidth=0.55, alpha=0.66, zorder=0,
             ))
 
     axis.axhline(0, color=COLORS['muted'], linewidth=0.55, alpha=0.42)
     axis.axvline(0, color=COLORS['muted'], linewidth=0.55, alpha=0.42)
     axis.scatter(
-        [0], [0], marker='+', s=78, c=COLORS['text'],
-        linewidths=1.0, zorder=8,
+        [0], [0], marker='+', s=75, c=COLORS['text'],
+        linewidths=1.0, zorder=6,
     )
 
     points = axis.scatter(
-        [], [], s=58, marker=HOUSE_MARKER, c=[], cmap='Blues',
+        [], [], s=32, c=[], cmap='viridis',
         norm=Normalize(0, np.sqrt(2) * 23),
-        edgecolors=COLORS['panel'], linewidths=0.65,
-        alpha=0.92, zorder=5,
+        edgecolors=COLORS['text'], linewidths=0.28,
+        alpha=0.88, zorder=5,
     )
     current_region = Rectangle(
         (0, 0), spacing, spacing, fill=False,
-        edgecolor=COLORS['blue'], linewidth=1.6, alpha=0.0, zorder=7,
+        edgecolor=COLORS['cyan'], linewidth=1.55, alpha=0.0, zorder=7,
     )
     current_window = Rectangle(
-        (0, 0), 24, 24, facecolor=COLORS['cyan'],
-        edgecolor=COLORS['blue'], linewidth=0.95,
+        (0, 0), 24, 24, facecolor=COLORS['blue'],
+        edgecolor=COLORS['cyan'], linewidth=0.8,
         linestyle='--', alpha=0.0, zorder=2,
     )
     axis.add_patch(current_window)
     axis.add_patch(current_region)
     current_point = axis.scatter(
-        [], [], s=190, marker=HOUSE_MARKER, facecolors='none',
-        edgecolors=COLORS['blue'], linewidths=1.55, zorder=9,
+        [], [], s=120, facecolors='none', edgecolors=COLORS['cyan'],
+        linewidths=1.2, zorder=8,
     )
 
-    legendHandles = [
-        Patch(
-            facecolor='#B9DDA7', edgecolor='none', alpha=0.55,
-            label='Terrain context',
-        ),
-        Patch(
-            facecolor='none', edgecolor=COLORS['grid'],
-            label='32 x 32 chunk region',
-        ),
-        Patch(
-            facecolor=COLORS['cyan'], edgecolor=COLORS['blue'],
-            alpha=0.30, label='24 x 24 candidate window',
-        ),
-        Line2D(
-            [0], [0], marker=MarkerStyle(HOUSE_MARKER), linestyle='None',
-            markerfacecolor=COLORS['blue'], markeredgecolor=COLORS['panel'],
-            markersize=8.5, label='Java RNG village candidate',
-        ),
-    ]
-    legend = axis.legend(
-        handles=legendHandles, loc='upper right', title='Placement key',
-        borderpad=0.9, labelspacing=0.75, fontsize=8.0, title_fontsize=8.8,
+    inset = axis.inset_axes([0.735, 0.035, 0.23, 0.23])
+    inset.set_xlim(0, 32)
+    inset.set_ylim(0, 32)
+    inset.set_aspect('equal')
+    inset.set_facecolor(COLORS['panel'])
+    inset.add_patch(Rectangle(
+        (0, 0), 24, 24, facecolor=COLORS['blue'],
+        edgecolor=COLORS['cyan'], linewidth=0.9, alpha=0.17,
+    ))
+    inset.axvline(24, color=COLORS['cyan'], linewidth=0.65, linestyle='--')
+    inset.axhline(24, color=COLORS['cyan'], linewidth=0.65, linestyle='--')
+    inset.set_xticks([0, 8, 16, 24, 32])
+    inset.set_yticks([0, 8, 16, 24, 32])
+    inset.tick_params(colors=COLORS['muted'], labelsize=6)
+    for spine in inset.spines.values():
+        spine.set_color(COLORS['grid'])
+    inset_point = inset.scatter(
+        [], [], s=70, c=COLORS['gold'],
+        edgecolors=COLORS['text'], linewidths=0.55, zorder=4,
     )
-    addSoftShadow(legend.get_frame(), offset=(1.8, -1.8), alpha=0.20)
+    inset_x_line, = inset.plot([], [], color=COLORS['gold'], linewidth=0.7, alpha=0.7)
+    inset_z_line, = inset.plot([], [], color=COLORS['gold'], linewidth=0.7, alpha=0.7)
+
+    legend = figure.add_axes([0.145, 0.025, 0.56, 0.035])
+    legend.axis('off')
+    legend.set_xlim(0, 1)
+    legend.set_ylim(0, 1)
+    entries = [
+        (0.03, COLORS['grid'], '32 x 32 region'),
+        (0.38, COLORS['blue'], '24 x 24 candidate window'),
+        (0.79, COLORS['gold'], 'Java RNG candidate'),
+    ]
+    for x, color, label in entries:
+        legend.scatter([x], [0.5], s=40, c=color, marker='s')
+        legend.text(x + 0.035, 0.5, label, va='center',
+                    color=COLORS['muted'], fontsize=7.2)
 
     def update(frame_index):
         progress = frame_index / max(total_frames - 1, 1)
@@ -146,8 +146,11 @@ def create_structure_placement_animation(
         current_region.set_xy(region_origin)
         current_region.set_alpha(0.95)
         current_window.set_xy(region_origin)
-        current_window.set_alpha(0.18)
+        current_window.set_alpha(0.12)
         current_point.set_offsets(np.array([[item['chunk_x'], item['chunk_z']]]))
+        inset_point.set_offsets(np.array([[item['offset_x'], item['offset_z']]]))
+        inset_x_line.set_data([0, item['offset_x']], [item['offset_z'], item['offset_z']])
+        inset_z_line.set_data([item['offset_x'], item['offset_x']], [0, item['offset_z']])
         return []
 
     animation = FuncAnimation(
@@ -155,7 +158,7 @@ def create_structure_placement_animation(
     )
     animation.save(save_path, writer=PillowWriter(fps=fps), dpi=125)
     plt.close(figure)
-    optimize_gif(save_path, colors=128)
+    optimize_gif(save_path, colors=96)
     return str(save_path)
 
 

@@ -98,10 +98,10 @@ class MinecraftExtendedAnimator:
 
 ### Analysis Frameworks
 
-#### `archive/minecraftStructureAnalysis.py`
+#### minecraftStructureAnalysis.py
 **Primary Functions**: Static Java 1.16.1 candidate and structure analysis
 
-This former six-panel dashboard is archived and no longer belongs to the active render pipeline. It includes:
+The six-panel dashboard separates exact seeded candidate placement from the compact biome-layer preview. It includes:
 
 - Village candidate grid and candidate-distance distribution
 - Complete eight-ring stronghold candidate geometry
@@ -185,7 +185,7 @@ STRONGHOLD_RINGS = [
 |--------|------------|--------------|-------------|
 | `minecraftAnimations.py` | O(n²) regions | 2-4 GB | 30-60 seconds |
 | `minecraftExtendedAnimations.py` | O(n³) temporal | 4-8 GB | 90-180 seconds |
-| `archive/minecraftStructureAnalysis.py` | O(n²) spatial | 1-2 GB | 15-30 seconds |
+| `minecraftStructureAnalysis.py` | O(n²) spatial | 1-2 GB | 15-30 seconds |
 | `minecraftMathematicalAnalysis.py` | O(n log n) | 512 MB - 1 GB | 10-20 seconds |
 
 ## Algorithm Implementations
@@ -252,7 +252,7 @@ extended_animator.animate_speedrunning_analysis(frames=150)
 
 ### Static Visualization
 ```python
-from archive.minecraftStructureAnalysis import MinecraftStructureAnalyzer
+from minecraftStructureAnalysis import MinecraftStructureAnalyzer
 
 # High-resolution static analysis
 analyzer = MinecraftStructureAnalyzer(world_seed=42, world_size=20000)
