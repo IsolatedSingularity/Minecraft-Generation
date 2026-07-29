@@ -1,4 +1,4 @@
-"""Render every README visualization from deterministic inputs."""
+﻿"""Render every maintained README visualization from deterministic inputs."""
 
 from pathlib import Path
 import time
@@ -13,7 +13,6 @@ from dragon_pathfinding import (
     create_trajectory_ensemble_animation,
 )
 from end_dimension_overview import create_end_dimension_overview
-from minecraftStructureAnalysis import create_structure_analysis
 from multi_structure_generation import create_multi_structure_animation
 from seed_loading import create_seed_loading_animation
 from stronghold_distribution import create_stronghold_distribution
@@ -35,8 +34,6 @@ def main():
 
     _render('End overview', lambda: create_end_dimension_overview(
         plots / 'end_dimension_overview.png'))
-    _render('Structure analysis', lambda: create_structure_analysis(
-        plots / 'structure_analysis.png'))
     _render('Stronghold rings', lambda: create_stronghold_distribution(
         plots / 'stronghold_rings.png'))
 

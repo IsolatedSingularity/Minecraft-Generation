@@ -6,12 +6,14 @@ reduced-order interpolation for legibility.
 """
 
 from pathlib import Path
+from itertools import combinations
 import sys
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.collections import LineCollection
-from matplotlib.patches import Circle, FancyArrowPatch, Wedge
+from matplotlib.colors import LinearSegmentedColormap, PowerNorm
+from matplotlib.patches import Circle, FancyArrowPatch, FancyBboxPatch, RegularPolygon, Wedge
 import numpy as np
 
 from core.constants import END_PILLAR_RADIUS
@@ -25,7 +27,7 @@ from core.dragon import (
 )
 from core.end_generation import spike_layout
 from core.rendering import optimize_gif
-from core.style import COLORS, STATE_COLORS, apply_style
+from core.style import COLORS, STATE_COLORS, addSoftShadow, apply_style, style_axis
 
 
 apply_style()
@@ -36,7 +38,8 @@ def _arena_static(ax, seed=42, compact=False):
     ax.set_ylim(-76, 76)
     ax.set_aspect('equal')
     ax.axis('off')
-    ax.set_facecolor(COLORS['background'])
+    ax.set_facecolor(COLORS['panel'])
+    addSoftShadow(ax.patch, offset=(2.0, -2.0), alpha=0.14)
 
     ax.add_patch(Circle(
         (0, 0), 72, facecolor=COLORS['end_stone'],
@@ -88,17 +91,34 @@ def _draw_state_machine(ax):
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis('off')
-    ax.set_facecolor(COLORS['background'])
+    ax.set_facecolor(COLORS['panel'])
 
+    card = FancyBboxPatch(
+        (0.025, 0.035), 0.95, 0.93,
+        boxstyle='round,pad=0.012,rounding_size=0.035',
+        transform=ax.transAxes, facecolor=COLORS['panel'],
+        edgecolor=COLORS['grid'], linewidth=0.75, zorder=-10,
+    )
+    ax.add_patch(card)
+    addSoftShadow(card, offset=(2.2, -2.2), alpha=0.20)
+
+    center = np.array([0.50, 0.53])
+    node_radius = 0.355
+    angles = np.linspace(
+        np.pi / 2.0, np.pi / 2.0 + 2.0 * np.pi,
+        len(STATE_ORDER), endpoint=False,
+    )
     positions = {
-        'holding': (0.50, 0.88),
-        'strafing': (0.20, 0.70),
-        'charging': (0.80, 0.70),
-        'landing_approach': (0.50, 0.58),
-        'landing': (0.50, 0.40),
-        'perching': (0.50, 0.22),
-        'takeoff': (0.80, 0.38),
+        state: center + node_radius * np.array([np.cos(angle), np.sin(angle)])
+        for state, angle in zip(STATE_ORDER, angles)
     }
+    position_array = np.asarray([positions[state] for state in STATE_ORDER])
+
+    ax.add_patch(Circle(
+        center, node_radius + 0.042, fill=False,
+        edgecolor=COLORS['grid'], linewidth=1.0, alpha=0.75, zorder=0,
+    ))
+
     transitions = [
         ('holding', 'strafing'), ('strafing', 'holding'),
         ('holding', 'charging'), ('charging', 'holding'),
@@ -110,11 +130,22 @@ def _draw_state_machine(ax):
     for start, end in transitions:
         arrow = FancyArrowPatch(
             positions[start], positions[end], arrowstyle='-|>',
-            mutation_scale=8, color=COLORS['grid'], linewidth=0.9,
-            connectionstyle='arc3,rad=0.08', alpha=0.85,
-            shrinkA=17, shrinkB=17,
+            mutation_scale=7, color=COLORS['grid'], linewidth=0.8,
+            connectionstyle='arc3,rad=0.08', alpha=0.82,
+            shrinkA=15, shrinkB=15, zorder=1,
         )
         ax.add_patch(arrow)
+
+    connection_pairs = list(combinations(range(len(STATE_ORDER)), 2))
+    connection_segments = [
+        [position_array[left], position_array[right]]
+        for left, right in connection_pairs
+    ]
+    energy_links = LineCollection(
+        connection_segments, colors=COLORS['blue'], linewidths=1.15,
+        alpha=0.36, capstyle='round', zorder=2,
+    )
+    ax.add_collection(energy_links)
 
     labels = {
         'holding': 'HOLDING',
@@ -126,46 +157,63 @@ def _draw_state_machine(ax):
         'takeoff': 'TAKEOFF',
     }
     nodes = {}
-    for state in STATE_ORDER:
+    for state, angle in zip(STATE_ORDER, angles):
         position = positions[state]
         node = Circle(
-            position, 0.052, facecolor=COLORS['panel'],
-            edgecolor=STATE_COLORS[state], linewidth=1.4, zorder=4,
+            position, 0.047, facecolor=COLORS['panel'],
+            edgecolor=STATE_COLORS[state], linewidth=1.5, zorder=5,
         )
         ax.add_patch(node)
+        addSoftShadow(node, offset=(1.2, -1.2), alpha=0.20)
+        label_position = center + (node_radius + 0.082) * np.array([
+            np.cos(angle), np.sin(angle),
+        ])
         ax.text(
-            position[0], position[1] - 0.078, labels[state],
-            ha='center', va='top', color=COLORS['muted'],
-            fontsize=7.2, fontweight='normal',
+            label_position[0], label_position[1], labels[state],
+            ha='center', va='center', color=COLORS['muted'],
+            fontsize=6.6, fontweight='bold', zorder=6,
         )
         nodes[state] = node
 
     crystal_icons = []
     for index in range(10):
-        x = 0.13 + index * 0.082
-        icon = Circle(
-            (x, 0.055), 0.013, facecolor=COLORS['green'],
-            edgecolor=COLORS['text'], linewidth=0.35,
+        angle = np.pi / 2.0 + 2.0 * np.pi * index / 10.0
+        point = center + 0.185 * np.array([np.cos(angle), np.sin(angle)])
+        icon = RegularPolygon(
+            point, numVertices=4, radius=0.018, orientation=np.pi / 4.0,
+            facecolor=COLORS['green'], edgecolor=COLORS['panel'],
+            linewidth=0.6, zorder=7,
         )
         ax.add_patch(icon)
+        addSoftShadow(icon, offset=(0.8, -0.8), alpha=0.18)
         crystal_icons.append(icon)
 
     probability_background = Wedge(
-        (0.50, 0.12), 0.050, 90, 450, width=0.010,
-        facecolor=COLORS['grid'], edgecolor='none', alpha=0.8,
+        center, 0.088, 90, 450, width=0.014,
+        facecolor=COLORS['grid'], edgecolor='none', alpha=0.9, zorder=7,
     )
     probability_wedge = Wedge(
-        (0.50, 0.12), 0.050, 90, 90, width=0.010,
-        facecolor=COLORS['cyan'], edgecolor='none', alpha=0.95,
+        center, 0.088, 90, 90, width=0.014,
+        facecolor=COLORS['green'], edgecolor='none', alpha=0.98, zorder=8,
     )
     ax.add_patch(probability_background)
     ax.add_patch(probability_wedge)
     probability_text = ax.text(
-        0.50, 0.12, '', ha='center', va='center',
-        color=COLORS['text'], fontsize=6.7, family='monospace',
+        center[0], center[1] + 0.008, '', ha='center', va='center',
+        color=COLORS['text'], fontsize=8.2, fontweight='bold', zorder=9,
     )
-    return nodes, crystal_icons, probability_wedge, probability_text
-
+    ax.text(
+        center[0], center[1] - 0.038, 'PERCH', ha='center', va='center',
+        color=COLORS['muted'], fontsize=5.7, fontweight='bold', zorder=9,
+    )
+    crystal_count_text = ax.text(
+        0.50, 0.072, '', ha='center', va='center',
+        color=COLORS['muted'], fontsize=7.2, fontweight='bold', zorder=9,
+    )
+    return (
+        nodes, crystal_icons, probability_wedge, probability_text,
+        energy_links, position_array, crystal_count_text,
+    )
 
 def create_dragon_pathfinding_animation(
     save_path, fps=12, dpi=125, colors=128,
@@ -180,9 +228,11 @@ def create_dragon_pathfinding_animation(
     arena = figure.add_subplot(grid[0, 0])
     machine = figure.add_subplot(grid[0, 1])
     crystal_markers = _arena_static(arena)
-    state_nodes, crystal_icons, probability_wedge, probability_text = (
-        _draw_state_machine(machine)
-    )
+    (
+        state_nodes, crystal_icons, probability_wedge, probability_text,
+        energy_links, state_positions, crystal_count_text,
+    ) = _draw_state_machine(machine)
+    connection_pairs = list(combinations(range(len(STATE_ORDER)), 2))
 
     trail = LineCollection([], linewidths=2.8, capstyle='round', zorder=9)
     arena.add_collection(trail)
@@ -230,6 +280,27 @@ def create_dragon_pathfinding_animation(
         probability = perch_probability(frame.crystals_alive)
         probability_wedge.set_theta2(90 + 360 * probability / (1.0 / 3.0))
         probability_text.set_text(f'{probability * 100:.0f}%')
+        crystal_count_text.set_text(f'{frame.crystals_alive} CRYSTALS')
+        active_index = STATE_ORDER.index(frame.state)
+        ordered_pairs = sorted(
+            connection_pairs,
+            key=lambda pair: (
+                active_index not in pair,
+                -min((pair[1] - pair[0]) % len(STATE_ORDER),
+                     (pair[0] - pair[1]) % len(STATE_ORDER)),
+                pair,
+            ),
+        )
+        connection_count = round(
+            len(ordered_pairs) * frame.crystals_alive / 10.0
+        )
+        energy_links.set_segments([
+            [state_positions[left], state_positions[right]]
+            for left, right in ordered_pairs[:connection_count]
+        ])
+        energy_links.set_alpha(
+            0.18 + 0.24 * frame.crystals_alive / 10.0
+        )
         for index, (icon, marker) in enumerate(zip(crystal_icons, crystal_markers)):
             alive = index < frame.crystals_alive
             color = COLORS['green'] if alive else COLORS['coral']
@@ -314,9 +385,9 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
 
 
 def create_trajectory_ensemble_animation(
-    save_path, seed=12031, trajectories=420, fps=12, frames=108,
+    save_path, seed=12031, trajectories=420, fps=12, frames=192,
 ):
-    """Animate accumulated source-shaped dragon approaches and occupancy."""
+    """Animate a gradual accumulation of seeded approaches and occupancy."""
     paths = [
         simulate_perch_trajectory(
             seed + index * 7919,
@@ -328,54 +399,89 @@ def create_trajectory_ensemble_animation(
     bins = np.linspace(-76, 76, 93)
     contributions = []
     for path in paths:
-        histogram, _, _ = np.histogram2d(path[:, 1], path[:, 0], bins=(bins, bins))
+        histogram, _, _ = np.histogram2d(
+            path[:, 1], path[:, 0], bins=(bins, bins),
+        )
         contributions.append(histogram)
     cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
-    figure, axis = plt.subplots(figsize=(9.6, 6.4), facecolor=COLORS['background'])
+    figure, axis = plt.subplots(
+        figsize=(9.6, 6.4), facecolor=COLORS['background'],
+    )
+    figure.subplots_adjust(left=0.11, right=0.94, top=0.95, bottom=0.11)
     axis.set_xlim(-76, 76)
     axis.set_ylim(-76, 76)
-    axis.set_aspect('equal')
     axis.set_xlabel('X (blocks)')
     axis.set_ylabel('Z (blocks)')
-    axis.grid(color=COLORS['grid'], alpha=0.24, linewidth=0.45)
-    for spine in axis.spines.values():
-        spine.set_color(COLORS['grid'])
+    style_axis(axis, equal=True, grid=True)
+    axis.add_patch(Circle(
+        (0, 0), 72, facecolor=COLORS['end_stone'],
+        edgecolor='none', alpha=0.18, zorder=0,
+    ))
     for start, end in DRAGON_EDGES:
         axis.plot(
             [DRAGON_NODES[start, 0], DRAGON_NODES[end, 0]],
             [DRAGON_NODES[start, 1], DRAGON_NODES[end, 1]],
-            color=COLORS['grid'], linewidth=0.45, alpha=0.24, zorder=1,
+            color=COLORS['grid'], linewidth=0.55, alpha=0.56, zorder=1,
         )
     axis.add_patch(Circle(
         (0, 0), 7.5, fill=False, edgecolor=COLORS['portal'],
-        linewidth=1.2, alpha=0.9, zorder=7,
+        linewidth=1.25, alpha=0.95, zorder=7,
     ))
     axis.add_patch(Circle(
-        (0, 0), 2.0, fill=False, edgecolor=COLORS['cyan'],
+        (0, 0), 2.0, fill=False, edgecolor=COLORS['blue'],
         linewidth=1.0, linestyle=':', alpha=0.95, zorder=8,
     ))
 
+    density_map = LinearSegmentedColormap.from_list(
+        'iosTrajectoryDensity',
+        [COLORS['panel'], '#CBEAFF', COLORS['cyan'], COLORS['blue'], COLORS['violet']],
+    )
+    empty_density = np.zeros_like(cumulative[0])
+    final_density = np.sqrt(cumulative[-1])
+    positive_density = final_density[final_density > 0]
+    density_ceiling = float(np.percentile(positive_density, 94))
     image = axis.imshow(
-        np.zeros_like(cumulative[0]), origin='lower',
+        empty_density, origin='lower',
         extent=(bins[0], bins[-1], bins[0], bins[-1]),
-        cmap='magma', vmin=0, vmax=np.sqrt(cumulative[-1]).max(),
-        interpolation='bilinear', alpha=0.78, zorder=2,
+        cmap=density_map,
+        norm=PowerNorm(gamma=0.52, vmin=0, vmax=density_ceiling),
+        interpolation='bilinear', alpha=0.80, zorder=2,
     )
-    lines = LineCollection([], linewidths=0.55, colors=COLORS['cyan'], alpha=0.10, zorder=4)
-    axis.add_collection(lines)
+    history_lines = LineCollection(
+        [], linewidths=0.38, colors=COLORS['blue'], alpha=0.055, zorder=4,
+    )
+    recent_lines = LineCollection(
+        [], linewidths=0.90, colors=COLORS['green'], alpha=0.48, zorder=5,
+    )
+    axis.add_collection(history_lines)
+    axis.add_collection(recent_lines)
     count_text = axis.text(
-        0.985, 0.025, '', transform=axis.transAxes,
+        0.975, 0.035, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
-        fontsize=8, family='monospace',
+        fontsize=8.2, fontweight='bold',
+        bbox=dict(
+            boxstyle='round,pad=0.42', facecolor=COLORS['panel'],
+            edgecolor=COLORS['grid'], alpha=0.96,
+        ),
     )
+    addSoftShadow(count_text.get_bbox_patch(), offset=(1.3, -1.3), alpha=0.18)
 
     def update(frame_index):
-        shown = max(1, round((frame_index + 1) * trajectories / frames))
-        image.set_data(np.sqrt(cumulative[shown - 1]))
-        recent_start = max(0, shown - 55)
-        lines.set_segments(paths[recent_start:shown])
-        count_text.set_text(f'{shown:03d} seeded approaches')
+        normalized = frame_index / max(frames - 1, 1)
+        reveal = np.clip((normalized - 0.04) / 0.86, 0.0, 1.0)
+        shown = min(trajectories, round((reveal ** 1.20) * trajectories))
+        if shown == 0:
+            image.set_data(empty_density)
+            history_lines.set_segments([])
+            recent_lines.set_segments([])
+        else:
+            image.set_data(np.sqrt(cumulative[shown - 1]))
+            history_start = max(0, shown - 30)
+            recent_start = max(0, shown - 4)
+            history_lines.set_segments(paths[history_start:recent_start])
+            recent_lines.set_segments(paths[recent_start:shown])
+        count_text.set_text(f'{shown:03d} SEEDED APPROACHES')
         return []
 
     animation = FuncAnimation(

@@ -1,32 +1,34 @@
-"""Shared scientific styling for active repository visualizations."""
+"""Shared light iOS 10 styling for active repository visualizations."""
 
 import matplotlib as mpl
+import matplotlib.patheffects as pathEffects
 
 
 COLORS = {
-    'background': '#090B12',
-    'panel': '#111622',
-    'panel_alt': '#171E2C',
-    'grid': '#273043',
-    'text': '#F1F5F9',
-    'muted': '#9AA8BC',
-    'blue': '#65C7F7',
-    'cyan': '#43D9C2',
-    'violet': '#A78BFA',
-    'magenta': '#E879F9',
-    'coral': '#FB7185',
-    'orange': '#FB923C',
-    'gold': '#F6C85F',
-    'green': '#73D49B',
+    'background': '#F2F2F7',
+    'panel': '#FFFFFF',
+    'panel_alt': '#F8F8FB',
+    'grid': '#D6D6DC',
+    'shadow': '#A7A7AE',
+    'text': '#1C1C1E',
+    'muted': '#6D6D72',
+    'blue': '#4A90E2',
+    'cyan': '#5AC8FA',
+    'violet': '#9C8CF2',
+    'magenta': '#D780D6',
+    'coral': '#FF6B6B',
+    'orange': '#FF9F43',
+    'gold': '#F4C542',
+    'green': '#5CCB73',
     'end_stone': '#D6D7A8',
-    'end_shadow': '#777954',
-    'obsidian': '#211532',
-    'purpur': '#B879B3',
-    'portal': '#65D6AD',
-    'fortress': '#E06C75',
-    'bastion': '#D6A35A',
-    'ruined_portal': '#B88AE8',
-    'stronghold': '#58B9D9',
+    'end_shadow': '#AAA982',
+    'obsidian': '#352B45',
+    'purpur': '#C58AC1',
+    'portal': '#30B993',
+    'fortress': '#D75A5E',
+    'bastion': '#C98A3E',
+    'ruined_portal': '#9167D8',
+    'stronghold': '#3F9BC6',
 }
 
 STATE_COLORS = {
@@ -41,11 +43,11 @@ STATE_COLORS = {
 
 
 def apply_style():
-    """Apply consistent Matplotlib defaults without a game UI motif."""
+    """Apply a polished light visual system inspired by iOS 10."""
     mpl.rcParams.update({
         'figure.facecolor': COLORS['background'],
         'savefig.facecolor': COLORS['background'],
-        'axes.facecolor': COLORS['background'],
+        'axes.facecolor': COLORS['panel'],
         'axes.edgecolor': COLORS['grid'],
         'axes.labelcolor': COLORS['muted'],
         'axes.titlecolor': COLORS['text'],
@@ -54,24 +56,43 @@ def apply_style():
         'text.color': COLORS['text'],
         'font.family': 'DejaVu Sans',
         'font.size': 10,
-        'axes.linewidth': 0.8,
+        'font.weight': 'regular',
+        'axes.linewidth': 0.7,
+        'axes.titleweight': 'bold',
         'grid.color': COLORS['grid'],
-        'grid.alpha': 0.38,
-        'grid.linewidth': 0.6,
+        'grid.alpha': 0.48,
+        'grid.linewidth': 0.55,
         'legend.facecolor': COLORS['panel'],
         'legend.edgecolor': COLORS['grid'],
         'legend.labelcolor': COLORS['text'],
+        'legend.fancybox': True,
+        'legend.framealpha': 0.96,
     })
 
 
+def addSoftShadow(artist, offset=(1.5, -1.5), alpha=0.18):
+    """Give a patch or panel the subtle raised depth used by iOS controls."""
+    artist.set_path_effects([
+        pathEffects.SimplePatchShadow(
+            offset=offset,
+            shadow_rgbFace=COLORS['shadow'],
+            alpha=alpha,
+            rho=0.98,
+        ),
+        pathEffects.Normal(),
+    ])
+    return artist
+
+
 def style_axis(ax, equal=False, grid=True):
-    """Apply restrained scientific axis styling."""
-    ax.set_facecolor(COLORS['background'])
+    """Apply the shared white-card axis styling."""
+    ax.set_facecolor(COLORS['panel'])
+    addSoftShadow(ax.patch, offset=(2.0, -2.0), alpha=0.14)
     for spine in ax.spines.values():
         spine.set_color(COLORS['grid'])
     ax.tick_params(colors=COLORS['muted'], labelsize=8)
     if grid:
-        ax.grid(True, color=COLORS['grid'], alpha=0.32, linewidth=0.55)
+        ax.grid(True, color=COLORS['grid'], alpha=0.42, linewidth=0.55)
     if equal:
         ax.set_aspect('equal', adjustable='box')
     return ax
