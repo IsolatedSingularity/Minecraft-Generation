@@ -8,11 +8,13 @@ Authentic values from Minecraft's world generation.
 # VISUAL STYLING
 # ============================================================================
 
-# Dark theme colors (GitHub-inspired)
-BACKGROUND_COLOR = '#0D1117'
-GRID_COLOR = '#21262D'
-TEXT_COLOR = '#E6EDF3'
-ACCENT_COLOR = '#58A6FF'
+# Shared scientific dark theme
+BACKGROUND_COLOR = '#090B12'
+PANEL_COLOR = '#111622'
+GRID_COLOR = '#273043'
+TEXT_COLOR = '#F1F5F9'
+MUTED_TEXT_COLOR = '#9AA8BC'
+ACCENT_COLOR = '#65C7F7'
 
 # Viridis-inspired palette for data visualization
 PALETTE = {
@@ -85,22 +87,39 @@ DRAGON_STATES = [
 
 # Dragon arena dimensions
 END_PILLAR_COUNT = 10
-END_PILLAR_RADIUS = 76  # Blocks from center
+END_PILLAR_RADIUS = 42  # Java 1.16.1 spike-circle radius
 END_FOUNTAIN_RADIUS = 8
 
-# Pathfinding node radii
-DRAGON_OUTER_RING_RADIUS = 100
-DRAGON_INNER_RING_RADIUS = 60
-DRAGON_CENTER_RING_RADIUS = 30
+# Java 1.16.1 path-node radii. These are horizontal path coordinates,
+# while each node's Y coordinate is selected from the End heightmap.
+DRAGON_OUTER_RING_RADIUS = 60
+DRAGON_INNER_RING_RADIUS = 40
+DRAGON_CENTER_RING_RADIUS = 20
 
 # Node counts per ring
 DRAGON_OUTER_NODE_COUNT = 12
 DRAGON_INNER_NODE_COUNT = 8
 DRAGON_CENTER_NODE_COUNT = 4
 
+# Exact 24-node adjacency bitmasks from EnderDragonEntity.
+DRAGON_NODE_CONNECTIONS = [
+    6146, 8197, 8202, 16404, 32808, 32848,
+    65696, 131392, 131712, 263424, 526848, 525313,
+    1581057, 3166214, 2138120, 6373424, 4358208, 12910976,
+    9044480, 9706496, 15216640, 13688832, 11763712, 8257536,
+]
+
 # AI parameters
 DRAGON_BASE_PERCH_PROBABILITY = 1/3  # With 0 crystals
 DRAGON_CRYSTAL_PERCH_MODIFIER = 1  # Added to denominator per crystal
+
+# Java 1.16.1 Nether structure placement.
+NETHER_STRUCTURE_SPACING = 27
+NETHER_STRUCTURE_SEPARATION = 4
+NETHER_STRUCTURE_SALT = 30084232
+NETHER_RUINED_PORTAL_SPACING = 25
+NETHER_RUINED_PORTAL_SEPARATION = 10
+RUINED_PORTAL_SALT = 34222645
 
 # ============================================================================
 # BIOME CLASSIFICATION THRESHOLDS
