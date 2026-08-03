@@ -24,12 +24,12 @@ OVERWORLD_BLOCKS = {
 }
 
 NETHER_BLOCKS = {
-    'netherrack': '#713A36',
-    'crimson': '#8E3046',
-    'warped': '#246B68',
-    'soul_sand': '#59483D',
-    'basalt': '#3D3B40',
-    'lava': '#F47B20',
+    'netherrack': '#682D38',
+    'crimson': '#94334E',
+    'warped': '#4E4A78',
+    'soul_sand': '#5B443D',
+    'basalt': '#36323E',
+    'lava': '#F08A32',
 }
 
 

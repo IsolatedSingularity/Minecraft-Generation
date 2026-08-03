@@ -63,15 +63,19 @@ def _candidate_offset_samples(samples=18_432):
 
 def create_structure_analysis(save_path, dpi=200, seed=WORLD_SEED):
     """Render four large panels separating exact math from visual terrain."""
-    figure = plt.figure(figsize=(15.5, 9.4), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(13.4, 10.4), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        2, 2, left=0.055, right=0.98, top=0.91, bottom=0.075,
-        wspace=0.15, hspace=0.25,
+        2, 2, left=0.06, right=0.97, top=0.91, bottom=0.075,
+        wspace=0.055, hspace=0.29,
     )
     village_axis = figure.add_subplot(grid[0, 0])
     region_axis = figure.add_subplot(grid[0, 1])
     nether_axis = figure.add_subplot(grid[1, 0])
     audit_axis = figure.add_subplot(grid[1, 1])
+    village_axis.set_anchor('E')
+    nether_axis.set_anchor('E')
+    region_axis.set_anchor('W')
+    audit_axis.set_anchor('W')
 
     radius = 3
     village_minimum = -radius * VILLAGE_SPACING - 4
@@ -101,8 +105,8 @@ def create_structure_analysis(save_path, dpi=200, seed=WORLD_SEED):
     village_axis.set_xlabel('Chunk X')
     village_axis.set_ylabel('Chunk Z')
     village_axis.set_title(
-        'Village candidates over 32 x 32 regions',
-        fontsize=12.5, fontweight='bold', pad=8,
+        'Village candidates\n32 x 32 chunk regions',
+        fontsize=11.8, fontweight='bold', pad=8,
     )
     style_axis(village_axis, equal=True, grid=False)
     _panel_label(village_axis, '(a)')
@@ -160,8 +164,8 @@ def create_structure_analysis(save_path, dpi=200, seed=WORLD_SEED):
     region_axis.set_xlabel('Local chunk X')
     region_axis.set_ylabel('Local chunk Z')
     region_axis.set_title(
-        'One region and its 24 x 24 candidate window',
-        fontsize=12.5, fontweight='bold', pad=8,
+        'One region\n24 x 24 candidate window',
+        fontsize=11.8, fontweight='bold', pad=8,
     )
     style_axis(region_axis, equal=True, grid=False)
     _panel_label(region_axis, '(b)')
@@ -217,8 +221,8 @@ def create_structure_analysis(save_path, dpi=200, seed=WORLD_SEED):
     nether_axis.set_xlabel('Nether chunk X')
     nether_axis.set_ylabel('Nether chunk Z')
     nether_axis.set_title(
-        'Shared fortress and bastion grid with portal layer',
-        fontsize=12.5, fontweight='bold', pad=8,
+        'Shared fortress and bastion grid\nindependent portal layer',
+        fontsize=11.8, fontweight='bold', pad=8,
     )
     nether_axis.legend(loc='lower right', fontsize=8.3, framealpha=0.92)
     style_axis(nether_axis, equal=True, grid=False)
@@ -269,8 +273,8 @@ def create_structure_analysis(save_path, dpi=200, seed=WORLD_SEED):
     audit_axis.set_xlabel('Village offset X, nextInt(24)')
     audit_axis.set_ylabel('Village offset Z, nextInt(24)')
     audit_axis.set_title(
-        'Uniform offset field and exact 2 to 3 Nether split',
-        fontsize=12.5, fontweight='bold', pad=8,
+        'Uniform offset field\nexact 2 to 3 Nether split',
+        fontsize=11.8, fontweight='bold', pad=8,
     )
     style_axis(audit_axis, equal=False, grid=False)
     _panel_label(audit_axis, '(d)', x=0.975, y=0.86, horizontal='right')

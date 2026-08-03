@@ -13,7 +13,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.patches import (
-    FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle, RegularPolygon,
+    Ellipse, FancyArrowPatch, FancyBboxPatch, Rectangle, RegularPolygon,
 )
 import numpy as np
 
@@ -80,16 +80,6 @@ def _arena_static(
     return spikes
 
 
-def _state_island_vertices(center, width, height, seed):
-    random = np.random.default_rng(seed)
-    angles = np.linspace(0.0, 2.0 * np.pi, 14, endpoint=False)
-    jitter = random.uniform(0.88, 1.12, len(angles))
-    return np.column_stack((
-        center[0] + width * 0.5 * np.cos(angles) * jitter,
-        center[1] + height * 0.5 * np.sin(angles) * jitter,
-    ))
-
-
 def _draw_state_machine(ax):
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
@@ -106,21 +96,42 @@ def _draw_state_machine(ax):
         'takeoff': (0.80, 0.48),
     }
     transitions = [
-        ('holding', 'strafing'), ('strafing', 'holding'),
-        ('holding', 'charging'), ('charging', 'holding'),
-        ('holding', 'landing_approach'),
-        ('landing_approach', 'landing'),
-        ('landing', 'perching'), ('perching', 'takeoff'),
-        ('takeoff', 'holding'),
+        ('holding', 'strafing', 0.12),
+        ('strafing', 'holding', 0.12),
+        ('holding', 'charging', -0.12),
+        ('charging', 'holding', -0.12),
+        ('holding', 'landing_approach', 0.0),
+        ('landing_approach', 'landing', 0.0),
+        ('landing', 'perching', 0.0),
+        ('perching', 'takeoff', 0.0),
+        ('takeoff', 'holding', 0.06),
     ]
-    for start, end in transitions:
-        arrow = FancyArrowPatch(
-            positions[start], positions[end], arrowstyle='-|>',
-            mutation_scale=8, color=COLORS['magenta'], linewidth=0.85,
-            connectionstyle='arc3,rad=0.08', alpha=0.48,
-            shrinkA=19, shrinkB=19,
+    for start, end, curvature in transitions:
+        connection = FancyArrowPatch(
+            positions[start], positions[end], arrowstyle='-',
+            color='#E7B5F2', linewidth=1.65,
+            connectionstyle=f'arc3,rad={curvature}', alpha=0.82,
+            shrinkA=25, shrinkB=25, zorder=2,
         )
-        ax.add_patch(arrow)
+        ax.add_patch(connection)
+
+        start_point = np.asarray(positions[start], dtype=float)
+        end_point = np.asarray(positions[end], dtype=float)
+        direction = end_point - start_point
+        length = np.linalg.norm(direction)
+        if length:
+            direction /= length
+        perpendicular = np.array([-direction[1], direction[0]])
+        center = (start_point + end_point) / 2.0
+        center += perpendicular * curvature * length * 0.50
+        direction_arrow = FancyArrowPatch(
+            center - direction * 0.018,
+            center + direction * 0.018,
+            arrowstyle='-|>', mutation_scale=7.0,
+            color='#FFF0FF', linewidth=0.48, alpha=0.96,
+            zorder=2.6,
+        )
+        ax.add_patch(direction_arrow)
 
     labels = {
         'holding': 'HOLDING',
@@ -132,19 +143,18 @@ def _draw_state_machine(ax):
         'takeoff': 'TAKEOFF',
     }
     nodes = {}
-    for state_index, state in enumerate(STATE_ORDER):
+    node_width = 0.245
+    node_height = 0.095
+    for state in STATE_ORDER:
         position = positions[state]
-        vertices = _state_island_vertices(
-            position, 0.235 if state != 'landing_approach' else 0.275,
-            0.104, 8100 + state_index,
-        )
-        shadow = Polygon(
-            vertices + np.array([0.0, -0.012]), closed=True,
+        shadow = Ellipse(
+            (position[0], position[1] - 0.012),
+            node_width, node_height,
             facecolor=COLORS['end_shadow'], edgecolor='none',
             alpha=0.34, zorder=3,
         )
-        node = Polygon(
-            vertices, closed=True,
+        node = Ellipse(
+            position, node_width, node_height,
             facecolor=to_rgba(COLORS['purpur'], 0.42),
             edgecolor=STATE_COLORS[state], linewidth=1.2, zorder=4,
         )
@@ -356,9 +366,9 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
 
 
 def create_trajectory_ensemble_animation(
-    save_path, seed=12031, trajectories=420, fps=3, frames=180,
+    save_path, seed=12031, trajectories=240, fps=6, frames=144,
 ):
-    """Animate a slower accumulation of dragon approaches and occupancy."""
+    """Animate a readable accumulation of dragon approaches and occupancy."""
     paths = [
         simulate_perch_trajectory(
             seed + index * 7919,
@@ -387,10 +397,18 @@ def create_trajectory_ensemble_animation(
         interpolation='bilinear', alpha=0.74, zorder=2.8,
     )
     lines = LineCollection(
-        [], linewidths=0.62, colors=COLORS['cyan'],
-        alpha=0.12, zorder=8,
+        [], linewidths=0.78, colors=COLORS['cyan'], zorder=8,
     )
     axis.add_collection(lines)
+    direction_arrows = []
+    for _ in range(13):
+        arrow = FancyArrowPatch(
+            (0.0, 0.0), (0.0, 0.0), arrowstyle='-|>',
+            mutation_scale=6.2, color='#FFE0A3', linewidth=0.55,
+            alpha=0.48, visible=False, zorder=9,
+        )
+        axis.add_patch(arrow)
+        direction_arrows.append(arrow)
     count_text = axis.text(
         0.985, 0.025, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
@@ -400,15 +418,52 @@ def create_trajectory_ensemble_animation(
             edgecolor=COLORS['purpur'], alpha=0.90,
         ),
     )
+    axis.text(
+        0.018, 0.975,
+        'route density   cooler = older   warmer = newer',
+        transform=axis.transAxes, ha='left', va='top',
+        color=COLORS['muted'], fontsize=7.6,
+        bbox=dict(
+            boxstyle='round,pad=0.28', facecolor=COLORS['panel'],
+            edgecolor=COLORS['grid'], alpha=0.86,
+        ), zorder=10,
+    )
 
-    active_frames = max(1, round(frames * 0.82))
+    active_frames = max(1, round(frames * 0.88))
 
     def update(frame_index):
         progress = min((frame_index + 1) / active_frames, 1.0)
         shown = max(1, round(progress * trajectories))
         image.set_data(np.sqrt(cumulative[shown - 1]))
-        recent_start = max(0, shown - 55)
-        lines.set_segments(paths[recent_start:shown])
+        recent_start = max(0, shown - 38)
+        recent_paths = paths[recent_start:shown]
+        lines.set_segments(recent_paths)
+        age = np.linspace(0.08, 1.0, len(recent_paths))
+        line_colors = [
+            to_rgba(plt.get_cmap('plasma')(0.14 + 0.72 * value),
+                    0.05 + 0.36 * value)
+            for value in age
+        ]
+        lines.set_colors(line_colors)
+
+        arrow_geometry = []
+        for path in recent_paths[::3]:
+            arrow_index = max(1, min(len(path) - 2, round(len(path) * 0.58)))
+            vector = path[arrow_index + 1] - path[arrow_index - 1]
+            magnitude = np.linalg.norm(vector)
+            if magnitude <= 1e-9:
+                continue
+            unit = vector / magnitude
+            arrow_geometry.append((
+                path[arrow_index] - unit * 1.9,
+                path[arrow_index] + unit * 1.9,
+            ))
+        for index, arrow in enumerate(direction_arrows):
+            if index < len(arrow_geometry):
+                arrow.set_positions(*arrow_geometry[index])
+                arrow.set_visible(True)
+            else:
+                arrow.set_visible(False)
         count_text.set_text(f'{shown:03d} seeded approaches')
         return []
 

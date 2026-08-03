@@ -95,13 +95,22 @@ def draw_end_fountain(ax, active=False, zorder=7):
 
 def draw_end_spikes(
     ax, seed=42, crystals_alive=10, alpha=1.0, zorder=5,
+    radius_override=None,
 ):
-    """Draw exact spike footprints with top-down crystals and cage marks."""
+    """Draw spike footprints with top-down crystals and cage marks.
+
+    ``radius_override`` is a visual-only option for panels that need uniform
+    footprints. The source radius remains available in the returned metadata.
+    """
     artists = []
     for index, spike in enumerate(spike_layout(seed)):
         x = spike['x']
         z = spike['z']
-        radius = float(spike['radius'])
+        source_radius = float(spike['radius'])
+        radius = (
+            source_radius if radius_override is None
+            else float(radius_override)
+        )
         tower = Circle(
             (x, z), radius,
             facecolor=COLORS['obsidian'], edgecolor='#6E4B86',
@@ -158,7 +167,8 @@ def draw_end_spikes(
             'crystal': crystal,
             'cage': cage,
             'height': spike['height'],
-            'radius': spike['radius'],
+            'radius': radius,
+            'source_radius': source_radius,
         })
     return artists
 

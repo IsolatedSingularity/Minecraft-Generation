@@ -53,7 +53,7 @@ class AssetIntegrityTests(unittest.TestCase):
 
     def test_deliberately_slow_animations_retain_their_timing(self):
         expected_duration_ranges = {
-            'dragon_trajectory_ensemble.gif': (55_000, 65_000),
+            'dragon_trajectory_ensemble.gif': (20_000, 28_000),
             'seed_loading.gif': (10_000, 13_500),
             'structure_placement.gif': (10_000, 13_500),
             'multi_structure_generation.gif': (10_000, 13_500),

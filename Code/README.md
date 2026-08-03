@@ -34,6 +34,8 @@ Real-time simulation of dragon behavior with:
 - Crystal destruction mechanics affecting perch probability
 - Source-shaped central-island projection with exact spike footprints
 - Graph-based navigation with weighted edges
+- Uniform horizontal state ovals with bright directed connections
+- A 240-route ensemble with age-temperature fading and sparse direction arrows
 
 ```python
 class EnderDragonAI:
@@ -47,7 +49,7 @@ class EnderDragonAI:
 #### `end_dimension_overview.py`
 **Three-Panel End Dimension Overview**
 
-The left panel maps genuine signed 32-bit overflow rings across a 2.2-million-block view, the upper-right panel shows central fight geometry, and the lower-right panel magnifies the first distant terrain and void band.
+The large panel evaluates the exact signed 32-bit End overflow mask from -6,000,000 to +6,000,000 blocks on each axis. Regular raster sampling makes the increasingly thin radial bands resolve into the large lattice-like moire pattern. The upper-right panel shows central fight geometry with all ten spike footprints normalized to the maximum five-block radius for clarity. The lower-right panel projects the complete local outer-island field from -18,000 to +18,000 blocks, including the central island and 1,024-block gulf.
 
 **Output**: `Plots/end_dimension_overview.png`
 
@@ -66,14 +68,14 @@ The generator shows one exact candidate attempt per 32 x 32 chunk region:
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Shows the exact thirteen-status order from `EMPTY` through `FULL` as an explicitly modeled dependency wave over an illustrative terrain backdrop.
+Shows the exact thirteen-status order from `EMPTY` through `FULL` as an explicitly modeled dependency wave. The map starts hidden, chunk tiles grow into view, status-specific terrain and feature marks persist, and the completed `FULL` field holds for two seconds. The terrain is illustrative, while the status order is source-mapped to Java 1.16.1.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows the shared 27 x 27 fortress and bastion grid, its exact 2/5 versus 3/5 type roll, and the independent 25 x 25 ruined-portal grid.
+Shows the shared 27 x 27 fortress and bastion grid, its exact 2/5 versus 3/5 type roll, and the independent 25 x 25 ruined-portal grid. The Nether backdrop uses crimson, indigo, basalt, soul-sand, and lava-gold tones to keep the exact candidate layers readable.
 
 **Output**: `Plots/multi_structure_generation.gif`
 
@@ -127,7 +129,7 @@ class MinecraftExtendedAnimator:
 #### minecraftStructureAnalysis.py
 **Primary Functions**: Static Java 1.16.1 candidate and structure analysis
 
-The four-panel dashboard separates exact seeded candidate placement from illustrative terrain context. It includes:
+The tightly spaced four-panel dashboard separates exact seeded candidate placement from illustrative terrain context. It includes:
 
 - Village candidates across exact 32 x 32 chunk regions
 - One expanded 24 x 24 candidate window with Java Random offsets

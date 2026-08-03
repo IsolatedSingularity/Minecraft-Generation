@@ -28,6 +28,7 @@ from core.lcg import MinecraftLCG, generate_population_seed, generate_region_see
 from core.strongholds import generate_stronghold_candidates
 from core.structures import NETHER_RUINED_PORTAL, VILLAGE, candidate_in_region, nether_shared_candidate
 from redstone_quasi_connectivity import bud_animation_state
+from seed_loading import chunk_status_snapshot
 
 
 class JavaRandomTests(unittest.TestCase):
@@ -100,6 +101,22 @@ class StructureTests(unittest.TestCase):
             for index in range(1, 9)
         ]
         self.assertEqual(counts, [ring['count'] for ring in STRONGHOLD_RINGS])
+
+
+class ChunkStatusTests(unittest.TestCase):
+    def test_dependency_wave_reveals_then_holds_full_map(self):
+        stages, growth, hidden = chunk_status_snapshot(0)
+        self.assertEqual(stages[7, 7], 0)
+        self.assertEqual(growth[7, 7], 0.0)
+        self.assertTrue(hidden[0, 0])
+
+        final_generation = chunk_status_snapshot(79)
+        first_hold = chunk_status_snapshot(80)
+        for snapshot in (final_generation, first_hold):
+            stages, growth, hidden = snapshot
+            self.assertTrue(np.all(stages == 12))
+            self.assertTrue(np.all(growth == 1.0))
+            self.assertFalse(np.any(hidden))
 
 
 class EndGeometryTests(unittest.TestCase):

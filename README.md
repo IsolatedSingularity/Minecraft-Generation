@@ -138,7 +138,7 @@ The Ender Dragon navigates a weighted **24-node graph** embedded in the End dime
 
 The dragon's behavioral state machine operates on seven distinct states, each with characteristic movement patterns. **HOLDING** produces the familiar circling at maximum radius, the dragon tracing lazy arcs while surveying its domain. **STRAFING** triggers aggressive linear charges accompanied by acid breath. **APPROACH**, **LANDING**, and **PERCHING** execute the critical touchdown sequence that speedrunners exploit, the probability of initiating this sequence following $P = 1/(3 + n_{\text{crystals}})$ where destroyed crystals increase perch likelihood. **TAKEOFF** and **CHARGING** complete the cycle, returning the dragon to its orbital patterns.
 
-The visualization renders this graph structure in real time, highlighting active paths and transitions as the dragon's simulated AI processes its environment. The state machine uses purpur island controls, while a compact fight-state panel retains only the remaining crystals and current perch probability.
+The visualization renders this graph structure in real time, highlighting active paths and transitions as the dragon's simulated AI processes its environment. Every state is presented as the same wide horizontal oval so the diagram reads as one system rather than a collection of differently weighted controls. Bright magenta links use thicker strokes and small centered arrowheads to expose direction without covering the labels. A compact fight-state panel retains only the remaining crystals and current perch probability.
 
 #### Phase Details
 
@@ -161,7 +161,7 @@ The three clips separate the behavior cycle into readable stages. **Holding, str
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The ensemble accumulates 420 seeded dragon approaches over roughly one minute, including a short final hold. Brighter paths are the most recent samples, while the underlying density field reveals routes repeatedly selected across the seeded runs. The central End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
+The ensemble accumulates 240 seeded dragon approaches in about 23 seconds. A cooler-to-warmer age scale lets old paths recede while new paths remain prominent, and sparse arrowheads clarify travel direction without turning the graph into a field of symbols. The shortened run reaches the route-density result quickly, then pauses just long enough to read it. The source-shaped End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
 
 *The dragon doesn't hunt you. It follows an algorithm. Your death was a graph traversal.*
 
@@ -179,7 +179,13 @@ Twenty End Gateways form a larger ring at radius 96 blocks, their positions calc
 
 $$\mathbf{g}_k = \left( \lfloor 96 \cos(\pi k / 10) \rfloor, \lfloor 96 \sin(\pi k / 10) \rfloor \right), \quad k \in \{0, 1, \ldots, 19\}$$
 
-Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview now separates the End into three readable scales. The left panel spans 2.2 million blocks and maps the genuine repeating terrain and void pattern caused by signed 32-bit overflow. The upper-right panel preserves the central fight geometry. The lower-right panel magnifies the first distant overflow band, whose affected eight-block cell begins at $r = 370,720$ blocks and whose normal terrain resumes at $r = 524,288$ blocks. The ring mask and boundaries follow Java integer arithmetic; the end-stone texture is an illustrative projection.
+Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview separates this system into three readable scales. The large panel spans 12 million blocks from $-6,000,000$ to $+6,000,000$ on each axis and evaluates the signed 32-bit overflow predicate directly:
+
+$$\operatorname{signed32}\left(\operatorname{trunc}(x/8)^2 + \operatorname{trunc}(z/8)^2\right) \geq 0$$
+
+This produces 261 land-to-void or void-to-land transitions by six million blocks. The apparent grid and inversion pattern at that scale is a sampling effect: the exact geometry remains a sequence of increasingly thin radial bands, but a regular pixel grid aliases those subpixel rings into a large moire structure. The first affected eight-block cell begins at $r = 370,720$ blocks, the first strictly unsafe point is $370,728$, and normal terrain resumes at $524,288$.
+
+The upper-right panel preserves the central fight geometry and deliberately renders every obsidian-spike footprint at the maximum five-block radius so all ten towers remain legible. Vanilla source radii still range from two to five blocks. The lower-right panel is a complete local projection from $-18,000$ to $+18,000$ blocks, including the central island, the roughly 1,024-block empty gulf, and the filled outer-island noise field. Exact overflow arithmetic and seeded site tests are separated from the illustrative end-stone surface texture.
 
 *The End has edges. The numbers told it where to stop.*
 
@@ -207,9 +213,9 @@ Beyond the gateway ring, outer-island seed sites are selected from the complete 
 
 ![Seed Loading](Plots/seed_loading.gif)
 
-This animation follows the Java 1.16.1 chunk-status order from `EMPTY` through `FULL`. The center target advances first, while surrounding chunks trail behind as a deterministic dependency wave. A single bottom strip keeps all thirteen statuses readable without a separate dashboard.
+This animation follows the Java 1.16.1 chunk-status order from `EMPTY` through `FULL`. It starts with the map hidden. Each chunk tile grows into view only as the dependency wave reaches it, so the terrain is revealed by generation rather than displayed in advance. Early statuses remain muted, `NOISE` exposes the first recognizable field, and `SURFACE` restores the terrain palette.
 
-The status sequence is source-faithful. The wave is an explanatory scheduling model rather than a profiler trace, and the pixel-art Overworld beneath it is an illustrative terrain context rather than a block-perfect seed render.
+Later stages leave visible evidence on the map: carvers and liquid-carver traces modify the terrain, `FEATURES` adds feature markers, `LIGHT` marks illuminated chunks, `SPAWN` identifies the spawn-ready target, and `HEIGHTMAPS` outlines the completed heightmap footprint. The finished `FULL` state is held for two seconds so the completed dependency field can be inspected. The thirteen-status order is source-faithful; the wave is an explanatory scheduling model rather than a profiler trace, and the pixel-art terrain is not a block-perfect seed render.
 
 *The seed is fixed. The reveal is the explanation.*
 
@@ -231,7 +237,7 @@ Candidate placement is exact for 1.16.1. Full biome viability remains a separate
 
 Nether fortresses and bastion remnants share one 27 x 27 chunk region grid in Java 1.16.1. After two `nextInt(23)` offset draws, a `nextInt(5)` roll assigns the shared candidate: rolls 0 and 1 produce a fortress, while rolls 2 through 4 produce a bastion. Ruined portals use a separate 25 x 25 grid, candidate window, and salt.
 
-The animation exposes both layers at once, including the current shared roll and the independent portal candidate. The placement arithmetic is exact; the Nether terrain backdrop is illustrative.
+The animation exposes both layers at once, including the current shared roll and the independent portal candidate. Its terrain palette uses netherrack crimson, warped indigo, basalt, soul sand, and lava gold so the three candidate symbols remain distinct without relying on bright green. The placement arithmetic is exact; the Nether terrain backdrop is illustrative.
 
 *Same seed. Different salt. Different fate.*
 
@@ -255,7 +261,7 @@ The animation exposes both layers at once, including the current shared roll and
 
 ![Structure Analysis](Plots/structure_analysis.png)
 
-The refreshed four-panel analysis concentrates on the actual candidate-stage algorithms. It shows exact village candidates across 32 x 32 chunk regions, one expanded 24 x 24 candidate window with its two Java Random offsets, the shared fortress and bastion layer beside independent ruined portals, and the full 576-pair offset distribution with the exact 40/60 Nether type split.
+The refreshed four-panel analysis concentrates on the actual candidate-stage algorithms. A compact 2 x 2 layout keeps related panels close enough for direct comparison. It shows exact village candidates across 32 x 32 chunk regions, one expanded 24 x 24 candidate window with its two Java Random offsets, the shared fortress and bastion layer beside independent ruined portals, and the full 576-pair offset distribution with the exact 40/60 Nether type split. The Nether panel shares the animation's crimson, indigo, basalt, and gold visual language.
 
 All candidate coordinates and seeded rolls are exact for the modeled Java 1.16.1 stage. The Overworld and Nether surfaces behind those overlays are clearly labeled illustrative terrain.
 
@@ -318,6 +324,7 @@ python render_all.py
 5. **[Fabric Yarn 1.16.1 ChunkStatus](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/chunk/ChunkStatus.html)**: Source-mapped chunk generation stages
 6. **[Fabric Yarn 1.16.1 StructureConfig](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/chunk/StructureConfig.html)**: Spacing, separation, and salt configuration
 7. **[Mojang MC-159283](https://mojira.dev/MC-159283)**: End island density and distant overflow analysis
+8. **[Deltanic's End overflow derivation](https://gist.github.com/Deltanic/b98d005c9025f10a67de9e966fa57ebb)**: Java integer derivation and distant transition sequence linked from MC-159283
 
 ---
 
