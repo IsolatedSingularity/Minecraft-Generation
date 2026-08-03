@@ -14,10 +14,18 @@ from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
     DRAGON_EDGES, DRAGON_NODES, perch_probability, shortest_path,
 )
-from core.end_generation import gateway_positions, pillar_seed, spike_layout
+from core.end_generation import (
+    SimplexNoise2D,
+    central_island_projection,
+    gateway_positions,
+    outer_island_seed_field,
+    pillar_seed,
+    spike_layout,
+)
 from core.lcg import MinecraftLCG, generate_population_seed, generate_region_seed
 from core.strongholds import generate_stronghold_candidates
 from core.structures import NETHER_RUINED_PORTAL, VILLAGE, candidate_in_region, nether_shared_candidate
+from redstone_quasi_connectivity import bud_animation_state
 
 
 class JavaRandomTests(unittest.TestCase):
@@ -93,6 +101,51 @@ class EndGeometryTests(unittest.TestCase):
         self.assertEqual(len(spikes), 10)
         self.assertEqual(sum(spike['caged'] for spike in spikes), 2)
         self.assertEqual(sorted(spike['height'] for spike in spikes), list(range(76, 104, 3)))
+
+    def test_vectorized_simplex_and_island_projection(self):
+        simplex = SimplexNoise2D(42)
+        x = np.array([0.0, 123.0, -456.0, 78.5])
+        z = np.array([0.0, -456.0, 78.0, -31.25])
+        expected = np.array([
+            simplex.sample(sample_x, sample_z)
+            for sample_x, sample_z in zip(x, z)
+        ])
+        np.testing.assert_allclose(simplex.sample_grid(x, z), expected, atol=1e-12)
+
+        field = outer_island_seed_field(42, max_coordinate_blocks=2048)
+        radii_squared = field['chunk_x'] ** 2 + field['chunk_z'] ** 2
+        self.assertGreater(len(radii_squared), 0)
+        self.assertTrue(np.all(radii_squared > 4096))
+        expected_sites = {
+            (chunk_x, chunk_z)
+            for chunk_x in range(-128, 129)
+            for chunk_z in range(-128, 129)
+            if chunk_x * chunk_x + chunk_z * chunk_z > 4096
+            and simplex.sample(chunk_x, chunk_z) < -0.9
+        }
+        self.assertEqual(
+            set(zip(field['chunk_x'], field['chunk_z'])), expected_sites,
+        )
+
+        _, _, projection = central_island_projection(42, resolution=65)
+        self.assertFalse(np.ma.getmaskarray(projection)[32, 32])
+        self.assertTrue(np.ma.getmaskarray(projection)[0, 0])
+
+
+class RedstoneTests(unittest.TestCase):
+    def test_bud_cycle_requires_updates_for_both_edges(self):
+        waiting_to_extend = bud_animation_state(20)
+        self.assertTrue(waiting_to_extend.source_on)
+        self.assertEqual(waiting_to_extend.extension, 0.0)
+
+        extended_without_power = bud_animation_state(90)
+        self.assertFalse(extended_without_power.source_on)
+        self.assertEqual(extended_without_power.extension, 1.0)
+
+        retracting = bud_animation_state(118)
+        self.assertFalse(retracting.source_on)
+        self.assertGreater(retracting.extension, 0.0)
+        self.assertLess(retracting.extension, 1.0)
 
 
 if __name__ == '__main__':

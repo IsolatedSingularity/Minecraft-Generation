@@ -6,7 +6,7 @@
 
 ###### Mathematical exploration of Minecraft's world generation algorithms. References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
 
-![Ender Dragon Pathfinding](Plots/dragon_pathfinding.gif)
+![Ender Dragon Pathfinding](Plots/dragon_pathfinding_hero.gif)
 
 
 
@@ -134,13 +134,11 @@ where $\mu_b$ is the prototype parameter vector for biome $b$.
 
 ### Dragon Pathfinding
 
-![Dragon Pathfinding Animation](Plots/dragon_pathfinding.gif)
-
-The Ender Dragon navigates a **directed acyclic graph** embedded in the End dimension's geometry. The pathfinding system maintains 25+ nodes distributed across three concentric rings: outer nodes at radius 100 blocks for circling behavior, inner nodes at 60 blocks for strafing approaches, and center nodes at 30 blocks for landing preparation.
+The Ender Dragon navigates a weighted **24-node graph** embedded in the End dimension's geometry. Its horizontal path nodes form three concentric rings: 12 nodes at radius 60 blocks, 8 nodes at radius 40 blocks, and 4 nodes at radius 20 blocks. The new hero overlays that exact lattice on a source-shaped top-down projection of the central island, including the exit fountain and the ten seed-shuffled obsidian spikes.
 
 The dragon's behavioral state machine operates on seven distinct states, each with characteristic movement patterns. **HOLDING** produces the familiar circling at maximum radius, the dragon tracing lazy arcs while surveying its domain. **STRAFING** triggers aggressive linear charges accompanied by acid breath. **APPROACH**, **LANDING**, and **PERCHING** execute the critical touchdown sequence that speedrunners exploit, the probability of initiating this sequence following $P = 1/(3 + n_{\text{crystals}})$ where destroyed crystals increase perch likelihood. **TAKEOFF** and **CHARGING** complete the cycle, returning the dragon to its orbital patterns.
 
-The visualization renders this graph structure in real-time, highlighting active nodes and transitions as the dragon's simulated AI processes its environment. The state machine diagram illuminates which behavioral mode drives current movement.
+The visualization renders this graph structure in real time, highlighting active paths and transitions as the dragon's simulated AI processes its environment. The state machine uses purpur island controls, while a compact fight-state panel retains only the remaining crystals and current perch probability.
 
 #### Phase Details
 
@@ -163,7 +161,7 @@ The three clips separate the behavior cycle into readable stages. **Holding, str
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The ensemble gradually accumulates 420 seeded dragon approaches over roughly sixteen seconds. Brighter paths are the most recent samples, while the underlying density field reveals routes repeatedly selected across the seeded runs. The slower build makes the formation of the high-occupancy corridors visible instead of presenting the result almost instantly. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
+The ensemble accumulates 420 seeded dragon approaches over roughly twenty-four seconds, followed by a short final hold. Brighter paths are the most recent samples, while the underlying density field reveals routes repeatedly selected across the seeded runs. The central End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
 
 *The dragon doesn't hunt you. It follows an algorithm. Your death was a graph traversal.*
 
@@ -171,17 +169,17 @@ The ensemble gradually accumulates 420 seeded dragon approaches over roughly six
 
 ![End Dimension Layout](Plots/end_dimension_overview.png)
 
-The End dimension exhibits precise mathematical structure beneath its alien aesthetics. The central island, 200 blocks in diameter, hosts the exit portal at exact coordinates $(0, 0)$ surrounded by ten obsidian pillars arranged via:
+The End dimension exhibits precise mathematical structure beneath its alien aesthetics. The central island's density field is anchored at exact coordinates $(0, 0)$ and supports ten obsidian spikes arranged via:
 
 $$\mathbf{p}_k = \left( r_p \cos\left(\frac{2\pi k}{10}\right), r_p \sin\left(\frac{2\pi k}{10}\right) \right), \quad k \in \{0, 1, \ldots, 9\}$$
 
-with pillar radius $r_p = 76$ blocks. Crystals atop these pillars follow a height sequence encoding their cage protection status.
+with spike-circle radius $r_p = 42$ blocks. The spike footprints have radii from 2 to 5 blocks, while their tops rise from Y=76 through Y=103 in three-block steps. Two seed-selected crystals are protected by iron-bar cages.
 
 Twenty End Gateways form a larger ring at radius 96 blocks, their positions calculated through:
 
 $$\mathbf{g}_k = \left( \lfloor 96 \cos(\pi k / 10) \rfloor, \lfloor 96 \sin(\pi k / 10) \rfloor \right), \quad k \in \{0, 1, \ldots, 19\}$$
 
-Beyond the gateway ring, outer islands generate in a pseudo-infinite expanse, but not truly infinite. At $r = 370,720$ blocks, integer arithmetic overflow creates a void gap where no islands spawn. A second gap appears at $r = 524,288$ blocks. These are not bugs but *consequences of binary representation*.
+Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview projects their source falloff cones into island footprints instead of plotting a random accepted subset. In Java 1.16.1, integer overflow starts the first distant void ring at $r = 370,720$ blocks and normal terrain resumes at $r = 524,288$ blocks. The overflow pattern is documented here but is no longer a separate figure panel.
 
 *The End has edges. The numbers told it where to stop.*
 
@@ -295,6 +293,27 @@ The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The
 
 <br>
 
+### Redstone Quasi-Connectivity
+
+![Java Quasi-Connectivity Diagram](Plots/redstone_quasi_connectivity.png)
+
+Java 1.16.1 pistons, sticky pistons, droppers, and dispensers test whether the block above them would receive power. An elevated source can therefore leave a component logically powered without sending the neighboring block update needed to change its visible state.
+
+![Quasi-Connectivity BUD Piston](Plots/redstone_quasi_connectivity.gif)
+
+The BUD demonstrator follows both edges of that rule. The elevated lever turns on while the piston remains retracted, the adjacent note block supplies an update, and the piston extends. Removing power likewise leaves it extended until a second update causes retraction. The animation separates signal state, update propagation, and piston motion so the mechanism remains readable.
+
+The behavior is recorded as working as intended in [Mojang issue MC-108](https://mojira.dev/MC-108).
+
+<details>
+<summary>Original dragon pathfinding hero</summary>
+
+<br>
+
+![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)
+
+</details>
+
 ---
 
 ## Quick Start
@@ -305,8 +324,8 @@ cd Minecraft-Generation
 pip install numpy matplotlib networkx scipy pillow seaborn
 
 # Generate all visualizations
-python Code/dragon_pathfinding.py
-python Code/minecraftStructureAnalysis.py
+cd Code
+python render_all.py
 ```
 
 ---
@@ -317,6 +336,8 @@ python Code/minecraftStructureAnalysis.py
 2. **[Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)**: Procedural generation deep dives
 3. **Java Random Implementation**: OpenJDK LCG source code analysis
 4. **MCSR Community**: Speedrunning optimization research and seed analysis
+5. **[Mojang MC-108](https://mojira.dev/MC-108)**: Java quasi-connectivity behavior and update sequence
+6. **[Mojang MC-159283](https://mojira.dev/MC-159283)**: End island density and distant overflow analysis
 
 ---
 
@@ -328,7 +349,7 @@ python Code/minecraftStructureAnalysis.py
 > For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie. Your throws do.
 
 > [!NOTE]
-> These four refreshed assets target Java 1.16.1. Candidate formulas and stronghold ring geometry use Java-compatible RNG. Biome panels are labeled compact previews, not bit-perfect full-world biome generation. No Bedrock behavior is represented.
+> The active mathematical and redstone visualizations target Java 1.16.1. Candidate formulas and stronghold ring geometry use Java-compatible RNG. Biome panels and terrain projections are labeled visual models where they are not bit-perfect chunk generation. No Bedrock behavior is represented.
 
 > [!CAUTION]
 > Side effects of understanding these algorithms include: inability to enjoy "random" generation, compulsive seed analysis, and explaining to non-players why 48-bit integers matter.

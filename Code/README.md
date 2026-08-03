@@ -25,9 +25,11 @@ from core.constants import STRONGHOLD_RINGS, BIOME_COLORS
 **Enhanced Ender Dragon AI Visualization**
 
 Real-time simulation of dragon behavior with:
-- 25+ pathfinding nodes across outer, inner, and center rings
+
+- 24 pathfinding nodes across 60, 40, and 20-block rings
 - 7 behavioral states with probability-weighted transitions
 - Crystal destruction mechanics affecting perch probability
+- Source-shaped central-island projection with exact spike footprints
 - Graph-based navigation with weighted edges
 
 ```python
@@ -37,7 +39,21 @@ class EnderDragonAI:
         return 1.0 / (3.0 + self.crystals_alive)
 ```
 
-**Output**: `Plots/dragon_pathfinding.gif` (200 DPI, 20 FPS)
+**Outputs**: `Plots/dragon_pathfinding_hero.gif`, detail clips, and `Plots/dragon_trajectory_ensemble.gif`
+
+#### `end_dimension_overview.py`
+**Three-Panel End Dimension Overview**
+
+The left panel projects the complete Java 1.16.1 outer-island seed field, the upper-right panel shows central fight geometry, and the lower-right panel diagrams End city branching.
+
+**Output**: `Plots/end_dimension_overview.png`
+
+#### `redstone_quasi_connectivity.py`
+**Java 1.16.1 Quasi-Connectivity**
+
+Creates a three-stage isometric diagram and an animated BUD piston cycle that separates elevated power, neighbor updates, extension, and retraction.
+
+**Outputs**: `Plots/redstone_quasi_connectivity.png` and `Plots/redstone_quasi_connectivity.gif`
 
 #### structure_placement.py
 **Java 1.16.1 Village Candidate Animation**

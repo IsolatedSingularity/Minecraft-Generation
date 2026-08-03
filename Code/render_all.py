@@ -15,6 +15,10 @@ from dragon_pathfinding import (
 from end_dimension_overview import create_end_dimension_overview
 from minecraftStructureAnalysis import create_structure_analysis
 from multi_structure_generation import create_multi_structure_animation
+from redstone_quasi_connectivity import (
+    create_quasi_connectivity_animation,
+    create_quasi_connectivity_diagram,
+)
 from seed_loading import create_seed_loading_animation
 from stronghold_distribution import create_stronghold_distribution
 from structure_placement import create_structure_placement_animation
@@ -39,12 +43,16 @@ def main():
         plots / 'structure_analysis.png'))
     _render('Stronghold rings', lambda: create_stronghold_distribution(
         plots / 'stronghold_rings.png'))
+    _render('Quasi-connectivity diagram', lambda: create_quasi_connectivity_diagram(
+        plots / 'redstone_quasi_connectivity.png'))
 
     _render('Dragon hero', lambda: create_dragon_pathfinding_animation(
-        plots / 'dragon_pathfinding.gif'))
+        plots / 'dragon_pathfinding_hero.gif'))
     _render('Dragon detail clips', lambda: create_dragon_detail_clips(plots))
     _render('Dragon ensemble', lambda: create_trajectory_ensemble_animation(
         plots / 'dragon_trajectory_ensemble.gif'))
+    _render('Quasi-connectivity BUD', lambda: create_quasi_connectivity_animation(
+        plots / 'redstone_quasi_connectivity.gif'))
     _render('Seed loading', lambda: create_seed_loading_animation(
         plots / 'seed_loading.gif'))
     _render('Village placement', lambda: create_structure_placement_animation(

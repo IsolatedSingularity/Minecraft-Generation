@@ -12,10 +12,12 @@ def optimize_gif(path, colors=128):
     """Quantize a GIF through an atomic sibling file."""
     target = Path(path)
     with Image.open(target) as source:
-        duration = source.info.get('duration', 80)
+        default_duration = source.info.get('duration', 80)
         loop = source.info.get('loop', 0)
         frames = []
+        durations = []
         for frame in ImageSequence.Iterator(source):
+            durations.append(frame.info.get('duration', default_duration))
             quantized = frame.convert('RGBA').convert(
                 'P',
                 palette=Image.Palette.ADAPTIVE,
@@ -35,7 +37,7 @@ def optimize_gif(path, colors=128):
             temporary,
             save_all=True,
             append_images=frames[1:],
-            duration=duration,
+            duration=durations,
             loop=loop,
             optimize=True,
             disposal=2,

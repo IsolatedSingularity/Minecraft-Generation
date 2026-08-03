@@ -3,12 +3,14 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgba
-from matplotlib.patches import Circle, FancyBboxPatch, Polygon, Rectangle
+from matplotlib.patches import Circle, Polygon
 import numpy as np
 
 from core.end_generation import (
-    gateway_positions, sample_outer_island_sites, spike_layout,
+    gateway_positions, outer_island_projection, outer_island_seed_field,
+)
+from core.end_visuals import (
+    ISLAND_CMAP, draw_central_island, draw_end_fountain, draw_end_spikes,
 )
 from core.style import COLORS, apply_style, style_axis
 
@@ -25,21 +27,31 @@ def _panel_label(ax, label):
 
 
 def _draw_island_overview(ax, seed):
-    sites = sample_outer_island_sites(seed, count=2800, max_radius_blocks=18000)
-    x = np.array([site['block_x'] for site in sites])
-    z = np.array([site['block_z'] for site in sites])
-    elevation = np.array([site['elevation'] for site in sites])
-    sizes = 2.2 + 0.20 * elevation ** 1.45
-    scale = (elevation - elevation.min()) / max(float(np.ptp(elevation)), 1.0)
-    rgba = np.tile(np.array(to_rgba(COLORS['end_stone'])), (len(x), 1))
-    rgba[:, :3] *= (0.72 + 0.28 * scale)[:, None]
-    rgba[:, 3] = 0.36 + 0.30 * scale
+    sites = outer_island_seed_field(seed, max_coordinate_blocks=18000)
+    x, z, projection = outer_island_projection(
+        seed, max_coordinate_blocks=18000, resolution=901,
+    )
+    values = projection.filled(0.0)
+    rgba = ISLAND_CMAP(values)
+    visible = ~np.ma.getmaskarray(projection)
+    rgba[..., 3] = np.where(visible, 0.18 + 0.50 * values, 0.0)
+    ax.imshow(
+        rgba, extent=(x[0], x[-1], z[0], z[-1]),
+        origin='lower', interpolation='nearest', zorder=1,
+    )
+    texture = slice(None, None, 9)
     ax.scatter(
-        x, z, s=sizes, c=rgba, edgecolors='none', rasterized=True,
+        sites['block_x'][texture], sites['block_z'][texture],
+        s=1.2, c=COLORS['end_stone'], alpha=0.20,
+        edgecolors='none', rasterized=True, zorder=2,
     )
     ax.add_patch(Circle(
-        (0, 0), 1000, facecolor=COLORS['background'],
-        edgecolor=COLORS['grid'], linewidth=0.8, linestyle=':', zorder=4,
+        (0, 0), 900, facecolor=COLORS['background'],
+        edgecolor='none', zorder=4,
+    ))
+    ax.add_patch(Circle(
+        (0, 0), 1024, fill=False, edgecolor=COLORS['grid'],
+        linewidth=0.8, linestyle=':', zorder=4,
     ))
     ax.add_patch(Circle(
         (0, 0), 105, facecolor=COLORS['end_stone'],
@@ -67,14 +79,7 @@ def _draw_island_overview(ax, seed):
 
 
 def _draw_central_geometry(ax, seed):
-    ax.add_patch(Circle(
-        (0, 0), 100, facecolor=COLORS['end_stone'],
-        edgecolor='none', alpha=0.18,
-    ))
-    ax.add_patch(Circle(
-        (0, 0), 7.5, facecolor=COLORS['obsidian'],
-        edgecolor=COLORS['portal'], linewidth=1.0, zorder=8,
-    ))
+    draw_central_island(ax, seed=seed, extent=112, alpha=0.58, zorder=0)
     ax.add_patch(Circle(
         (0, 0), 42, fill=False, edgecolor=COLORS['muted'],
         linewidth=0.8, linestyle=':', alpha=0.75,
@@ -83,24 +88,8 @@ def _draw_central_geometry(ax, seed):
         (0, 0), 96, fill=False, edgecolor=COLORS['cyan'],
         linewidth=0.9, linestyle='--', alpha=0.68,
     ))
-
-    for spike in spike_layout(seed):
-        size = 40 + spike['radius'] * 15
-        ax.scatter(
-            [spike['x']], [spike['z']], s=size,
-            c=COLORS['obsidian'], edgecolors=COLORS['text'],
-            linewidths=0.45, zorder=5,
-        )
-        ax.scatter(
-            [spike['x']], [spike['z']], s=18,
-            c=COLORS['green'], marker='D', edgecolors='none', zorder=6,
-        )
-        if spike['caged']:
-            ax.scatter(
-                [spike['x']], [spike['z']], s=size + 38,
-                facecolors='none', edgecolors=COLORS['gold'],
-                marker='s', linewidths=0.8, zorder=7,
-            )
+    draw_end_spikes(ax, seed=seed, crystals_alive=10, zorder=5)
+    draw_end_fountain(ax, active=True, zorder=8)
 
     gateways = gateway_positions()
     ax.scatter(
