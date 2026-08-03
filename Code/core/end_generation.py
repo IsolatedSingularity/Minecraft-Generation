@@ -235,6 +235,46 @@ def central_island_projection(
     return coordinates, coordinates, np.ma.masked_where(surface <= 0.0, terraces)
 
 
+def end_overflow_ring_boundaries(max_radius_blocks):
+    """Return exact axis boundaries of the Java End overflow rings.
+
+    Odd entries mark the first affected eight-block cell of a NaN void band,
+    while even entries resume normal terrain. Coordinates are aligned to the
+    eight-block sampling lattice used by the End island-density function.
+    """
+    boundaries = []
+    index = 1
+    while True:
+        raw = 8.0 * math.sqrt(index * (2 ** 31))
+        if index % 2:
+            boundary = math.floor(raw / 8.0) * 8
+            kind = 'void'
+        else:
+            boundary = math.ceil(raw / 8.0) * 8
+            kind = 'terrain'
+        if boundary > int(max_radius_blocks):
+            break
+        boundaries.append({
+            'index': index,
+            'radius': int(boundary),
+            'kind': kind,
+        })
+        index += 1
+    return boundaries
+
+
+def end_overflow_generation_mask(block_x, block_z):
+    """Return where the Java 32-bit radial term remains non-negative."""
+    x, z = np.broadcast_arrays(
+        np.asarray(block_x, dtype=float), np.asarray(block_z, dtype=float),
+    )
+    sample_x = np.trunc(x / 8.0).astype(np.int64)
+    sample_z = np.trunc(z / 8.0).astype(np.int64)
+    unsigned = (sample_x * sample_x + sample_z * sample_z) & 0xFFFFFFFF
+    signed = np.where(unsigned >= 0x80000000, unsigned - 0x100000000, unsigned)
+    return signed >= 0
+
+
 def sample_outer_island_sites(world_seed, count=2600, max_radius_blocks=18000):
     """Sample sites that qualify the End source's simplex-noise branch.
 

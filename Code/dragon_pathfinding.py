@@ -135,8 +135,8 @@ def _draw_state_machine(ax):
     for state_index, state in enumerate(STATE_ORDER):
         position = positions[state]
         vertices = _state_island_vertices(
-            position, 0.22 if state != 'landing_approach' else 0.25,
-            0.086, 8100 + state_index,
+            position, 0.235 if state != 'landing_approach' else 0.275,
+            0.104, 8100 + state_index,
         )
         shadow = Polygon(
             vertices + np.array([0.0, -0.012]), closed=True,
@@ -153,7 +153,7 @@ def _draw_state_machine(ax):
         ax.text(
             position[0], position[1], labels[state],
             ha='center', va='center', color=COLORS['text'],
-            fontsize=6.8, fontweight='bold', family='monospace',
+            fontsize=9.3, fontweight='black', family='monospace',
             zorder=5,
         )
         nodes[state] = node
@@ -356,7 +356,7 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
 
 
 def create_trajectory_ensemble_animation(
-    save_path, seed=12031, trajectories=420, fps=8, frames=192,
+    save_path, seed=12031, trajectories=420, fps=3, frames=180,
 ):
     """Animate a slower accumulation of dragon approaches and occupancy."""
     paths = [

@@ -13,6 +13,9 @@ The `core/` module provides centralized utilities for all generation algorithms:
 | `constants.py` | Minecraft generation constants, colors, ring definitions |
 | `lcg.py` | Linear Congruential Generator (Java Random implementation) |
 | `noise.py` | Perlin noise generation for terrain simulation |
+| `structures.py` | Exact Java 1.16.1 candidate-stage structure placement |
+| `end_generation.py` | End geometry, simplex fields, and 32-bit overflow rings |
+| `minecraft_visuals.py` | Illustrative pixel-art terrain backdrops for exact overlays |
 
 ```python
 from core import MinecraftLCG, generate_region_seed, simple_perlin_noise
@@ -44,16 +47,9 @@ class EnderDragonAI:
 #### `end_dimension_overview.py`
 **Three-Panel End Dimension Overview**
 
-The left panel projects the complete Java 1.16.1 outer-island seed field, the upper-right panel shows central fight geometry, and the lower-right panel diagrams End city branching.
+The left panel maps genuine signed 32-bit overflow rings across a 2.2-million-block view, the upper-right panel shows central fight geometry, and the lower-right panel magnifies the first distant terrain and void band.
 
 **Output**: `Plots/end_dimension_overview.png`
-
-#### `redstone_quasi_connectivity.py`
-**Java 1.16.1 Quasi-Connectivity**
-
-Creates a three-stage isometric diagram and an animated BUD piston cycle that separates elevated power, neighbor updates, extension, and retraction.
-
-**Outputs**: `Plots/redstone_quasi_connectivity.png` and `Plots/redstone_quasi_connectivity.gif`
 
 #### structure_placement.py
 **Java 1.16.1 Village Candidate Animation**
@@ -63,9 +59,23 @@ The generator shows one exact candidate attempt per 32 x 32 chunk region:
 - Java-compatible region seed with village salt 10387312
 - Two Java Random nextInt(24) offsets
 - Explicit 24 x 24 chunk candidate window
-- Separate biome-pass preview and biome-reject states
+- Explicit eight-chunk excluded margins and exact candidate trace
 
 **Output**: Plots/structure_placement.gif
+
+#### `seed_loading.py`
+**Java 1.16.1 Chunk Status Dependency Wave**
+
+Shows the exact thirteen-status order from `EMPTY` through `FULL` as an explicitly modeled dependency wave over an illustrative terrain backdrop.
+
+**Output**: `Plots/seed_loading.gif`
+
+#### `multi_structure_generation.py`
+**Java 1.16.1 Nether Candidate Layers**
+
+Shows the shared 27 x 27 fortress and bastion grid, its exact 2/5 versus 3/5 type roll, and the independent 25 x 25 ruined-portal grid.
+
+**Output**: `Plots/multi_structure_generation.gif`
 
 #### stronghold_distribution.py
 **Java 1.16.1 Stronghold Candidate Rings**
@@ -117,12 +127,12 @@ class MinecraftExtendedAnimator:
 #### minecraftStructureAnalysis.py
 **Primary Functions**: Static Java 1.16.1 candidate and structure analysis
 
-The six-panel dashboard separates exact seeded candidate placement from the compact biome-layer preview. It includes:
+The four-panel dashboard separates exact seeded candidate placement from illustrative terrain context. It includes:
 
-- Village candidate grid and candidate-distance distribution
-- Complete eight-ring stronghold candidate geometry
-- Ring population comparison
-- Formula and scope notes embedded in the figure
+- Village candidates across exact 32 x 32 chunk regions
+- One expanded 24 x 24 candidate window with Java Random offsets
+- Shared fortress and bastion candidates beside independent ruined portals
+- Complete 576-pair offset distribution and exact 40/60 Nether type split
 
 #### `minecraftMathematicalAnalysis.py`
 **Primary Functions**: Mathematical foundation analysis and speedrunning optimization

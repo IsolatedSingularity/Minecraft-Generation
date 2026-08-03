@@ -3,14 +3,19 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, Polygon
+from matplotlib.colors import to_rgba
+from matplotlib.patches import Circle, Rectangle
 import numpy as np
+from scipy.ndimage import maximum_filter
 
 from core.end_generation import (
-    gateway_positions, outer_island_projection, outer_island_seed_field,
+    SimplexNoise2D,
+    end_overflow_generation_mask,
+    end_overflow_ring_boundaries,
+    gateway_positions,
 )
 from core.end_visuals import (
-    ISLAND_CMAP, draw_central_island, draw_end_fountain, draw_end_spikes,
+    draw_central_island, draw_end_fountain, draw_end_spikes,
 )
 from core.style import COLORS, apply_style, style_axis
 
@@ -26,55 +31,76 @@ def _panel_label(ax, label):
     )
 
 
+def _overflow_texture(seed, x, z, generated, dilation=2):
+    noise = SimplexNoise2D(seed).sample_grid(x / 16.0, z / 16.0)
+    radius = np.hypot(x, z)
+    sites = (noise < -0.9) & (radius > 1024.0) & generated
+    islands = maximum_filter(sites.astype(float), size=int(dilation))
+    color = np.asarray(to_rgba(COLORS['end_stone']))
+    rgba = np.zeros((*generated.shape, 4), dtype=float)
+    shade = 0.68 + 0.28 * np.clip((-noise - 0.35) / 0.65, 0.0, 1.0)
+    rgba[..., :3] = color[:3] * shade[..., None]
+    rgba[..., 3] = np.where(generated, 0.055 + 0.62 * islands, 0.0)
+    return rgba
+
+
 def _draw_island_overview(ax, seed):
-    sites = outer_island_seed_field(seed, max_coordinate_blocks=18000)
-    x, z, projection = outer_island_projection(
-        seed, max_coordinate_blocks=18000, resolution=901,
-    )
-    values = projection.filled(0.0)
-    rgba = ISLAND_CMAP(values)
-    visible = ~np.ma.getmaskarray(projection)
-    rgba[..., 3] = np.where(visible, 0.18 + 0.50 * values, 0.0)
+    limit = 1_100_000.0
+    coordinates = np.linspace(-limit, limit, 901)
+    x, z = np.meshgrid(coordinates, coordinates)
+    generated = end_overflow_generation_mask(x, z)
+    rgba = _overflow_texture(seed, x, z, generated, dilation=3)
     ax.imshow(
-        rgba, extent=(x[0], x[-1], z[0], z[-1]),
+        rgba, extent=(-limit, limit, -limit, limit),
         origin='lower', interpolation='nearest', zorder=1,
     )
-    texture = slice(None, None, 9)
+    boundaries = end_overflow_ring_boundaries(limit)
+    for item in boundaries:
+        color = COLORS['coral'] if item['kind'] == 'void' else COLORS['cyan']
+        ax.add_patch(Circle(
+            (0, 0), item['radius'], fill=False, edgecolor=color,
+            linewidth=0.72, alpha=0.64,
+        ))
+    for item in boundaries[:4]:
+        angle = np.deg2rad(33.0)
+        radius = item['radius']
+        ax.text(
+            radius * np.cos(angle), radius * np.sin(angle),
+            f"{radius // 1000}k",
+            color=COLORS['coral'] if item['kind'] == 'void' else COLORS['cyan'],
+            fontsize=6.8, fontweight='bold', ha='center', va='center',
+        )
     ax.scatter(
-        sites['block_x'][texture], sites['block_z'][texture],
-        s=1.2, c=COLORS['end_stone'], alpha=0.20,
-        edgecolors='none', rasterized=True, zorder=2,
-    )
-    ax.add_patch(Circle(
-        (0, 0), 900, facecolor=COLORS['background'],
-        edgecolor='none', zorder=4,
-    ))
-    ax.add_patch(Circle(
-        (0, 0), 1024, fill=False, edgecolor=COLORS['grid'],
-        linewidth=0.8, linestyle=':', zorder=4,
-    ))
-    ax.add_patch(Circle(
-        (0, 0), 105, facecolor=COLORS['end_stone'],
-        edgecolor=COLORS['text'], linewidth=0.7, alpha=0.94, zorder=5,
-    ))
-    ax.scatter(
-        [0], [0], s=26, c=COLORS['portal'], marker='o',
+        [0], [0], s=30, c=COLORS['portal'], marker='D',
         edgecolors=COLORS['text'], linewidths=0.5, zorder=6,
     )
-    for radius in (5000, 10000, 15000):
-        ax.add_patch(Circle(
-            (0, 0), radius, fill=False, edgecolor=COLORS['grid'],
-            linewidth=0.5, alpha=0.45,
-        ))
-        ax.text(
-            radius / np.sqrt(2), radius / np.sqrt(2), f'{radius // 1000}k',
-            color=COLORS['muted'], fontsize=6.5, ha='center', va='center',
-        )
-    ax.set_xlim(-18000, 18000)
-    ax.set_ylim(-18000, 18000)
+    zoom_bounds = (320_000, 570_000, -150_000, 150_000)
+    ax.add_patch(Rectangle(
+        (zoom_bounds[0], zoom_bounds[2]),
+        zoom_bounds[1] - zoom_bounds[0],
+        zoom_bounds[3] - zoom_bounds[2],
+        fill=False, edgecolor=COLORS['gold'], linewidth=1.0,
+        linestyle=(0, (4, 2)), zorder=7,
+    ))
+    ax.text(
+        0.025, 0.035,
+        'End-stone texture shows terrain availability\nindividual islands are below pixel scale',
+        transform=ax.transAxes, color=COLORS['muted'], fontsize=7.2,
+        ha='left', va='bottom',
+        bbox=dict(
+            boxstyle='round,pad=0.35', facecolor=COLORS['panel'],
+            edgecolor=COLORS['grid'], alpha=0.88,
+        ),
+    )
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
+    ticks = [-1_000_000, -500_000, 0, 500_000, 1_000_000]
+    ax.set_xticks(ticks, [f'{value / 1_000_000:.1f}M' for value in ticks])
+    ax.set_yticks(ticks, [f'{value / 1_000_000:.1f}M' for value in ticks])
     ax.set_xlabel('X (blocks)')
     ax.set_ylabel('Z (blocks)')
     style_axis(ax, equal=True, grid=False)
+    ax.set_title('Long-distance End terrain availability', fontsize=11, pad=8)
     _panel_label(ax, '(a)')
 
 
@@ -112,72 +138,56 @@ def _draw_central_geometry(ax, seed):
     ax.set_xlabel('X (blocks)')
     ax.set_ylabel('Z (blocks)')
     style_axis(ax, equal=True, grid=True)
+    ax.set_title('Central fight geometry', fontsize=11, pad=8)
     _panel_label(ax, '(b)')
 
 
-def _iso_point(x, y, z):
-    return x - 0.56 * z, y + 0.30 * z
-
-
-def _iso_box(ax, x, y, z, width, height, depth, color, alpha=1.0):
-    p000 = _iso_point(x, y, z)
-    p100 = _iso_point(x + width, y, z)
-    p110 = _iso_point(x + width, y + height, z)
-    p010 = _iso_point(x, y + height, z)
-    p001 = _iso_point(x, y, z + depth)
-    p101 = _iso_point(x + width, y, z + depth)
-    p111 = _iso_point(x + width, y + height, z + depth)
-    p011 = _iso_point(x, y + height, z + depth)
-    top = Polygon([p010, p110, p111, p011], closed=True,
-                  facecolor=COLORS['end_stone'], edgecolor=COLORS['grid'],
-                  linewidth=0.55, alpha=alpha)
-    front = Polygon([p000, p100, p110, p010], closed=True,
-                    facecolor=color, edgecolor=COLORS['grid'],
-                    linewidth=0.55, alpha=alpha)
-    side = Polygon([p100, p101, p111, p110], closed=True,
-                   facecolor=COLORS['end_shadow'], edgecolor=COLORS['grid'],
-                   linewidth=0.55, alpha=alpha)
-    ax.add_patch(side)
-    ax.add_patch(front)
-    ax.add_patch(top)
-
-
-def _draw_end_city(ax):
-    ax.axis('off')
-    ax.set_facecolor(COLORS['background'])
-
-    _iso_box(ax, -2.6, 0.0, -1.6, 5.4, 1.0, 3.2, COLORS['purpur'])
-    _iso_box(ax, -2.1, 1.0, -1.25, 4.4, 1.35, 2.5, COLORS['purpur'])
-    _iso_box(ax, -1.55, 2.35, -0.95, 3.3, 1.35, 1.9, COLORS['purpur'])
-    _iso_box(ax, -0.85, 3.70, -0.60, 1.9, 3.5, 1.2, COLORS['purpur'])
-    _iso_box(ax, -1.15, 7.20, -0.85, 2.5, 0.55, 1.7, COLORS['purpur'])
-
-    _iso_box(ax, 0.85, 5.30, -0.35, 4.5, 0.35, 0.70, COLORS['purpur'])
-    _iso_box(ax, 4.80, 5.05, -0.75, 1.45, 1.00, 1.50, COLORS['purpur'])
-    ship_body = Polygon([
-        _iso_point(6.2, 5.0, -0.7), _iso_point(9.2, 5.0, -0.7),
-        _iso_point(10.2, 5.55, 0.0), _iso_point(9.2, 6.0, 0.7),
-        _iso_point(6.2, 6.0, 0.7), _iso_point(5.4, 5.55, 0.0),
-    ], closed=True, facecolor=COLORS['purpur'],
-       edgecolor=COLORS['text'], linewidth=0.7, alpha=0.95)
-    ax.add_patch(ship_body)
-    mast_x, mast_y = _iso_point(7.8, 6.0, 0.0)
-    ax.plot([mast_x, mast_x], [mast_y, mast_y + 2.5],
-            color=COLORS['end_stone'], linewidth=1.1)
-    ax.scatter([mast_x], [mast_y + 2.55], s=24, marker='D',
-               c=COLORS['portal'], edgecolors=COLORS['text'], linewidths=0.4)
-
-    labels = [
-        (-2.5, 0.0, 'base floors'),
-        (-0.2, 5.0, 'tower chain'),
-        (3.0, 5.75, 'bridge branch'),
-        (7.7, 7.3, 'ship branch'),
-    ]
-    for x, y, label in labels:
-        ax.text(x, y, label, color=COLORS['muted'], fontsize=7,
-                ha='center', va='bottom')
-    ax.set_xlim(-5.0, 11.2)
-    ax.set_ylim(-0.5, 10.0)
+def _draw_overflow_zoom(ax, seed):
+    x_limits = (320_000.0, 570_000.0)
+    z_limits = (-150_000.0, 150_000.0)
+    x_coordinates = np.linspace(*x_limits, 801)
+    z_coordinates = np.linspace(*z_limits, 721)
+    x, z = np.meshgrid(x_coordinates, z_coordinates)
+    generated = end_overflow_generation_mask(x, z)
+    rgba = _overflow_texture(seed, x, z, generated, dilation=2)
+    ax.imshow(
+        rgba, extent=(*x_limits, *z_limits), origin='lower',
+        interpolation='nearest', zorder=1,
+    )
+    boundaries = end_overflow_ring_boundaries(570_000)
+    for item in boundaries:
+        color = COLORS['coral'] if item['kind'] == 'void' else COLORS['cyan']
+        ax.add_patch(Circle(
+            (0, 0), item['radius'], fill=False, edgecolor=color,
+            linewidth=1.05, alpha=0.86, zorder=3,
+        ))
+    ax.text(
+        348_000, 118_000, 'terrain', color=COLORS['end_stone'],
+        fontsize=9, fontweight='bold', ha='center',
+    )
+    ax.text(
+        444_000, 0, '32-bit overflow void', color=COLORS['coral'],
+        fontsize=9.5, fontweight='bold', ha='center', va='center',
+        bbox=dict(
+            boxstyle='round,pad=0.28', facecolor=COLORS['panel'],
+            edgecolor=COLORS['coral'], alpha=0.90,
+        ),
+    )
+    ax.text(
+        548_000, 118_000, 'terrain resumes', color=COLORS['cyan'],
+        fontsize=9, fontweight='bold', ha='center',
+    )
+    ax.set_xlim(*x_limits)
+    ax.set_ylim(*z_limits)
+    ax.set_xticks(
+        [320_000, 370_720, 450_000, 524_288, 570_000],
+        ['320k', '370,720', '450k', '524,288', '570k'],
+    )
+    ax.set_yticks([-150_000, 0, 150_000], ['-150k', '0', '150k'])
+    ax.set_xlabel('X (blocks)')
+    ax.set_ylabel('Z (blocks)')
+    style_axis(ax, equal=True, grid=False)
+    ax.set_title('First overflow ring detail', fontsize=11, pad=8)
     _panel_label(ax, '(c)')
 
 
@@ -190,10 +200,10 @@ def create_end_dimension_overview(save_path, dpi=220, seed=42):
     )
     overview = figure.add_subplot(grid[:, 0])
     geometry = figure.add_subplot(grid[0, 1])
-    city = figure.add_subplot(grid[1, 1])
+    overflow_zoom = figure.add_subplot(grid[1, 1])
     _draw_island_overview(overview, seed)
     _draw_central_geometry(geometry, seed)
-    _draw_end_city(city)
+    _draw_overflow_zoom(overflow_zoom, seed)
     figure.savefig(
         save_path, dpi=dpi, facecolor=COLORS['background'],
         edgecolor='none', bbox_inches='tight',

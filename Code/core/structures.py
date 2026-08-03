@@ -73,7 +73,8 @@ def nether_shared_candidate(world_seed, region_x, region_z):
     window = NETHER_SHARED.spacing - NETHER_SHARED.separation
     offset_x = random.next_int(window)
     offset_z = random.next_int(window)
-    structure_type = 'fortress' if random.next_int(5) < 2 else 'bastion'
+    type_roll = random.next_int(5)
+    structure_type = 'fortress' if type_roll < 2 else 'bastion'
     chunk_x = region_x * NETHER_SHARED.spacing + offset_x
     chunk_z = region_z * NETHER_SHARED.spacing + offset_z
     return {
@@ -83,6 +84,7 @@ def nether_shared_candidate(world_seed, region_x, region_z):
         'region_seed': region_seed,
         'offset_x': offset_x,
         'offset_z': offset_z,
+        'type_roll': type_roll,
         'chunk_x': chunk_x,
         'chunk_z': chunk_z,
         'block_x': chunk_x * CHUNK_SIZE + CHUNK_SIZE // 2,

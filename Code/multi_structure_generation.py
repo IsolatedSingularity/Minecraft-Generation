@@ -4,15 +4,15 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Rectangle
 import numpy as np
 
 from core.constants import (
     NETHER_RUINED_PORTAL_SPACING,
     NETHER_STRUCTURE_SPACING,
 )
+from core.minecraft_visuals import draw_minecraft_terrain
 from core.rendering import optimize_gif
-from core.strongholds import generate_stronghold_candidates
 from core.structures import (
     NETHER_RUINED_PORTAL,
     candidate_in_region,
@@ -34,7 +34,7 @@ def _spiral_regions(radius):
 
 
 def create_multi_structure_animation(
-    save_path, seed=42, region_radius=5, fps=12, duration=9,
+    save_path, seed=42, region_radius=4, fps=8, duration=12,
 ):
     regions = _spiral_regions(region_radius)
     shared = [
@@ -47,14 +47,14 @@ def create_multi_structure_animation(
         )
         for region_x, region_z in regions
     ]
-    strongholds = generate_stronghold_candidates(seed)[:3]
     total_frames = int(fps * duration)
-    limit = (region_radius + 0.75) * NETHER_STRUCTURE_SPACING
+    minimum = -region_radius * NETHER_STRUCTURE_SPACING - 5
+    maximum = (region_radius + 1) * NETHER_STRUCTURE_SPACING + 5
 
-    figure, axis = plt.subplots(figsize=(12.8, 7.2), facecolor=COLORS['background'])
-    figure.subplots_adjust(left=0.085, right=0.925, top=0.965, bottom=0.105)
-    axis.set_xlim(-limit, limit)
-    axis.set_ylim(-limit, limit)
+    figure, axis = plt.subplots(figsize=(12.0, 6.75), facecolor=COLORS['background'])
+    figure.subplots_adjust(left=0.075, right=0.98, top=0.875, bottom=0.10)
+    axis.set_xlim(minimum, maximum)
+    axis.set_ylim(minimum, maximum)
     axis.set_aspect('equal')
     axis.set_xlabel('Nether chunk X')
     axis.set_ylabel('Nether chunk Z')
@@ -63,88 +63,88 @@ def create_multi_structure_animation(
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
 
-    grid_extent = int(limit // NETHER_STRUCTURE_SPACING + 1)
+    draw_minecraft_terrain(
+        axis, (minimum, maximum, minimum, maximum), seed=seed,
+        dimension='nether', resolution=256, alpha=0.90,
+    )
+
+    grid_extent = region_radius + 2
     for coordinate in range(-grid_extent, grid_extent + 1):
         value = coordinate * NETHER_STRUCTURE_SPACING
-        axis.axvline(value, color=COLORS['fortress'], linewidth=0.45, alpha=0.19)
-        axis.axhline(value, color=COLORS['fortress'], linewidth=0.45, alpha=0.19)
-    portal_extent = int(limit // NETHER_RUINED_PORTAL_SPACING + 1)
+        axis.axvline(value, color=COLORS['coral'], linewidth=0.75, alpha=0.30)
+        axis.axhline(value, color=COLORS['coral'], linewidth=0.75, alpha=0.30)
+    portal_extent = region_radius + 2
     for coordinate in range(-portal_extent, portal_extent + 1):
         value = coordinate * NETHER_RUINED_PORTAL_SPACING
-        axis.axvline(value, color=COLORS['ruined_portal'], linewidth=0.4,
-                     alpha=0.14, linestyle=':')
-        axis.axhline(value, color=COLORS['ruined_portal'], linewidth=0.4,
-                     alpha=0.14, linestyle=':')
+        axis.axvline(value, color=COLORS['violet'], linewidth=0.62,
+                     alpha=0.24, linestyle=':')
+        axis.axhline(value, color=COLORS['violet'], linewidth=0.62,
+                     alpha=0.24, linestyle=':')
 
     axis.scatter([0], [0], marker='+', s=85, c=COLORS['text'],
                  linewidths=1.1, zorder=8)
     fortress_points = axis.scatter(
-        [], [], s=48, marker='o', c=COLORS['fortress'],
-        edgecolors=COLORS['text'], linewidths=0.35, zorder=6,
+        [], [], s=72, marker='P', c=COLORS['fortress'],
+        edgecolors=COLORS['text'], linewidths=0.48, zorder=6,
     )
     bastion_points = axis.scatter(
-        [], [], s=52, marker='s', c=COLORS['bastion'],
-        edgecolors=COLORS['text'], linewidths=0.35, zorder=6,
+        [], [], s=68, marker='s', c=COLORS['bastion'],
+        edgecolors=COLORS['text'], linewidths=0.48, zorder=6,
     )
     portal_points = axis.scatter(
-        [], [], s=42, marker='D', c=COLORS['ruined_portal'],
-        edgecolors=COLORS['text'], linewidths=0.35, zorder=7,
+        [], [], s=58, marker='D', c=COLORS['ruined_portal'],
+        edgecolors=COLORS['text'], linewidths=0.48, zorder=7,
     )
-    active_region = Rectangle(
+    active_shared = Rectangle(
         (0, 0), NETHER_STRUCTURE_SPACING, NETHER_STRUCTURE_SPACING,
-        fill=False, edgecolor=COLORS['cyan'], linewidth=1.1,
+        fill=False, edgecolor=COLORS['coral'], linewidth=1.5,
         alpha=0.0, zorder=8,
     )
-    axis.add_patch(active_region)
-
-    inset = axis.inset_axes([0.735, 0.045, 0.23, 0.23])
-    inset.set_facecolor(COLORS['panel'])
-    inset.set_aspect('equal')
-    inset.set_xlim(-3200, 3200)
-    inset.set_ylim(-3200, 3200)
-    inset.tick_params(colors=COLORS['muted'], labelsize=5.5)
-    inset.set_xticks([-2048, 0, 2048])
-    inset.set_yticks([-2048, 0, 2048])
-    for spine in inset.spines.values():
-        spine.set_color(COLORS['grid'])
-    inset.add_patch(Circle(
-        (0, 0), 2048, fill=False, edgecolor=COLORS['stronghold'],
-        linestyle='--', linewidth=0.7, alpha=0.6,
-    ))
-    inset.scatter([0], [0], marker='+', s=35, c=COLORS['text'], linewidths=0.8)
-    stronghold_points = inset.scatter(
-        [item['x'] for item in strongholds],
-        [item['z'] for item in strongholds],
-        s=35, c=COLORS['stronghold'], marker='o',
-        edgecolors=COLORS['text'], linewidths=0.35, alpha=0.0,
+    active_portal = Rectangle(
+        (0, 0), NETHER_RUINED_PORTAL_SPACING, NETHER_RUINED_PORTAL_SPACING,
+        fill=False, edgecolor=COLORS['violet'], linewidth=1.5,
+        linestyle='--', alpha=0.0, zorder=8,
     )
-    linked_portal = portals[0]
-    linked_point = inset.scatter(
-        [linked_portal['chunk_x'] * 16 * 8],
-        [linked_portal['chunk_z'] * 16 * 8],
-        s=30, c=COLORS['ruined_portal'], marker='D',
-        edgecolors=COLORS['text'], linewidths=0.35, alpha=0.0,
+    axis.add_patch(active_shared)
+    axis.add_patch(active_portal)
+    axis.text(
+        0.018, 0.978, '27 x 27 SHARED GRID   25 x 25 PORTAL GRID',
+        transform=axis.transAxes, ha='left', va='top',
+        color=COLORS['text'], fontsize=13.5, fontweight='black', zorder=10,
+        bbox=dict(
+            boxstyle='square,pad=0.32', facecolor=COLORS['background'],
+            edgecolor='none', alpha=0.80,
+        ),
     )
-
-    legend = figure.add_axes([0.18, 0.025, 0.64, 0.04])
-    legend.set_xlim(0, 1)
-    legend.set_ylim(0, 1)
-    legend.axis('off')
-    entries = [
-        (0.03, 'o', COLORS['fortress'], 'fortress candidate'),
-        (0.34, 's', COLORS['bastion'], 'bastion candidate'),
-        (0.64, 'D', COLORS['ruined_portal'], 'ruined portal candidate'),
-    ]
-    for x, marker, color, label in entries:
-        legend.scatter([x], [0.5], s=38, marker=marker, c=color,
-                       edgecolors=COLORS['text'], linewidths=0.3)
-        legend.text(x + 0.035, 0.5, label, va='center',
-                    color=COLORS['muted'], fontsize=7.2)
+    axis.text(
+        0.985, 0.975,
+        'FORTRESS  roll 0-1 / 5\nBASTION   roll 2-4 / 5\nPORTAL    independent salt',
+        transform=axis.transAxes, ha='right', va='top',
+        color=COLORS['text'], fontsize=8.7, fontweight='bold', zorder=10,
+        bbox=dict(
+            boxstyle='round,pad=0.34', facecolor=COLORS['panel'],
+            edgecolor=COLORS['grid'], alpha=0.90,
+        ),
+    )
+    trace_text = axis.text(
+        0.50, 0.025, '', transform=axis.transAxes,
+        ha='center', va='bottom', color=COLORS['text'],
+        fontsize=9.7, fontweight='bold', family='monospace', zorder=10,
+        bbox=dict(
+            boxstyle='round,pad=0.42', facecolor=COLORS['panel'],
+            edgecolor=COLORS['violet'], alpha=0.94,
+        ),
+    )
+    figure.text(
+        0.50, 0.936, 'NETHER STRUCTURE CANDIDATE LAYERS   JAVA 1.16.1',
+        ha='center', va='center', color=COLORS['text'],
+        fontsize=17, fontweight='black',
+    )
 
     def update(frame_index):
         progress = frame_index / max(total_frames - 1, 1)
-        shared_progress = np.clip(progress / 0.72, 0.0, 1.0)
-        portal_progress = np.clip((progress - 0.24) / 0.68, 0.0, 1.0)
+        shared_progress = np.clip(progress / 0.90, 0.0, 1.0)
+        portal_progress = np.clip((progress - 0.08) / 0.84, 0.0, 1.0)
         shared_count = max(1, round(shared_progress * len(shared)))
         portal_count = max(0, round(portal_progress * len(portals)))
         visible_shared = shared[:shared_count]
@@ -163,25 +163,39 @@ def create_multi_structure_animation(
             np.array([[item['chunk_x'], item['chunk_z']] for item in visible_portals])
             if visible_portals else np.empty((0, 2))
         )
-        current = visible_portals[-1] if visible_portals else visible_shared[-1]
-        spacing = NETHER_RUINED_PORTAL_SPACING if visible_portals else NETHER_STRUCTURE_SPACING
-        active_region.set_xy((current['region_x'] * spacing, current['region_z'] * spacing))
-        active_region.set_width(spacing)
-        active_region.set_height(spacing)
-        active_region.set_alpha(0.85)
-
-        inset_alpha = float(np.clip((progress - 0.72) / 0.20, 0.0, 1.0))
-        stronghold_points.set_alpha(inset_alpha)
+        shared_item = visible_shared[-1]
+        active_shared.set_xy((
+            shared_item['region_x'] * NETHER_STRUCTURE_SPACING,
+            shared_item['region_z'] * NETHER_STRUCTURE_SPACING,
+        ))
+        active_shared.set_alpha(0.92)
         if visible_portals:
-            linked_point.set_alpha(inset_alpha)
+            portal_item = visible_portals[-1]
+            active_portal.set_xy((
+                portal_item['region_x'] * NETHER_RUINED_PORTAL_SPACING,
+                portal_item['region_z'] * NETHER_RUINED_PORTAL_SPACING,
+            ))
+            active_portal.set_alpha(0.92)
+            portal_text = (
+                f"PORTAL ({portal_item['chunk_x']:+04d},"
+                f"{portal_item['chunk_z']:+04d})"
+            )
+        else:
+            portal_text = 'PORTAL pending'
+        trace_text.set_text(
+            f"SHARED ROLL {shared_item['type_roll']} -> "
+            f"{shared_item['name'].upper()} "
+            f"({shared_item['chunk_x']:+04d},{shared_item['chunk_z']:+04d})   "
+            f"{portal_text}"
+        )
         return []
 
     animation = FuncAnimation(
         figure, update, frames=total_frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=125)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=90)
     plt.close(figure)
-    optimize_gif(save_path, colors=96)
+    optimize_gif(save_path, colors=80)
     return str(save_path)
 
 

@@ -106,7 +106,7 @@ $$c_x = R_x \cdot 32 + J_x, \quad c_z = R_z \cdot 32 + J_z$$
 
 where $J_x$ and $J_z$ are independent \texttt{nextInt(24)} values. There is one candidate attempt per region. A separate biome check decides whether the candidate can generate as a village, so the final rate is not simply the separation divided by the spacing.
 
-The refreshed animation makes that boundary visible: exact candidate placement first, readable biome-pass preview second.
+The refreshed animation makes that boundary visible: the exact seeded candidate and its 24 x 24 window are drawn directly over an explicitly illustrative terrain backdrop. The biome gate remains outside the animation's scope.
 
 ### Perlin Noise and Fractal Brownian Motion
 
@@ -161,7 +161,7 @@ The three clips separate the behavior cycle into readable stages. **Holding, str
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The ensemble accumulates 420 seeded dragon approaches over roughly twenty-four seconds, followed by a short final hold. Brighter paths are the most recent samples, while the underlying density field reveals routes repeatedly selected across the seeded runs. The central End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
+The ensemble accumulates 420 seeded dragon approaches over roughly one minute, including a short final hold. Brighter paths are the most recent samples, while the underlying density field reveals routes repeatedly selected across the seeded runs. The central End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
 
 *The dragon doesn't hunt you. It follows an algorithm. Your death was a graph traversal.*
 
@@ -179,7 +179,7 @@ Twenty End Gateways form a larger ring at radius 96 blocks, their positions calc
 
 $$\mathbf{g}_k = \left( \lfloor 96 \cos(\pi k / 10) \rfloor, \lfloor 96 \sin(\pi k / 10) \rfloor \right), \quad k \in \{0, 1, \ldots, 19\}$$
 
-Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview projects their source falloff cones into island footprints instead of plotting a random accepted subset. In Java 1.16.1, integer overflow starts the first distant void ring at $r = 370,720$ blocks and normal terrain resumes at $r = 524,288$ blocks. The overflow pattern is documented here but is no longer a separate figure panel.
+Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview now separates the End into three readable scales. The left panel spans 2.2 million blocks and maps the genuine repeating terrain and void pattern caused by signed 32-bit overflow. The upper-right panel preserves the central fight geometry. The lower-right panel magnifies the first distant overflow band, whose affected eight-block cell begins at $r = 370,720$ blocks and whose normal terrain resumes at $r = 524,288$ blocks. The ring mask and boundaries follow Java integer arithmetic; the end-stone texture is an illustrative projection.
 
 *The End has edges. The numbers told it where to stop.*
 
@@ -207,9 +207,9 @@ Beyond the gateway ring, outer-island seed sites are selected from the complete 
 
 ![Seed Loading](Plots/seed_loading.gif)
 
-This animation traces a world seed through the Java 1.16.1 loading story. The left panel reveals sampled chunks in an outward spiral, while the right panels separate the seed, the 48-bit Java LCG state, the biome-layer preview, and the run status.
+This animation follows the Java 1.16.1 chunk-status order from `EMPTY` through `FULL`. The center target advances first, while surrounding chunks trail behind as a deterministic dependency wave. A single bottom strip keeps all thirteen statuses readable without a separate dashboard.
 
-The seed and LCG display use the exact Java Random recurrence. The biome colors are intentionally labeled as a compact layer preview, because a small educational animation is not a replacement for the complete vanilla 1.16.1 biome engine.
+The status sequence is source-faithful. The wave is an explanatory scheduling model rather than a profiler trace, and the pixel-art Overworld beneath it is an illustrative terrain context rather than a block-perfect seed render.
 
 *The seed is fixed. The reveal is the explanation.*
 
@@ -221,17 +221,17 @@ This animation isolates the Java 1.16.1 village candidate stage. The world is di
 
 $$S = \text{worldSeed} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigma$$
 
-Java Random then selects two offsets with `nextInt(24)`, producing a candidate chunk in the region's 24 x 24 chunk window. The gold points show candidates that pass the animation's readable biome-layer preview; red crosses show the biome gate rejecting the candidate.
+Java Random then selects two offsets with `nextInt(24)`, producing a candidate chunk in the region's 24 x 24 chunk window. Gold squares are exact candidate attempts. The active region exposes both the legal window and the excluded eight-chunk margins, while the trace reports the region, offsets, and resulting chunk.
 
-This is a clearer boundary than the old plot: candidate placement is exact for 1.16.1, while full biome viability remains a separate generation step.
+Candidate placement is exact for 1.16.1. Full biome viability remains a separate generation step and is intentionally not fabricated by the animation; the Overworld terrain beneath the grid is illustrative.
 
 ### Multi-Structure Generation
 
 ![Multi-Structure Generation](Plots/multi_structure_generation.gif)
 
-Different structure types use different salts, causing the same region to produce independent placement decisions for each type. This animation compares **parallel structure evaluation** across villages ($\sigma = 10387312$), outposts ($\sigma = 165745296$), and temples ($\sigma = 14357620$).
+Nether fortresses and bastion remnants share one 27 x 27 chunk region grid in Java 1.16.1. After two `nextInt(23)` offset draws, a `nextInt(5)` roll assigns the shared candidate: rolls 0 and 1 produce a fortress, while rolls 2 through 4 produce a bastion. Ruined portals use a separate 25 x 25 grid, candidate window, and salt.
 
-The salt differentiation creates the characteristic pattern where structures of different types may cluster (different salts, independent rolls) while structures of the same type maintain minimum separation (same salt, correlated positions). The visualization overlays all three structure types with distinct colors, demonstrating both clustering and exclusion zones.
+The animation exposes both layers at once, including the current shared roll and the independent portal candidate. The placement arithmetic is exact; the Nether terrain backdrop is illustrative.
 
 *Same seed. Different salt. Different fate.*
 
@@ -255,15 +255,15 @@ The salt differentiation creates the characteristic pattern where structures of 
 
 ![Structure Analysis](Plots/structure_analysis.png)
 
-The refreshed six-panel analysis separates the two things that were previously mixed together: exact seeded structure candidates and a compact biome-layer preview. It shows the 1.16.1 village candidate grid, candidate distances, the complete eight-ring stronghold geometry, ring populations, and the formulas that connect the panels.
+The refreshed four-panel analysis concentrates on the actual candidate-stage algorithms. It shows exact village candidates across 32 x 32 chunk regions, one expanded 24 x 24 candidate window with its two Java Random offsets, the shared fortress and bastion layer beside independent ruined portals, and the full 576-pair offset distribution with the exact 40/60 Nether type split.
 
-Stronghold points are labeled as approximate candidates before the vanilla biome search. This keeps the plot useful for speedrunning while making its accuracy boundary explicit.
+All candidate coordinates and seeded rolls are exact for the modeled Java 1.16.1 stage. The Overworld and Nether surfaces behind those overlays are clearly labeled illustrative terrain.
 
 ### Stronghold Ring Distribution
 
 ![Stronghold Distribution](Plots/stronghold_rings.png)
 
-This plot now uses the Java 1.16.1 stronghold ring iterator, centered on world origin '(0, 0)', not the player's spawn point. The seeded candidate geometry contains 128 strongholds across eight rings with populations:
+This plot uses the Java 1.16.1 stronghold ring iterator, centered on world origin $(0, 0)$, not the player's spawn point. The seeded candidate geometry contains 128 strongholds across eight rings with populations:
 
 $$3,\ 6,\ 10,\ 15,\ 21,\ 28,\ 36,\ 9$$
 
@@ -271,7 +271,7 @@ For ring number $i$, indexed from zero, the approximate radius in chunks is:
 
 $$r_i = 128 + 192i + \left(\mathcal{U}(0,1) - \frac{1}{2}\right) \cdot 80$$
 
-The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The remaining ring ranges are shown directly in the figure. Java 1.16.1 then searches around each candidate for a valid biome, so the plotted points are the exact seeded ring candidates, not claims about final portal-room coordinates.
+The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The main map makes all eight rings readable over an illustrative Minecraft-style Overworld, while the detail panel enlarges the three first-ring candidates and their 112-block biome-search radii. A third panel compares all ring populations and candidate ranges. The points are exact seeded ring candidates, not claims about final portal-room coordinates.
 
 *The ring is deterministic. The biome search is the last step.*
 
@@ -292,27 +292,6 @@ The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The
 <p align="center"><sub>. . .</sub></p>
 
 <br>
-
-### Redstone Quasi-Connectivity
-
-![Java Quasi-Connectivity Diagram](Plots/redstone_quasi_connectivity.png)
-
-Java 1.16.1 pistons, sticky pistons, droppers, and dispensers test whether the block above them would receive power. An elevated source can therefore leave a component logically powered without sending the neighboring block update needed to change its visible state.
-
-![Quasi-Connectivity BUD Piston](Plots/redstone_quasi_connectivity.gif)
-
-The BUD demonstrator follows both edges of that rule. The elevated lever turns on while the piston remains retracted, the adjacent note block supplies an update, and the piston extends. Removing power likewise leaves it extended until a second update causes retraction. The animation separates signal state, update propagation, and piston motion so the mechanism remains readable.
-
-The behavior is recorded as working as intended in [Mojang issue MC-108](https://mojira.dev/MC-108).
-
-<details>
-<summary>Original dragon pathfinding hero</summary>
-
-<br>
-
-![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)
-
-</details>
 
 ---
 
@@ -336,8 +315,9 @@ python render_all.py
 2. **[Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)**: Procedural generation deep dives
 3. **Java Random Implementation**: OpenJDK LCG source code analysis
 4. **MCSR Community**: Speedrunning optimization research and seed analysis
-5. **[Mojang MC-108](https://mojira.dev/MC-108)**: Java quasi-connectivity behavior and update sequence
-6. **[Mojang MC-159283](https://mojira.dev/MC-159283)**: End island density and distant overflow analysis
+5. **[Fabric Yarn 1.16.1 ChunkStatus](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/chunk/ChunkStatus.html)**: Source-mapped chunk generation stages
+6. **[Fabric Yarn 1.16.1 StructureConfig](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/chunk/StructureConfig.html)**: Spacing, separation, and salt configuration
+7. **[Mojang MC-159283](https://mojira.dev/MC-159283)**: End island density and distant overflow analysis
 
 ---
 
@@ -349,7 +329,7 @@ python render_all.py
 > For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie. Your throws do.
 
 > [!NOTE]
-> The active mathematical and redstone visualizations target Java 1.16.1. Candidate formulas and stronghold ring geometry use Java-compatible RNG. Biome panels and terrain projections are labeled visual models where they are not bit-perfect chunk generation. No Bedrock behavior is represented.
+> The active mathematical visualizations target Java 1.16.1. Candidate formulas, structure rolls, End overflow, and stronghold ring geometry use Java-compatible arithmetic. Terrain backdrops and End surface projections are labeled visual models where they are not bit-perfect chunk generation. No Bedrock behavior is represented.
 
 > [!CAUTION]
 > Side effects of understanding these algorithms include: inability to enjoy "random" generation, compulsive seed analysis, and explaining to non-players why 48-bit integers matter.
@@ -395,3 +375,11 @@ Isn't it?
 ```
 
 </details>
+
+---
+
+## Original Dragon Pathfinding Hero
+
+The original hero is preserved here as a visual record of the project's earlier dragon model. Its abstract arena and full dashboard make the evolution to the terrain-projected hero above easy to compare without overwriting the earlier work.
+
+![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)

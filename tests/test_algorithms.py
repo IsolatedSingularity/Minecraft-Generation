@@ -17,6 +17,8 @@ from core.dragon import (
 from core.end_generation import (
     SimplexNoise2D,
     central_island_projection,
+    end_overflow_generation_mask,
+    end_overflow_ring_boundaries,
     gateway_positions,
     outer_island_seed_field,
     pillar_seed,
@@ -73,9 +75,18 @@ class StructureTests(unittest.TestCase):
             self.assertLess(item['offset_z'], config.spacing - config.separation)
 
     def test_nether_shared_split_converges_to_two_fifths(self):
-        fortress_count = sum(
-            nether_shared_candidate(seed, 0, 0)['name'] == 'fortress'
+        candidates = [
+            nether_shared_candidate(seed, 0, 0)
             for seed in range(2000)
+        ]
+        for candidate in candidates:
+            self.assertIn(candidate['type_roll'], range(5))
+            expected_name = (
+                'fortress' if candidate['type_roll'] < 2 else 'bastion'
+            )
+            self.assertEqual(candidate['name'], expected_name)
+        fortress_count = sum(
+            candidate['name'] == 'fortress' for candidate in candidates
         )
         ratio = fortress_count / 2000.0
         self.assertGreater(ratio, 0.36)
@@ -92,6 +103,29 @@ class StructureTests(unittest.TestCase):
 
 
 class EndGeometryTests(unittest.TestCase):
+    def test_end_overflow_ring_boundaries_and_point_samples(self):
+        boundaries = end_overflow_ring_boundaries(1_100_000)
+        self.assertEqual(
+            [(item['radius'], item['kind']) for item in boundaries],
+            [
+                (370_720, 'void'),
+                (524_288, 'terrain'),
+                (642_112, 'void'),
+                (741_456, 'terrain'),
+                (828_968, 'void'),
+                (908_096, 'terrain'),
+                (980_848, 'void'),
+                (1_048_576, 'terrain'),
+            ],
+        )
+        samples = end_overflow_generation_mask(
+            np.array([370_720, 370_728, 524_280, 524_288]),
+            np.zeros(4),
+        )
+        np.testing.assert_array_equal(
+            samples, np.array([True, False, False, True]),
+        )
+
     def test_gateway_and_spike_geometry(self):
         gateways = gateway_positions()
         self.assertEqual(len(gateways), 20)

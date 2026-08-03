@@ -1,7 +1,7 @@
-"""Java 1.16.1 chunk-status and population-seed animation.
+"""Java 1.16.1 chunk-status dependency animation.
 
-The status order and population-seed mixing are exact. Wall-clock scheduling is
-represented as a deterministic dependency wave rather than a profiler trace.
+The status order is exact. Wall-clock scheduling is represented as a
+deterministic dependency wave rather than a profiler trace.
 """
 
 from pathlib import Path
@@ -9,10 +9,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.colors import to_rgba
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Rectangle
 import numpy as np
 
-from core.lcg import MinecraftLCG, generate_population_seed
+from core.minecraft_visuals import draw_minecraft_terrain
 from core.rendering import optimize_gif
 from core.style import COLORS, apply_style
 
@@ -25,29 +25,21 @@ STATUS_NAMES = [
     'SPAWN', 'HEIGHTMAPS', 'FULL',
 ]
 STATUS_COLORS = [
-    '#121722', '#222A3D', '#2D3953', '#39466B', '#4E5E91',
-    '#6678B5', '#7B74C8', '#8975CF', '#9A76D6', '#B276D0',
-    '#C27BC8', '#E391A8', '#73D49B',
+    '#141822', '#384152', '#4C5264', '#596C86', '#506C9B',
+    '#788657', '#8D7863', '#6D7280', '#7EA65F', '#E0C65B',
+    '#C9865E', '#8EC7B0', '#59C985',
+]
+STATUS_SHORT = [
+    'EMPTY', 'STARTS', 'REFS', 'BIOMES', 'NOISE', 'SURFACE', 'CARVE',
+    'LIQUID', 'FEATURES', 'LIGHT', 'SPAWN', 'MAPS', 'FULL',
 ]
 
 
-def _chunk_texture(seed, radius):
-    values = np.zeros((2 * radius + 1, 2 * radius + 1), dtype=float)
-    for row, chunk_z in enumerate(range(-radius, radius + 1)):
-        for column, chunk_x in enumerate(range(-radius, radius + 1)):
-            population_seed = generate_population_seed(
-                seed, chunk_x * 16, chunk_z * 16,
-            )
-            random = MinecraftLCG(population_seed)
-            values[row, column] = 0.78 + 0.22 * random.next_int(256) / 255.0
-    return values
-
-
 def create_seed_loading_animation(
-    save_path, seed=-4172144997902289642, fps=12, duration=9,
+    save_path, seed=-4172144997902289642, fps=8, duration=12,
 ):
     total_frames = int(fps * duration)
-    radius = 10
+    radius = 7
     size = 2 * radius + 1
     distances = np.fromfunction(
         lambda row, column: np.maximum(
@@ -55,10 +47,8 @@ def create_seed_loading_animation(
         ),
         (size, size), dtype=float,
     )
-    texture = _chunk_texture(seed, radius)
-
-    figure, axis = plt.subplots(figsize=(12.8, 7.2), facecolor=COLORS['background'])
-    figure.subplots_adjust(left=0.11, right=0.89, top=0.965, bottom=0.16)
+    figure, axis = plt.subplots(figsize=(8.4, 8.4), facecolor=COLORS['background'])
+    figure.subplots_adjust(left=0.08, right=0.98, top=0.89, bottom=0.17)
     axis.set_aspect('equal')
     axis.set_xlim(-radius - 0.5, radius + 0.5)
     axis.set_ylim(-radius - 0.5, radius + 0.5)
@@ -70,6 +60,11 @@ def create_seed_loading_animation(
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
 
+    draw_minecraft_terrain(
+        axis,
+        (-radius - 0.5, radius + 0.5, -radius - 0.5, radius + 0.5),
+        seed=seed, dimension='overworld', resolution=240, alpha=0.96,
+    )
     rgba = np.zeros((size, size, 4), dtype=float)
     image = axis.imshow(
         rgba, origin='lower', interpolation='nearest',
@@ -77,65 +72,92 @@ def create_seed_loading_animation(
         zorder=1,
     )
     for value in np.arange(-radius - 0.5, radius + 1.0, 1.0):
-        axis.axvline(value, color=COLORS['grid'], linewidth=0.28, alpha=0.44, zorder=2)
-        axis.axhline(value, color=COLORS['grid'], linewidth=0.28, alpha=0.44, zorder=2)
+        axis.axvline(value, color='#07090E', linewidth=0.52, alpha=0.62, zorder=2)
+        axis.axhline(value, color='#07090E', linewidth=0.52, alpha=0.62, zorder=2)
     axis.scatter(
         [0], [0], marker='+', s=90, c=COLORS['text'],
         linewidths=1.2, zorder=5,
     )
-    frontier = Rectangle(
+    target_outline = Rectangle(
         (-0.5, -0.5), 1, 1, fill=False,
-        edgecolor=COLORS['cyan'], linewidth=1.3, alpha=0.0, zorder=4,
+        edgecolor=COLORS['gold'], linewidth=2.1, zorder=6,
     )
-    axis.add_patch(frontier)
+    axis.add_patch(target_outline)
+    axis.text(
+        0.018, 0.976, 'CHUNK STATUS DEPENDENCY WAVE',
+        transform=axis.transAxes, ha='left', va='top',
+        fontsize=15, fontweight='black', color=COLORS['text'],
+        bbox=dict(
+            boxstyle='square,pad=0.35', facecolor=COLORS['background'],
+            edgecolor='none', alpha=0.82,
+        ), zorder=8,
+    )
+    center_label = axis.text(
+        0.982, 0.035, '', transform=axis.transAxes,
+        ha='right', va='bottom', fontsize=12.5, fontweight='bold',
+        family='monospace', color=COLORS['text'], zorder=8,
+        bbox=dict(
+            boxstyle='round,pad=0.38', facecolor=COLORS['panel'],
+            edgecolor=COLORS['gold'], alpha=0.92,
+        ),
+    )
 
-    legend_axis = figure.add_axes([0.115, 0.045, 0.77, 0.065])
+    legend_axis = figure.add_axes([0.04, 0.045, 0.92, 0.075])
     legend_axis.set_xlim(0, len(STATUS_NAMES))
     legend_axis.set_ylim(0, 1)
     legend_axis.axis('off')
-    for index, (name, color) in enumerate(zip(STATUS_NAMES, STATUS_COLORS)):
+    for index, (name, color) in enumerate(zip(STATUS_SHORT, STATUS_COLORS)):
         legend_axis.add_patch(Rectangle(
-            (index + 0.06, 0.50), 0.72, 0.18,
-            facecolor=color, edgecolor='none',
+            (index + 0.04, 0.40), 0.90, 0.30,
+            facecolor=color, edgecolor='#07090E', linewidth=0.45,
         ))
         legend_axis.text(
-            index + 0.42, 0.28, name, ha='center', va='center',
-            color=COLORS['muted'], fontsize=6.6,
+            index + 0.49, 0.19, name, ha='center', va='center',
+            color=COLORS['muted'], fontsize=6.8, fontweight='bold',
         )
-    stage_marker = Circle(
-        (0.42, 0.59), 0.09, facecolor='none',
-        edgecolor=COLORS['text'], linewidth=0.8,
+    stage_marker = Rectangle(
+        (0.04, 0.40), 0.90, 0.30, fill=False,
+        edgecolor=COLORS['text'], linewidth=1.55,
     )
     legend_axis.add_patch(stage_marker)
+    figure.text(
+        0.50, 0.938, 'JAVA 1.16.1 CHUNK GENERATION',
+        ha='center', va='center', color=COLORS['text'],
+        fontsize=17, fontweight='black',
+    )
+    figure.text(
+        0.50, 0.905,
+        'Exact status order shown as a deterministic dependency model',
+        ha='center', va='center', color=COLORS['muted'], fontsize=9.5,
+    )
 
     def update(frame_index):
         progress = frame_index / max(total_frames - 1, 1)
-        wave = progress * (len(STATUS_NAMES) + radius + 4.0)
-        stage_values = np.floor(wave - distances * 0.74).astype(int)
+        center_progress = progress * (len(STATUS_NAMES) - 1 + 0.999)
+        stage_values = np.floor(center_progress - distances * 0.72).astype(int)
         stage_values = np.clip(stage_values, 0, len(STATUS_NAMES) - 1)
         output = np.empty((size, size, 4), dtype=float)
         for stage, color in enumerate(STATUS_COLORS):
             mask = stage_values == stage
             base = np.array(to_rgba(color))
-            output[mask, :3] = base[:3] * texture[mask, None]
-            output[mask, 3] = 0.96
+            output[mask, :3] = base[:3]
+            output[mask, 3] = 0.78 - 0.52 * stage / (len(STATUS_NAMES) - 1)
         image.set_data(output)
 
-        active_stage = int(np.clip(np.floor(progress * len(STATUS_NAMES)), 0, len(STATUS_NAMES) - 1))
-        stage_marker.center = (active_stage + 0.42, 0.59)
-        current_radius = min(radius, int(max(0.0, wave - len(STATUS_NAMES) + 1.0)))
-        frontier.set_xy((-current_radius - 0.5, -current_radius - 0.5))
-        frontier.set_width(2 * current_radius + 1)
-        frontier.set_height(2 * current_radius + 1)
-        frontier.set_alpha(0.75 if current_radius > 0 else 0.0)
+        active_stage = int(stage_values[radius, radius])
+        stage_marker.set_x(active_stage + 0.04)
+        center_label.set_text(
+            f'CENTER CHUNK  {STATUS_NAMES[active_stage]}  '
+            f'{active_stage + 1:02d}/{len(STATUS_NAMES):02d}'
+        )
         return []
 
     animation = FuncAnimation(
         figure, update, frames=total_frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=125)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
     plt.close(figure)
-    optimize_gif(save_path, colors=96)
+    optimize_gif(save_path, colors=80)
     return str(save_path)
 
 
