@@ -40,12 +40,12 @@ def _ring_band(ax, ring, color):
     ))
     ax.add_patch(Circle(
         (0, 0), ring['min_radius'], fill=False,
-        edgecolor=color, linewidth=0.70, linestyle=':', alpha=0.72,
+        edgecolor=color, linewidth=0.90, linestyle=':', alpha=0.78,
         zorder=3,
     ))
     ax.add_patch(Circle(
         (0, 0), ring['max_radius'], fill=False,
-        edgecolor=color, linewidth=0.92, alpha=0.80, zorder=3,
+        edgecolor=color, linewidth=1.18, alpha=0.86, zorder=3,
     ))
 
 
@@ -66,7 +66,7 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
     maximum = STRONGHOLD_RINGS[-1]['max_radius'] + 1700
     draw_minecraft_terrain(
         ring_axis, (-maximum, maximum, -maximum, maximum),
-        seed=seed, dimension='overworld', resolution=384, alpha=0.66,
+        seed=seed, dimension='overworld', resolution=384, alpha=0.50,
     )
     for index, (ring, color) in enumerate(zip(STRONGHOLD_RINGS, RING_COLORS)):
         _ring_band(ring_axis, ring, color)
@@ -74,7 +74,7 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
         ring_axis.scatter(
             [item['x'] for item in subset],
             [item['z'] for item in subset],
-            s=64 if index == 0 else 34,
+            s=82 if index == 0 else 46,
             marker='o', c=color,
             edgecolors=COLORS['text'] if index == 0 else '#11131A',
             linewidths=0.55 if index == 0 else 0.28,
@@ -115,7 +115,7 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
     first_limit = 3100
     draw_minecraft_terrain(
         first_axis, (-first_limit, first_limit, -first_limit, first_limit),
-        seed=seed + 73, dimension='overworld', resolution=256, alpha=0.78,
+        seed=seed + 73, dimension='overworld', resolution=256, alpha=0.62,
     )
     first_config = STRONGHOLD_RINGS[0]
     first_axis.add_patch(Wedge(
@@ -183,9 +183,9 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
         count_axis.text(
             bar.get_x() + bar.get_width() / 2.0,
             bar.get_height() + 0.8,
-            f"{ring['count']}\n{ring['min_radius'] // 1000:.0f}-{ring['max_radius'] // 1000:.0f}k",
+            f"n = {ring['count']}",
             ha='center', va='bottom', color=COLORS['text'],
-            fontsize=8.3, fontweight='bold',
+            fontsize=8.2, fontweight='bold',
         )
     count_axis.text(
         0.02, 0.94, '3 + 6 + 10 + 15 + 21 + 28 + 36 + 9 = 128',
@@ -193,11 +193,18 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
         color=COLORS['muted'], fontsize=9.2, family='monospace',
     )
     count_axis.set_ylim(0, 44)
-    count_axis.set_xticks(range(1, 9))
-    count_axis.set_xlabel('Ring number')
+    count_axis.set_xticks(
+        range(1, 9),
+        [
+            f"R{index}\n{ring['min_radius'] / 1000:.1f}-{ring['max_radius'] / 1000:.1f}"
+            for index, ring in enumerate(STRONGHOLD_RINGS, start=1)
+        ],
+    )
+    count_axis.tick_params(axis='x', labelsize=7.2)
+    count_axis.set_xlabel('Ring and radial band (thousands of blocks)')
     count_axis.set_ylabel('Candidate count')
     count_axis.set_title(
-        'Ring populations and approximate ranges',
+        'Candidate count and radial search band',
         fontsize=12.5, fontweight='bold', pad=8,
     )
     style_axis(count_axis, grid=True)

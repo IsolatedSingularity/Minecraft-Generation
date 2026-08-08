@@ -18,9 +18,14 @@ OVERWORLD_BLOCKS = {
     'forest': '#3D7838',
     'dark_forest': '#285B32',
     'desert': '#D8BE72',
+    'savanna': '#A8A85A',
+    'jungle': '#2E7136',
+    'swamp': '#586B45',
     'taiga': '#5D8068',
-    'snow': '#DDE5E4',
-    'stone': '#85857D',
+    'snowy_tundra': '#DDE5E4',
+    'mountains': '#85857D',
+    'badlands': '#B96B45',
+    'mushroom_fields': '#9A6A9E',
 }
 
 NETHER_BLOCKS = {
@@ -56,6 +61,49 @@ def _paint(output, mask, color):
     output[mask, :3] = to_rgb(color)
 
 
+def minecraft_biome_grid(seed, resolution=256):
+    """Return a deterministic, illustrative Overworld biome-category grid.
+
+    The categories and palette follow recognizable Java 1.16.1 biome families,
+    while the boundaries remain an explanatory noise model rather than the
+    complete vanilla layered-biome generator.
+    """
+    broad, medium, detail, climate, moisture = _noise_layers(
+        int(seed), int(resolution),
+    )
+    elevation = 0.67 * broad + 0.24 * medium + 0.09 * detail
+    biomes = np.full(elevation.shape, 'plains', dtype='<U18')
+
+    land = elevation >= -0.17
+    biomes[land & (moisture > 0.10)] = 'forest'
+    biomes[land & (moisture > 0.50) & (climate < 0.18)] = 'dark_forest'
+    biomes[land & (climate > 0.22) & (moisture < -0.08)] = 'desert'
+    biomes[
+        land & (climate > 0.18) & (moisture >= -0.08) & (moisture < 0.22)
+    ] = 'savanna'
+    biomes[land & (climate > 0.20) & (moisture > 0.34)] = 'jungle'
+    biomes[
+        land & (elevation < 0.20) & (climate > -0.12) & (moisture > 0.40)
+    ] = 'swamp'
+    biomes[land & (climate < -0.18) & (elevation > -0.15)] = 'taiga'
+    biomes[land & (climate < -0.42) & (elevation > -0.08)] = 'snowy_tundra'
+    biomes[land & (elevation > 0.50)] = 'mountains'
+    biomes[
+        land & ((elevation > 0.62) | ((elevation > 0.48) & (climate < -0.10)))
+    ] = 'snowy_tundra'
+    biomes[
+        land & (climate > 0.44) & (moisture < -0.32) & (medium > 0.05)
+    ] = 'badlands'
+    biomes[
+        land & (broad > 0.38) & (medium < -0.38) & (moisture > 0.18)
+    ] = 'mushroom_fields'
+
+    biomes[(elevation >= -0.27) & (elevation < -0.17)] = 'shore'
+    biomes[elevation < -0.17] = 'water'
+    biomes[elevation < -0.47] = 'deep_water'
+    return biomes
+
+
 def minecraft_terrain_rgba(seed, resolution=256, dimension='overworld'):
     """Return a deterministic pixel-art terrain texture.
 
@@ -68,38 +116,9 @@ def minecraft_terrain_rgba(seed, resolution=256, dimension='overworld'):
     output = np.zeros((int(resolution), int(resolution), 4), dtype=float)
 
     if dimension == 'overworld':
-        elevation = 0.67 * broad + 0.24 * medium + 0.09 * detail
-        _paint(output, np.ones_like(elevation, dtype=bool), OVERWORLD_BLOCKS['plains'])
-        _paint(output, moisture > 0.10, OVERWORLD_BLOCKS['forest'])
-        _paint(output, moisture > 0.47, OVERWORLD_BLOCKS['dark_forest'])
-        _paint(
-            output,
-            (climate > 0.22) & (moisture < -0.08),
-            OVERWORLD_BLOCKS['desert'],
-        )
-        _paint(
-            output,
-            (climate < -0.18) & (elevation > -0.15),
-            OVERWORLD_BLOCKS['taiga'],
-        )
-        _paint(
-            output,
-            (climate < -0.42) & (elevation > -0.08),
-            OVERWORLD_BLOCKS['snow'],
-        )
-        _paint(output, elevation > 0.50, OVERWORLD_BLOCKS['stone'])
-        _paint(
-            output,
-            (elevation > 0.62) | ((elevation > 0.48) & (climate < -0.10)),
-            OVERWORLD_BLOCKS['snow'],
-        )
-        _paint(
-            output,
-            (elevation >= -0.27) & (elevation < -0.17),
-            OVERWORLD_BLOCKS['shore'],
-        )
-        _paint(output, elevation < -0.17, OVERWORLD_BLOCKS['water'])
-        _paint(output, elevation < -0.47, OVERWORLD_BLOCKS['deep_water'])
+        biomes = minecraft_biome_grid(seed, resolution=resolution)
+        for biome_name, color in OVERWORLD_BLOCKS.items():
+            _paint(output, biomes == biome_name, color)
     elif dimension == 'nether':
         terrain = 0.62 * broad + 0.27 * medium + 0.11 * detail
         _paint(output, np.ones_like(terrain, dtype=bool), NETHER_BLOCKS['netherrack'])

@@ -32,7 +32,6 @@ README_ASSETS = (
     'seed_loading.gif',
     'structure_placement.gif',
     'multi_structure_generation.gif',
-    'structure_analysis.png',
     'stronghold_rings.png',
 )
 
@@ -73,9 +72,8 @@ class AssetIntegrityTests(unittest.TestCase):
         for name in README_ASSETS:
             self.assertTrue((PLOTS / name).is_file(), name)
             self.assertIn(f'Plots/{name}', root_text, name)
-        self.assertTrue(root_text.rstrip().endswith(
-            '![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)'
-        ))
+        self.assertIn('## Legacy Simulations', root_text)
+        self.assertTrue(root_text.rstrip().endswith('</details>'))
 
     def test_active_readmes_exclude_redstone_content(self):
         for relative in ('README.md', 'Code/README.md', 'Plots/README.md'):

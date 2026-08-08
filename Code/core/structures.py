@@ -4,12 +4,16 @@ from dataclasses import dataclass
 
 from .constants import (
     CHUNK_SIZE,
+    DESERT_PYRAMID_SALT,
+    JUNGLE_PYRAMID_SALT,
     NETHER_RUINED_PORTAL_SEPARATION,
     NETHER_RUINED_PORTAL_SPACING,
     NETHER_STRUCTURE_SALT,
     NETHER_STRUCTURE_SEPARATION,
     NETHER_STRUCTURE_SPACING,
+    PILLAGER_OUTPOST_SALT,
     RUINED_PORTAL_SALT,
+    SWAMP_HUT_SALT,
     VILLAGE_SALT,
     VILLAGE_SEPARATION,
     VILLAGE_SPACING,
@@ -28,6 +32,41 @@ class StructureConfig:
 VILLAGE = StructureConfig(
     'village', VILLAGE_SPACING, VILLAGE_SEPARATION, VILLAGE_SALT,
 )
+DESERT_PYRAMID = StructureConfig(
+    'desert_pyramid', VILLAGE_SPACING, VILLAGE_SEPARATION,
+    DESERT_PYRAMID_SALT,
+)
+JUNGLE_PYRAMID = StructureConfig(
+    'jungle_pyramid', VILLAGE_SPACING, VILLAGE_SEPARATION,
+    JUNGLE_PYRAMID_SALT,
+)
+SWAMP_HUT = StructureConfig(
+    'swamp_hut', VILLAGE_SPACING, VILLAGE_SEPARATION, SWAMP_HUT_SALT,
+)
+PILLAGER_OUTPOST = StructureConfig(
+    'pillager_outpost', VILLAGE_SPACING, VILLAGE_SEPARATION,
+    PILLAGER_OUTPOST_SALT,
+)
+
+OVERWORLD_STRUCTURES = (
+    VILLAGE,
+    DESERT_PYRAMID,
+    JUNGLE_PYRAMID,
+    SWAMP_HUT,
+    PILLAGER_OUTPOST,
+)
+
+OVERWORLD_STRUCTURE_BIOMES = {
+    'village': frozenset({
+        'plains', 'desert', 'savanna', 'taiga', 'snowy_tundra',
+    }),
+    'desert_pyramid': frozenset({'desert'}),
+    'jungle_pyramid': frozenset({'jungle'}),
+    'swamp_hut': frozenset({'swamp'}),
+    'pillager_outpost': frozenset({
+        'plains', 'desert', 'savanna', 'taiga', 'snowy_tundra',
+    }),
+}
 NETHER_SHARED = StructureConfig(
     'nether_shared', NETHER_STRUCTURE_SPACING,
     NETHER_STRUCTURE_SEPARATION, NETHER_STRUCTURE_SALT,
@@ -62,6 +101,11 @@ def candidate_in_region(world_seed, region_x, region_z, config):
         'block_z': chunk_z * CHUNK_SIZE + CHUNK_SIZE // 2,
         'window': window,
     }
+
+
+def structure_biome_compatible(structure_name, biome_name):
+    """Return whether the illustrative biome category can host a structure."""
+    return biome_name in OVERWORLD_STRUCTURE_BIOMES[structure_name]
 
 
 def nether_shared_candidate(world_seed, region_x, region_z):

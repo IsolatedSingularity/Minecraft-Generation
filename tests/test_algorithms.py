@@ -25,10 +25,19 @@ from core.end_generation import (
     spike_layout,
 )
 from core.lcg import MinecraftLCG, generate_population_seed, generate_region_seed
+from core.minecraft_visuals import minecraft_biome_grid
 from core.strongholds import generate_stronghold_candidates
-from core.structures import NETHER_RUINED_PORTAL, VILLAGE, candidate_in_region, nether_shared_candidate
+from core.structures import (
+    NETHER_RUINED_PORTAL,
+    OVERWORLD_STRUCTURES,
+    VILLAGE,
+    candidate_in_region,
+    nether_shared_candidate,
+    structure_biome_compatible,
+)
 from redstone_quasi_connectivity import bud_animation_state
 from seed_loading import chunk_status_snapshot
+from structure_placement import overworld_structure_candidates
 
 
 class JavaRandomTests(unittest.TestCase):
@@ -52,6 +61,7 @@ class JavaRandomTests(unittest.TestCase):
 
 class DragonTopologyTests(unittest.TestCase):
     def test_node_rings_match_source_radii(self):
+        self.assertEqual(len(DRAGON_NODES), 24)
         radii = np.linalg.norm(DRAGON_NODES, axis=1)
         np.testing.assert_allclose(radii[:12], 60.0, atol=1.4)
         np.testing.assert_allclose(radii[12:20], 40.0, atol=1.1)
@@ -68,12 +78,28 @@ class DragonTopologyTests(unittest.TestCase):
 
 class StructureTests(unittest.TestCase):
     def test_uniform_candidates_stay_inside_window(self):
-        for config in (VILLAGE, NETHER_RUINED_PORTAL):
+        for config in (*OVERWORLD_STRUCTURES, NETHER_RUINED_PORTAL):
             item = candidate_in_region(42, -3, 4, config)
             self.assertGreaterEqual(item['offset_x'], 0)
             self.assertLess(item['offset_x'], config.spacing - config.separation)
             self.assertGreaterEqual(item['offset_z'], 0)
             self.assertLess(item['offset_z'], config.spacing - config.separation)
+
+    def test_overworld_candidates_respect_visual_biome_gate(self):
+        candidates, biomes, _ = overworld_structure_candidates(42)
+        self.assertGreater(len(candidates), 0)
+        self.assertEqual(
+            {item['name'] for item in candidates},
+            {config.name for config in OVERWORLD_STRUCTURES},
+        )
+        for item in candidates:
+            self.assertTrue(
+                structure_biome_compatible(item['name'], item['biome'])
+            )
+        self.assertTrue({
+            'plains', 'desert', 'savanna', 'jungle', 'swamp', 'taiga',
+            'snowy_tundra', 'mushroom_fields', 'badlands',
+        }.issubset(set(minecraft_biome_grid(42, 384).ravel())))
 
     def test_nether_shared_split_converges_to_two_fifths(self):
         candidates = [

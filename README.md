@@ -1,146 +1,107 @@
-# Minecraft Procedural Algorithms
+# Minecraft Generation
 
 <!-- Do not remove this comment. It is important. -->
 <!-- The seeds remember those who query them. -->
-<!-- Commit test -->
 
-###### Mathematical exploration of Minecraft's world generation algorithms. References include [Minecraft Wiki](https://minecraft.wiki/), [Sportskeeda Wiki](https://wiki.sportskeeda.com/minecraft), and procedural generation works from [Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/).
+###### A mathematical study of Minecraft's procedural-generation algorithms, with supporting analysis of pathing systems such as Ender Dragon flight behaviour.
 
 ![Ender Dragon Pathfinding](Plots/dragon_pathfinding_hero.gif)
 
-
-
----
-
 ## Objective
 
-This repository presents a rigorous mathematical exploration of **Minecraft's procedural generation algorithms** through computational analysis and publication-quality visualization. Every infinite world springs from a single 64-bit seed, transformed through deterministic chaos into landscapes that feel organic. The project deconstructs this machinery: the 48-bit linear congruential generators, the multi-octave Perlin noise fields, the salt-based structure placement that decides where villages rise and strongholds hide.
+Minecraft Generation explains how a compact seed becomes a world. Its primary subject is procedural generation: Java's pseudorandom number generator, noise fields, structure-region arithmetic, stronghold rings, chunk-status progression, and the unusual integer behaviour of the distant End. Pathing algorithms are included where they reveal the same central idea, namely that apparently organic behaviour can arise from deterministic rules.
 
-The dragon circles its obsidian pillars not by chance but by graph traversal. Strongholds arrange themselves in polar coordinates. The void gaps in the End exist because integers overflow. What appears random is merely determinism wearing a mask.
-
-
-<br>
+The repository combines source-shaped Python models with publication-quality figures and animations. Exact arithmetic is identified as exact. Terrain textures and other reduced-order surfaces are identified as illustrative when they are designed to explain a mechanism rather than reproduce every block from a vanilla save.
 
 <table align="center">
 <tr>
-<td align="center"><b>2<sup>48</sup></b><br><sub>LCG States</sub></td>
+<td align="center"><b>2<sup>48</sup></b><br><sub>Java Random states</sub></td>
 <td align="center"><b>128</b><br><sub>Strongholds</sub></td>
-<td align="center"><b>8</b><br><sub>Rings</sub></td>
-<td align="center"><b>10</b><br><sub>Crystals</sub></td>
-<td align="center"><b>7</b><br><sub>Dragon States</sub></td>
-<td align="center"><b>∞</b><br><sub>Worlds</sub></td>
+<td align="center"><b>8</b><br><sub>Stronghold rings</sub></td>
+<td align="center"><b>24</b><br><sub>Dragon path nodes</sub></td>
+<td align="center"><b>10</b><br><sub>End spikes</sub></td>
+<td align="center"><b>20</b><br><sub>End gateways</sub></td>
 </tr>
 </table>
-
-<br>
 
 <p align="center">
   <img src="./Plots/apple.gif?raw=true" alt="apple" width="51" height="50" />
 </p>
 
----
+## Mathematical Foundation
 
-## The Mathematics of Infinite Worlds
+### Java's 48-bit generator
 
-### Linear Congruential Generation
+A Minecraft Java world accepts a 64-bit seed, but many Java 1.16.1 placement decisions pass through the 48-bit internal state of `java.util.Random`. If the current state is $X_n$, the next state is
 
-At the foundation of Minecraft's generation lies Java's Linear Congruential Generator, a deceptively simple recurrence relation that powers every aspect of world creation. The state $X_n$ evolves according to:
+$$
+X_{n+1} = (aX_n + c) \bmod 2^{48},
+$$
 
-$$X_{n+1} = (aX_n + c) \bmod m$$
+with $a = 25214903917$ (`0x5DEECE66D`) and $c = 11$. Multiplication stretches and folds the current state around a finite ring of integers. The addition prevents zero from becoming a fixed point. The high bits of the new state are then returned to the caller.
 
-where the multiplier $a = 25214903917$ (`0x5DEECE66D`), increment $c = 11$, and modulus $m = 2^{48}$ define the sequence. This 48-bit state space contains $2^{48} \approx 2.81 \times 10^{14}$ possible values, cycling through each exactly once before repeating.
-
-The spectral properties of this generator exhibit lattice structure in higher dimensions. For dimension $d$, the covering radius $\rho_d$ satisfies:
-
-$$\rho_d \leq \frac{m}{\nu_d}$$
-
-where $\nu_d$ is the $d$-dimensional spectral test value. Java's constants achieve $\nu_2 = 7.17 \times 10^{6}$, providing adequate uniformity for game applications while maintaining computational efficiency through bit operations.
+The implementation in [`Code/core/lcg.py`](Code/core/lcg.py) matters because a mathematically plausible random generator is not sufficient. Reproducing Minecraft's candidate chunks requires the same bit width, overflow, seeding transform, and bounded-integer rejection rule as Java.
 
 ```python
-class JavaLCG:
-    """
-    Java-compatible Linear Congruential Generator.
-    The same algorithm that decides if your spawn has diamonds nearby.
-    """
+class MinecraftLCG:
     MULTIPLIER = 0x5DEECE66D
-    INCREMENT = 0xB
+    ADDEND = 0xB
     MASK = (1 << 48) - 1
 
-    def __init__(self, seed: int):
-        self.state = (seed ^ self.MULTIPLIER) & self.MASK
-
-    def next(self, bits: int) -> int:
-        self.state = (self.state * self.MULTIPLIER + self.INCREMENT) & self.MASK
-        return self.state >> (48 - bits)
+    def next_bits(self, bits):
+        self.seed = (self.MULTIPLIER * self.seed + self.ADDEND) & self.MASK
+        return self.seed >> (48 - bits)
 ```
 
-<br>
+### Noise, scale, and Brownian composition
 
-<p align="center"><sub>. . .</sub></p>
+Random numbers alone do not make terrain. A noise function assigns nearby coordinates similar values, so moving a short distance usually changes the field only a little. Minecraft combines fields evaluated at several scales. Broad layers provide continents and climate regions, while finer layers provide local variation.
 
-<br>
+A useful explanatory model is fractal Brownian motion:
 
-<p align="center"><sub>The numbers have patterns.</sub></p>
+$$
+\mathcal{N}(x,z) = \sum_{k=0}^{n-1} p^k\,\eta(f^k x, f^k z),
+$$
 
-<p align="center"><sub>Patterns have meaning.</sub></p>
+where $\eta$ is a smooth base-noise field, $f$ is lacunarity, and $p$ is persistence. Increasing $f$ makes each octave finer. Multiplying by $p$ makes fine octaves less influential. With $f=2$ and $p=1/2$, each layer doubles in frequency and halves in amplitude.
 
-<br>
-
-<p align="center"><sub>Or do they?</sub></p>
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-### Structure Placement Theory
-
-For Java 1.16.1, village placement starts with a fixed structure set: 32 x 32 chunks per region, separation 8, and a 24 x 24 chunk candidate window.
-
-$$S_{\text{region}} = S_{\text{world}} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigma$$
-
-Java Random is seeded from this value, then draws:
-
-$$c_x = R_x \cdot 32 + J_x, \quad c_z = R_z \cdot 32 + J_z$$
-
-where $J_x$ and $J_z$ are independent \texttt{nextInt(24)} values. There is one candidate attempt per region. A separate biome check decides whether the candidate can generate as a village, so the final rate is not simply the separation divided by the spacing.
-
-The refreshed animation makes that boundary visible: the exact seeded candidate and its 24 x 24 window are drawn directly over an explicitly illustrative terrain backdrop. The biome gate remains outside the animation's scope.
-
-### Perlin Noise and Fractal Brownian Motion
-
-Terrain generation employs **multi-octave Perlin noise**, where the base noise function is $\eta: \mathbb{R}^2 \to [-1, 1]$ and uses gradient interpolation on a regular lattice. For position $(x, y)$, the cell coordinates $(i, j) = (\lfloor x \rfloor, \lfloor y \rfloor)$ and fractional parts $(u, v) = (x - i, y - j)$ yield:
-
-$$\eta(x, y) = \text{lerp}\left(\text{lerp}(g_{00} \cdot d_{00}, g_{10} \cdot d_{10}, s(u)), \text{lerp}(g_{01} \cdot d_{01}, g_{11} \cdot d_{11}, s(u)), s(v)\right)$$
-
-where $g_{ij}$ are pseudorandom gradient vectors, $d_{ij}$ are displacement vectors to corners, and $s(t) = 6t^5 - 15t^4 + 10t^3$ is the smoothstep polynomial providing $C^2$ continuity.
-
-The composite noise field uses **fractal Brownian motion** (fBm):
-
-$$\mathcal{N}(x, y) = \sum_{k=0}^{n-1} \frac{\eta(2^k x, 2^k y)}{2^k} = \sum_{k=0}^{n-1} p^k \cdot \eta(f^k x, f^k y)$$
-
-where persistence $p = 0.5$ and lacunarity $f = 2$ are standard parameters. The Hurst exponent $H = -\log_f(p) = 1$ places this in the Brownian regime of the fBm spectrum.
-
-Biome determination uses **multi-parameter classification** across temperature $T$, humidity $H$, and continentalness $C$ noise fields, each with distinct seeds and scales. The biome at position $(x, z)$ is:
-
-$$\text{Biome}(x, z) = \underset{b \in \mathcal{B}}{\arg\min} \|(\mathcal{N}_T, \mathcal{N}_H, \mathcal{N}_C) - \mu_b\|_2$$
-
-where $\mu_b$ is the prototype parameter vector for biome $b$.
-
----
+The repository uses source-shaped simplex and gradient-noise components, then explicitly labels reduced biome and terrain fields as explanatory models. This separation is important: an illustration can accurately teach scale composition without claiming to be a block-for-block world export.
 
 ## Visualizations
 
 ### Dragon Pathfinding
 
-The Ender Dragon navigates a weighted **24-node graph** embedded in the End dimension's geometry. Its horizontal path nodes form three concentric rings: 12 nodes at radius 60 blocks, 8 nodes at radius 40 blocks, and 4 nodes at radius 20 blocks. The new hero overlays that exact lattice on a source-shaped top-down projection of the central island, including the exit fountain and the ten seed-shuffled obsidian spikes.
+The Ender Dragon moves through a graph rather than choosing an arbitrary point in continuous space. Java 1.16.1 defines 24 horizontal path nodes arranged in three rings: 12 near radius 60 blocks, 8 near radius 40, and 4 near radius 20. Edges determine which transitions are legal. A shortest-path search then minimizes the sum of Euclidean edge lengths,
 
-The dragon's behavioral state machine operates on seven distinct states, each with characteristic movement patterns. **HOLDING** produces the familiar circling at maximum radius, the dragon tracing lazy arcs while surveying its domain. **STRAFING** triggers aggressive linear charges accompanied by acid breath. **APPROACH**, **LANDING**, and **PERCHING** execute the critical touchdown sequence that speedrunners exploit, the probability of initiating this sequence following $P = 1/(3 + n_{\text{crystals}})$ where destroyed crystals increase perch likelihood. **TAKEOFF** and **CHARGING** complete the cycle, returning the dragon to its orbital patterns.
+$$
+d(v) = \min_{u \rightarrow v}\left[d(u) + \lVert \mathbf{x}_u - \mathbf{x}_v \rVert_2\right].
+$$
 
-The visualization renders this graph structure in real time, highlighting active paths and transitions as the dragon's simulated AI processes its environment. Every state is presented as the same wide horizontal oval so the diagram reads as one system rather than a collection of differently weighted controls. Bright magenta links use thicker strokes and small centered arrowheads to expose direction without covering the labels. A compact fight-state panel retains only the remaining crystals and current perch probability.
+The fight state also changes the usable graph. While crystals remain, the dragon can use the outer nodes. After the crystals are gone, its search is restricted toward the inner graph. The simplified perch decision follows
 
-#### Phase Details
+$$
+P(\text{perch}) = \frac{1}{3+n_{\mathrm{crystals}}}.
+$$
+
+This explains a familiar gameplay pattern: destroying crystals does more than remove healing. It also increases the chance that a holding phase commits to a landing approach.
+
+[`Code/core/dragon.py`](Code/core/dragon.py) uses a priority queue to traverse only source-allowed edges. The important detail is that path cost and state restrictions are kept separate.
+
+```python
+minimum_node = 0 if crystals_alive > 0 else 12
+allowed = set(range(minimum_node, 24))
+
+for neighbor in adjacency[current]:
+    if neighbor not in allowed:
+        continue
+    weight = np.linalg.norm(DRAGON_NODES[current] - DRAGON_NODES[neighbor])
+```
+
+![Dragon path graph and fight state](Plots/dragon_pathfinding_hero.gif)
+
+The large left panel places the graph over the central End island. Node rings, spike footprints, cages, the exit fountain, and the active route share the same block-coordinate system. The right side presents the seven-state behavioural cycle: Holding, Strafing, Approach, Landing, Perching, Takeoff, and Charging. The lower state panel reports remaining crystals and the corresponding perch probability. This is a reduced-order flight simulation grounded in the Java 1.16.1 node topology, not a complete reimplementation of every dragon controller.
+
+#### Phase details
 
 <table>
 <tr>
@@ -155,196 +116,243 @@ The visualization renders this graph structure in real time, highlighting active
 </tr>
 </table>
 
-The three clips separate the behavior cycle into readable stages. **Holding, strafing, and charging** shows the dragon moving around the outer graph before committing to an attack. **Landing approach and perching** follows the inward route toward the exit portal. **Takeoff and return** shows how the dragon leaves the perch and reconnects with its wider flight graph.
+The clips isolate the major phases so the path and state transition can be read without waiting through a full fight cycle. Their geometry and state colours match the main animation.
 
-#### Seeded Trajectory Ensemble
+### Trajectory Distribution and Degeneracy
+
+A single shortest path says what one simulated approach did. An ensemble asks which parts of the graph repeatedly attract routes. For trajectories $\gamma_i(t)$, a simple occupancy field is
+
+$$
+D(x,z) = \sum_i \sum_t K_h\!\left((x,z)-\gamma_i(t)\right),
+$$
+
+where $K_h$ deposits a small amount of density around every sampled position. High values identify shared corridors and near-degenerate route choices, meaning several valid approaches occupy almost the same region.
+
+Minecraft relevance comes from repeatability. Speedrunning strategies depend less on one attractive route than on locations that many plausible routes revisit. The current animation focuses on the spatial ensemble. A more explicit intersection-frequency analysis belongs to the next development cycle.
+
+[`Code/core/dragon.py`](Code/core/dragon.py) constructs each approach from legal node paths and smooth, deterministic interpolation.
+
+```python
+def path_coordinates(indices, samples_per_edge=10, bend=1.2):
+    points = []
+    for start, end in zip(indices[:-1], indices[1:]):
+        points.extend(smooth_segment(
+            DRAGON_NODES[start], DRAGON_NODES[end],
+            samples=samples_per_edge, bend=bend,
+        ))
+    return np.asarray(points)
+```
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The ensemble accumulates 240 seeded dragon approaches in about 23 seconds. A cooler-to-warmer age scale lets old paths recede while new paths remain prominent, and sparse arrowheads clarify travel direction without turning the graph into a field of symbols. The shortened run reaches the route-density result quickly, then pauses just long enough to read it. The source-shaped End island, fountain, and spike footprints remain visible beneath the trajectories. It is a dragon-path simulation inspired by speedrunning research, not a simulation of arrow momentum or damage.
+The image accumulates 240 seeded approaches. Older paths cool and recede; recent paths remain warmer and brighter. Arrowheads indicate direction, while the End island and spike footprints provide physical scale. Dense luminous corridors mark graph regions that many approaches share. The figure models flight-path distribution, not arrow momentum or dragon-damage mechanics.
 
-*The dragon doesn't hunt you. It follows an algorithm. Your death was a graph traversal.*
+### End Dimension Structure
 
-### End Dimension Overview
+The End contains meaningful geometry at three very different scales. Near the origin, ten obsidian spikes occupy a seed-shuffled ring with nominal angular positions
 
-![End Dimension Layout](Plots/end_dimension_overview.png)
+$$
+\mathbf{p}_k = 42\left(\cos\frac{2\pi k}{10},\ \sin\frac{2\pi k}{10}\right),
+\qquad k=0,\ldots,9.
+$$
 
-The End dimension exhibits precise mathematical structure beneath its alien aesthetics. The central island's density field is anchored at exact coordinates $(0, 0)$ and supports ten obsidian spikes arranged via:
+Twenty post-fight gateways occupy a larger ring of radius 96 blocks,
 
-$$\mathbf{p}_k = \left( r_p \cos\left(\frac{2\pi k}{10}\right), r_p \sin\left(\frac{2\pi k}{10}\right) \right), \quad k \in \{0, 1, \ldots, 9\}$$
+$$
+\mathbf{g}_k = \left(\left\lfloor 96\cos\frac{\pi k}{10}\right\rfloor,
+\left\lfloor 96\sin\frac{\pi k}{10}\right\rfloor\right).
+$$
 
-with spike-circle radius $r_p = 42$ blocks. The spike footprints have radii from 2 to 5 blocks, while their tops rise from Y=76 through Y=103 in three-block steps. Two seed-selected crystals are protected by iron-bar cages.
+Far from the origin, Java's signed 32-bit arithmetic changes the End density calculation. Let
 
-Twenty End Gateways form a larger ring at radius 96 blocks, their positions calculated through:
+$$
+q(x,z) = \mathrm{signed32}\!\left(
+\mathrm{trunc}(x/8)^2 + \mathrm{trunc}(z/8)^2
+\right).
+$$
 
-$$\mathbf{g}_k = \left( \lfloor 96 \cos(\pi k / 10) \rfloor, \lfloor 96 \sin(\pi k / 10) \rfloor \right), \quad k \in \{0, 1, \ldots, 19\}$$
+Terrain remains in the normal arithmetic branch when $q(x,z) \ge 0$. Repeated signed overflow creates thinner radial land and void bands. When sampled on a regular image grid, those bands alias into a folded, lattice-like field. The pattern should not be read as copies of the central island.
 
-Beyond the gateway ring, outer-island seed sites are selected from the complete chunk lattice by a seeded simplex-noise test. The overview separates this system into three readable scales. The large panel spans 12 million blocks from $-6,000,000$ to $+6,000,000$ on each axis and evaluates the signed 32-bit overflow predicate directly:
+[`Code/core/end_generation.py`](Code/core/end_generation.py) evaluates the wrap explicitly, avoiding unsupported plotting macros and avoiding floating-point guesses about Java overflow.
 
-$$\operatorname{signed32}\left(\operatorname{trunc}(x/8)^2 + \operatorname{trunc}(z/8)^2\right) \geq 0$$
+```python
+sample_x = np.trunc(x / 8.0).astype(np.int64)
+sample_z = np.trunc(z / 8.0).astype(np.int64)
+unsigned = (sample_x * sample_x + sample_z * sample_z) & 0xFFFFFFFF
+signed = np.where(unsigned >= 0x80000000, unsigned - 0x100000000, unsigned)
+generated = signed >= 0
+```
 
-This produces 261 land-to-void or void-to-land transitions by six million blocks. The apparent grid and inversion pattern at that scale is a sampling effect: the exact geometry remains a sequence of increasingly thin radial bands, but a regular pixel grid aliases those subpixel rings into a large moire structure. The first affected eight-block cell begins at $r = 370,720$ blocks, the first strictly unsafe point is $370,728$, and normal terrain resumes at $524,288$.
+![End Dimension Structure](Plots/end_dimension_overview.png)
 
-The upper-right panel preserves the central fight geometry and deliberately renders every obsidian-spike footprint at the maximum five-block radius so all ten towers remain legible. Vanilla source radii still range from two to five blocks. The lower-right panel is a complete local projection from $-18,000$ to $+18,000$ blocks, including the central island, the roughly 1,024-block empty gulf, and the filled outer-island noise field. Exact overflow arithmetic and seeded site tests are separated from the illustrative end-stone surface texture.
+Panel (a) samples the exact overflow predicate from $-6,000,000$ to $+6,000,000$ blocks on both axes. The first affected eight-block cell begins at 370,720 blocks, the first strictly unsafe point is 370,728, and normal terrain resumes at 524,288. Panel (b) shows the fight-scale island, ten spikes, two seed-selected cages, the emphasized exit fountain, and the 20-gateway ring. Tower outlines are neutral so the iron cages and crystals remain visually distinct. Panel (c) zooms into the first outer-island band. Each mark is a simplex-qualified source site, kept visually separate to communicate that the ring consists of many islands rather than continuous End stone.
 
-*The End has edges. The numbers told it where to stop.*
+The redesign was guided by the archived references in [`resources/references/end/`](resources/references/end/), while the rendered figure remains generated from repository code.
 
-<br>
+### Radial World Generation
 
-<p align="center"><sub>. . .</sub></p>
+Chunk generation is not a single operation. Java 1.16.1 advances chunks through an ordered status chain from `EMPTY` to `FULL`. If status $s_j$ depends on a neighbourhood completed at status $s_{j-1}$, generation propagates as a dependency wave rather than revealing the entire map at once.
 
-<br>
+The terrain revealed by that wave is connected to the earlier Brownian-motion discussion. Broad noise layers establish large regions before fine layers and surface rules add detail. The animation does not claim that Minecraft literally evaluates one fBm equation at each status. Instead, the equation explains why recognizable large-scale form can appear before the final surface is complete.
 
-<p align="center"><sub>Les nombres ont des limites.</sub></p>
+[`Code/seed_loading.py`](Code/seed_loading.py) keeps the source status order exact and models scheduling with a deterministic wave.
 
-<p align="center"><sub>La fin a des bords.</sub></p>
+```python
+phase = progress * wave_extent - distances * dependency_lag
+stages = np.floor(phase).astype(int)
+hidden = phase < 0.0
+stages = np.clip(stages, 0, len(STATUS_NAMES) - 1)
+```
 
-<br>
+![Radial World Generation](Plots/seed_loading.gif)
 
-<p align="center"><sub>Mais l'histoire continue.</sub></p>
+The axes identify chunk position around the target chunk. Tiles grow into view only when the wave reaches them. Early statuses remain muted; `NOISE` reveals the first field, `SURFACE` restores biome colour, and later stages leave visible evidence for carvers, features, lighting, spawn readiness, and heightmaps. The final `FULL` state is held so the completed dependency field can be read. The timing is explanatory, not a profiler trace.
 
-<br>
+### Overworld Structure Generation
 
-<p align="center"><sub>. . .</sub></p>
+Many Java 1.16.1 structures begin with random-spread regions. For a structure with spacing $d$, separation $s$, salt $\sigma$, world seed $W$, and region coordinate $(R_x,R_z)$, the region seed is
 
-<br>
+$$
+S = W + 341873128712R_x + 132897987541R_z + \sigma.
+$$
 
-### Seed Loading Animation
+Java Random draws two offsets from the candidate window $w=d-s$,
 
-![Seed Loading](Plots/seed_loading.gif)
+$$
+c_x = dR_x + J_x, \qquad c_z = dR_z + J_z,
+\qquad J_x,J_z \in \{0,\ldots,w-1\}.
+$$
 
-This animation follows the Java 1.16.1 chunk-status order from `EMPTY` through `FULL`. It starts with the map hidden. Each chunk tile grows into view only as the dependency wave reaches it, so the terrain is revealed by generation rather than displayed in advance. Early statuses remain muted, `NOISE` exposes the first recognizable field, and `SURFACE` restores the terrain palette.
+Villages, desert pyramids, jungle pyramids, swamp huts, and pillager outposts all use a 32 by 32 chunk grid with an eight-chunk separation in this model, but their salts differ. Different salts produce different candidates even when the grid is shared. Candidate arithmetic answers where a structure may try to start. A biome gate then answers whether that structure family is compatible with the local environment.
 
-Later stages leave visible evidence on the map: carvers and liquid-carver traces modify the terrain, `FEATURES` adds feature markers, `LIGHT` marks illuminated chunks, `SPAWN` identifies the spawn-ready target, and `HEIGHTMAPS` outlines the completed heightmap footprint. The finished `FULL` state is held for two seconds so the completed dependency field can be inspected. The thirteen-status order is source-faithful; the wave is an explanatory scheduling model rather than a profiler trace, and the pixel-art terrain is not a block-perfect seed render.
+[`Code/core/structures.py`](Code/core/structures.py) separates those two questions. This keeps the exact candidate calculation testable while allowing the visualization to state honestly that its biome boundaries are illustrative.
 
-*The seed is fixed. The reveal is the explanation.*
+```python
+window = config.spacing - config.separation
+offset_x = random.next_int(window)
+offset_z = random.next_int(window)
+chunk_x = region_x * config.spacing + offset_x
+chunk_z = region_z * config.spacing + offset_z
 
-### Structure Placement Algorithm
+compatible = structure_biome_compatible(config.name, biome_name)
+```
 
-![Structure Placement Animation](Plots/structure_placement.gif)
+![Overworld Structure Generation](Plots/structure_placement.gif)
 
-This animation isolates the Java 1.16.1 village candidate stage. The world is divided into 32 x 32 chunk regions. Each region gets one deterministic candidate, generated with:
+The main map is measured in chunks. Thin white squares show 32 by 32 placement regions, the cyan outline shows the active region, and the dashed cyan square shows its 24 by 24 random window. Marker shape and colour distinguish the five structure families. Only candidates compatible with the displayed biome category are plotted. The right legend names both structure markers and biome colours. Candidate positions and salts are Java-compatible for 1.16.1; the biome field is a deterministic explanatory surface, so the points are not claims about final structures in a vanilla seed export.
 
-$$S = \text{worldSeed} + R_x \cdot 341873128712 + R_z \cdot 132897987541 + \sigma$$
+### Nether Structure Generation
 
-Java Random then selects two offsets with `nextInt(24)`, producing a candidate chunk in the region's 24 x 24 chunk window. Gold squares are exact candidate attempts. The active region exposes both the legal window and the excluded eight-chunk margins, while the trace reports the region, offsets, and resulting chunk.
+Nether fortresses and bastion remnants share one Java 1.16.1 grid. Each 27 by 27 chunk region has a 23 by 23 candidate window. After drawing the two offsets, Java Random draws
 
-Candidate placement is exact for 1.16.1. Full biome viability remains a separate generation step and is intentionally not fabricated by the animation; the Overworld terrain beneath the grid is illustrative.
+$$
+r = \mathrm{nextInt}(5).
+$$
 
-### Multi-Structure Generation
+Rolls 0 and 1 select a fortress, while rolls 2, 3, and 4 select a bastion. The candidate-stage split is therefore
 
-![Multi-Structure Generation](Plots/multi_structure_generation.gif)
+$$
+P(\text{fortress}) = \frac{2}{5}, \qquad
+P(\text{bastion}) = \frac{3}{5}.
+$$
 
-Nether fortresses and bastion remnants share one 27 x 27 chunk region grid in Java 1.16.1. After two `nextInt(23)` offset draws, a `nextInt(5)` roll assigns the shared candidate: rolls 0 and 1 produce a fortress, while rolls 2 through 4 produce a bastion. Ruined portals use a separate 25 x 25 grid, candidate window, and salt.
+Ruined portals use a separate 25 by 25 grid, a 15 by 15 candidate window, and a different salt. Sharing a dimension does not imply sharing a random sequence.
 
-The animation exposes both layers at once, including the current shared roll and the independent portal candidate. Its terrain palette uses netherrack crimson, warped indigo, basalt, soul sand, and lava gold so the three candidate symbols remain distinct without relying on bright green. The placement arithmetic is exact; the Nether terrain backdrop is illustrative.
+[`Code/core/structures.py`](Code/core/structures.py) makes the shared roll explicit.
 
-*Same seed. Different salt. Different fate.*
+```python
+offset_x = random.next_int(23)
+offset_z = random.next_int(23)
+type_roll = random.next_int(5)
+structure_type = 'fortress' if type_roll < 2 else 'bastion'
+```
 
-<br>
+![Nether Structure Generation](Plots/multi_structure_generation.gif)
 
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-<p align="center"><sub>Three salts. Three destinies.</sub></p>
-
-<p align="center"><sub>The algorithm doesn't care which one you wanted.</sub></p>
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-### Structure Analysis
-
-![Structure Analysis](Plots/structure_analysis.png)
-
-The refreshed four-panel analysis concentrates on the actual candidate-stage algorithms. A compact 2 x 2 layout keeps related panels close enough for direct comparison. It shows exact village candidates across 32 x 32 chunk regions, one expanded 24 x 24 candidate window with its two Java Random offsets, the shared fortress and bastion layer beside independent ruined portals, and the full 576-pair offset distribution with the exact 40/60 Nether type split. The Nether panel shares the animation's crimson, indigo, basalt, and gold visual language.
-
-All candidate coordinates and seeded rolls are exact for the modeled Java 1.16.1 stage. The Overworld and Nether surfaces behind those overlays are clearly labeled illustrative terrain.
+The animation overlays the shared fortress-or-bastion layer and the independent ruined-portal layer. The trace identifies the active region, offsets, and shared type roll. Crimson, warped, basalt, soul-sand, netherrack, and lava colours provide Nether context without changing the exact placement arithmetic. A fuller biome legend and terrain redesign are intentionally reserved for the next cycle.
 
 ### Stronghold Ring Distribution
 
-![Stronghold Distribution](Plots/stronghold_rings.png)
+Strongholds do not use the rectangular random-spread grid. Java 1.16.1 advances around the origin in polar coordinates. For ring index $i$, a useful form of the candidate radius in chunks is
 
-This plot uses the Java 1.16.1 stronghold ring iterator, centered on world origin $(0, 0)$, not the player's spawn point. The seeded candidate geometry contains 128 strongholds across eight rings with populations:
+$$
+r_i = 128 + 192i + \left(U-\frac{1}{2}\right)80,
+\qquad U \sim \mathcal{U}(0,1).
+$$
 
-$$3,\ 6,\ 10,\ 15,\ 21,\ 28,\ 36,\ 9$$
+Angles advance around each ring, and a seeded angular offset rotates the next ring. The eight ring populations are
 
-For ring number $i$, indexed from zero, the approximate radius in chunks is:
+$$
+3,\ 6,\ 10,\ 15,\ 21,\ 28,\ 36,\ 9,
+$$
 
-$$r_i = 128 + 192i + \left(\mathcal{U}(0,1) - \frac{1}{2}\right) \cdot 80$$
+which sum to 128 candidates. The first ring lies between 1,408 and 2,688 blocks from world origin. These are pre-biome-search candidates, not guaranteed portal-room coordinates.
 
-The first ring contains exactly 3 candidates between 1,408 and 2,688 blocks. The main map makes all eight rings readable over an illustrative Minecraft-style Overworld, while the detail panel enlarges the three first-ring candidates and their 112-block biome-search radii. A third panel compares all ring populations and candidate ranges. The points are exact seeded ring candidates, not claims about final portal-room coordinates.
+[`Code/core/strongholds.py`](Code/core/strongholds.py) preserves the ring iterator and Java rounding.
 
-*The ring is deterministic. The biome search is the last step.*
+```python
+radius_chunks = (
+    4 * 32 + 6 * ring_index * 32
+    + (random.next_double() - 0.5) * 32 * 2.5
+)
+x = java_round(math.cos(angle) * radius_chunks) * 16
+z = java_round(math.sin(angle) * radius_chunks) * 16
+```
 
-<br>
+![Stronghold Ring Distribution](Plots/stronghold_rings.png)
 
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
-<p align="center"><sub>128 strongholds. 8 rings. One End.</sub></p>
-
-<p align="center"><sub>The portal frames have always known where you'd enter.</sub></p>
-
-<p align="center"><sub>They've been waiting since the seed was planted.</sub></p>
-
-<br>
-
-<p align="center"><sub>. . .</sub></p>
-
-<br>
-
----
+Panel (a) shows all 128 candidates over a faded, varied Overworld biome field. Coloured bands encode each ring's allowed radial interval; thicker boundaries and enlarged dots keep the exact geometry dominant over the illustrative terrain. Panel (b) enlarges the three first-ring candidates. Dashed gold circles show the 112-block biome-search neighbourhood around each preliminary point. Panel (c) gives two quantities for every ring: bar height is candidate count, while the label above the bar gives the radial search band in thousands of blocks. The background is illustrative, but the seeded candidate positions, ring counts, and ranges are exact for the modeled iterator.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/IsolatedSingularity/Minecraft-Generation.git
 cd Minecraft-Generation
-pip install numpy matplotlib networkx scipy pillow seaborn
+pip install -r requirements.txt
 
-# Generate all visualizations
+# Run the numerical and asset checks
+python -m unittest discover -s tests -v
+
+# Generate all active visualizations
 cd Code
 python render_all.py
 ```
 
----
+Run `render_all.py` from inside `Code/`. The visualization modules use sibling imports, so invoking `python Code/render_all.py` from the repository root is not supported.
+
+## Scope and Accuracy
+
+> [!NOTE]
+> Active mathematical visualizations target Java Edition 1.16.1. Java Random, candidate-region arithmetic, stronghold ring geometry, gateway positions, dragon topology, and signed-integer overflow are implemented with Java-compatible conventions. Terrain backdrops, reduced biome fields, the chunk scheduling wave, and selected End surface projections are explanatory models unless stated otherwise. No Bedrock behaviour is represented.
+
+> [!TIP]
+> For speedrunning, first-ring stronghold candidates occur 1,408 to 2,688 blocks from origin. Eye triangulation still targets the final biome-adjusted stronghold, not merely the preliminary ring point.
 
 ## References
 
-1. **[Minecraft Wiki](https://minecraft.wiki/)**: Definitive game mechanics documentation
-2. **[Alan Zucconi](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/)**: Procedural generation deep dives
-3. **Java Random Implementation**: OpenJDK LCG source code analysis
-4. **MCSR Community**: Speedrunning optimization research and seed analysis
-5. **[Fabric Yarn 1.16.1 ChunkStatus](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/chunk/ChunkStatus.html)**: Source-mapped chunk generation stages
-6. **[Fabric Yarn 1.16.1 StructureConfig](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/chunk/StructureConfig.html)**: Spacing, separation, and salt configuration
-7. **[Mojang MC-159283](https://mojira.dev/MC-159283)**: End island density and distant overflow analysis
-8. **[Deltanic's End overflow derivation](https://gist.github.com/Deltanic/b98d005c9025f10a67de9e966fa57ebb)**: Java integer derivation and distant transition sequence linked from MC-159283
-
----
+1. [Minecraft Wiki](https://minecraft.wiki/): mechanics and historical version context.
+2. [Alan Zucconi, Minecraft World Generation](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/): accessible procedural-generation background.
+3. [OpenJDK `java.util.Random`](https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/Random.java): Java LCG behaviour.
+4. [Fabric Yarn 1.16.1 `ChunkStatus`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/chunk/ChunkStatus.html): source-mapped chunk status order.
+5. [Fabric Yarn 1.16.1 `StructureConfig`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/chunk/StructureConfig.html): spacing, separation, and salt configuration.
+6. [Fabric Yarn 1.16.1 `StructureFeature`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/feature/StructureFeature.html): structure families and candidate-stage source context.
+7. [Mojang MC-159283](https://mojira.dev/MC-159283): distant End density and integer-overflow behaviour.
+8. [Deltanic's End overflow derivation](https://gist.github.com/Deltanic/b98d005c9025f10a67de9e966fa57ebb): transition sequence linked from MC-159283.
 
 *Author: Jeffrey Morais*
 
----
+## Legacy Simulations
 
-> [!TIP]
-> For speedrunning: First ring strongholds are at 1,408-2,688 blocks. Triangulate with 2 eye throws minimum. The math doesn't lie. Your throws do.
+The original dragon animation is retained as a record of the project's earlier reduced-order model. It uses an abstract arena and a larger dashboard rather than the newer source-shaped central-island projection. Its movement is less constrained by the current 24-node presentation, but its smooth interpolation remains useful when comparing how visual assumptions change the apparent character of the same state machine.
 
-> [!NOTE]
-> The active mathematical visualizations target Java 1.16.1. Candidate formulas, structure rolls, End overflow, and stronghold ring geometry use Java-compatible arithmetic. Terrain backdrops and End surface projections are labeled visual models where they are not bit-perfect chunk generation. No Bedrock behavior is represented.
+The legacy asset is not used as evidence for current numerical claims. It is presented after the active figures so readers encounter the tested model first.
 
-> [!CAUTION]
-> Side effects of understanding these algorithms include: inability to enjoy "random" generation, compulsive seed analysis, and explaining to non-players why 48-bit integers matter.
+![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)
 
----
+## Scroll of Forbidden Knowledge
 
 <details>
-<summary>📜 The Scroll of Forbidden Knowledge</summary>
+<summary>The Scroll of Forbidden Knowledge</summary>
 
 ```
 The ancient texts speak of seeds most cursed:
@@ -355,16 +363,12 @@ Seed 27594263        - Portal room behind bedrock
 
 Some seeds are best left unplanted.
 
-───────────────────────────────────────────────
-
 Also, did you know Herobrine's removal was never actually implemented?
 The changelog lies. He watches through the Perlin noise.
 Always 3 chunks behind. Always listening for footsteps.
 
 The generation is deterministic.
 Your survival is not.
-
-───────────────────────────────────────────────
 
 The dragon has circled 2^48 times before.
 It will circle 2^48 times again.
@@ -382,11 +386,3 @@ Isn't it?
 ```
 
 </details>
-
----
-
-## Original Dragon Pathfinding Hero
-
-The original hero is preserved here as a visual record of the project's earlier dragon model. Its abstract arena and full dashboard make the evolution to the terrain-projected hero above easy to compare without overwriting the earlier work.
-
-![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)

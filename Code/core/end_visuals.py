@@ -95,7 +95,8 @@ def draw_end_fountain(ax, active=False, zorder=7):
 
 def draw_end_spikes(
     ax, seed=42, crystals_alive=10, alpha=1.0, zorder=5,
-    radius_override=None,
+    radius_override=None, tower_edgecolor='#6E4B86',
+    cage_linewidth=0.75, cage_extent=2.7,
 ):
     """Draw spike footprints with top-down crystals and cage marks.
 
@@ -113,7 +114,7 @@ def draw_end_spikes(
         )
         tower = Circle(
             (x, z), radius,
-            facecolor=COLORS['obsidian'], edgecolor='#6E4B86',
+            facecolor=COLORS['obsidian'], edgecolor=tower_edgecolor,
             linewidth=0.7, alpha=0.96 * alpha, zorder=zorder,
         )
         core = Circle(
@@ -145,19 +146,22 @@ def draw_end_spikes(
         cage = None
         if spike['caged']:
             cage = Rectangle(
-                (x - 2.7, z - 2.7), 5.4, 5.4,
-                fill=False, edgecolor=IRON, linewidth=0.75,
+                (x - cage_extent, z - cage_extent),
+                2.0 * cage_extent, 2.0 * cage_extent,
+                fill=False, edgecolor=IRON, linewidth=cage_linewidth,
                 alpha=0.9 * alpha, zorder=zorder + 2.5,
             )
             ax.add_patch(cage)
             ax.plot(
-                [x - 2.7, x + 2.7], [z, z],
-                color=IRON, linewidth=0.42, alpha=0.72 * alpha,
+                [x - cage_extent, x + cage_extent], [z, z],
+                color=IRON, linewidth=cage_linewidth * 0.56,
+                alpha=0.82 * alpha,
                 zorder=zorder + 2.5,
             )
             ax.plot(
-                [x, x], [z - 2.7, z + 2.7],
-                color=IRON, linewidth=0.42, alpha=0.72 * alpha,
+                [x, x], [z - cage_extent, z + cage_extent],
+                color=IRON, linewidth=cage_linewidth * 0.56,
+                alpha=0.82 * alpha,
                 zorder=zorder + 2.5,
             )
         artists.append({

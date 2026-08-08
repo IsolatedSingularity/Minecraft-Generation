@@ -13,7 +13,6 @@ from dragon_pathfinding import (
     create_trajectory_ensemble_animation,
 )
 from end_dimension_overview import create_end_dimension_overview
-from minecraftStructureAnalysis import create_structure_analysis
 from multi_structure_generation import create_multi_structure_animation
 from redstone_quasi_connectivity import (
     create_quasi_connectivity_animation,
@@ -37,10 +36,8 @@ def main():
     plots = root / 'Plots'
     plots.mkdir(exist_ok=True)
 
-    _render('End overview', lambda: create_end_dimension_overview(
+    _render('End dimension structure', lambda: create_end_dimension_overview(
         plots / 'end_dimension_overview.png'))
-    _render('Structure analysis', lambda: create_structure_analysis(
-        plots / 'structure_analysis.png'))
     _render('Stronghold rings', lambda: create_stronghold_distribution(
         plots / 'stronghold_rings.png'))
     _render('Quasi-connectivity diagram', lambda: create_quasi_connectivity_diagram(
@@ -55,7 +52,7 @@ def main():
         plots / 'redstone_quasi_connectivity.gif'))
     _render('Seed loading', lambda: create_seed_loading_animation(
         plots / 'seed_loading.gif'))
-    _render('Village placement', lambda: create_structure_placement_animation(
+    _render('Overworld structures', lambda: create_structure_placement_animation(
         plots / 'structure_placement.gif'))
     _render('Nether structures', lambda: create_multi_structure_animation(
         plots / 'multi_structure_generation.gif'))

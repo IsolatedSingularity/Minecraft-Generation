@@ -41,6 +41,12 @@ VILLAGE_SPACING = 32  # Chunks between village region centers
 VILLAGE_SEPARATION = 8  # Minimum chunks between villages
 VILLAGE_SALT = 10387312
 
+# Overworld structures sharing the 32 x 32 random-spread region grid.
+DESERT_PYRAMID_SALT = 14357617
+JUNGLE_PYRAMID_SALT = 14357619
+SWAMP_HUT_SALT = 14357620
+PILLAGER_OUTPOST_SALT = 165745296
+
 # Nether Fortress generation  
 FORTRESS_SPACING = 27
 FORTRESS_SEPARATION = 4
