@@ -66,7 +66,8 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
     maximum = STRONGHOLD_RINGS[-1]['max_radius'] + 1700
     draw_minecraft_terrain(
         ring_axis, (-maximum, maximum, -maximum, maximum),
-        seed=seed, dimension='overworld', resolution=384, alpha=0.50,
+        seed=seed, dimension='overworld', resolution=512, alpha=0.46,
+        coordinate_scale=1.0,
     )
     for index, (ring, color) in enumerate(zip(STRONGHOLD_RINGS, RING_COLORS)):
         _ring_band(ring_axis, ring, color)
@@ -115,7 +116,8 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
     first_limit = 3100
     draw_minecraft_terrain(
         first_axis, (-first_limit, first_limit, -first_limit, first_limit),
-        seed=seed + 73, dimension='overworld', resolution=256, alpha=0.62,
+        seed=seed, dimension='overworld', resolution=320, alpha=0.58,
+        coordinate_scale=1.0,
     )
     first_config = STRONGHOLD_RINGS[0]
     first_axis.add_patch(Wedge(

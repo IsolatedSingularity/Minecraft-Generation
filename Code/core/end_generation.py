@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt
+from scipy.spatial import cKDTree
 
 from .lcg import MinecraftLCG
 
@@ -327,6 +328,88 @@ def gateway_positions():
             'z': math.floor(96.0 * math.sin(angle)),
         })
     return values
+
+
+def outer_gateway_positions(world_seed, radius_blocks=1024, search_limit=2300):
+    """Return source-shaped outer destinations paired to the 20 gateways.
+
+    Vanilla projects each gateway direction roughly 1,024 blocks outward and
+    searches for a safe outer-island position.  The exact block-entity search
+    depends on generated chunk heights.  This top-down model snaps the ideal
+    direction to the nearest simplex-qualified outer-island source site and
+    reports both the exact ideal vector and the illustrative safe destination.
+    """
+    sites = outer_island_seed_field(
+        world_seed, max_coordinate_blocks=int(search_limit),
+    )
+    positions = np.column_stack((sites['block_x'], sites['block_z']))
+    radii = np.hypot(positions[:, 0], positions[:, 1])
+    usable = radii > 900.0
+    positions = positions[usable]
+    tree = cKDTree(positions)
+    values = []
+    for gateway in gateway_positions():
+        angle = 2.0 * math.pi * gateway['index'] / 20.0
+        ideal_x = int(round(float(radius_blocks) * math.cos(angle)))
+        ideal_z = int(round(float(radius_blocks) * math.sin(angle)))
+        distance, site_index = tree.query((ideal_x, ideal_z))
+        site_x, site_z = positions[int(site_index)]
+        values.append({
+            'index': gateway['index'],
+            'central_x': gateway['x'],
+            'central_z': gateway['z'],
+            'ideal_x': ideal_x,
+            'ideal_z': ideal_z,
+            'x': int(site_x),
+            'z': int(site_z),
+            'search_distance': float(distance),
+        })
+    return values
+
+
+def end_city_candidates(world_seed, max_coordinate_blocks=3600):
+    """Return End-city grid candidates supported by the outer-island model.
+
+    Candidate chunks use the Java 1.16.1 uniform 20 by 20 grid with an
+    11-chunk separation and salt 10387313.  The subsequent island/height gate
+    is a transparent source-shaped projection because this repository does
+    not reproduce the complete three-dimensional End heightmap.
+    """
+    from .structures import END_CITY, candidate_in_region
+
+    maximum_chunk = int(max_coordinate_blocks) // 16
+    region_limit = math.ceil(maximum_chunk / END_CITY.spacing) + 1
+    sites = outer_island_seed_field(
+        world_seed, max_coordinate_blocks=int(max_coordinate_blocks),
+    )
+    site_positions = np.column_stack((sites['block_x'], sites['block_z']))
+    tree = cKDTree(site_positions)
+    accepted = []
+    for region_x in range(-region_limit, region_limit + 1):
+        for region_z in range(-region_limit, region_limit + 1):
+            item = candidate_in_region(
+                world_seed, region_x, region_z, END_CITY,
+            )
+            if not (
+                -maximum_chunk <= item['chunk_x'] <= maximum_chunk
+                and -maximum_chunk <= item['chunk_z'] <= maximum_chunk
+            ):
+                continue
+            if math.hypot(item['block_x'], item['block_z']) <= 1024.0:
+                continue
+            distance, site_index = tree.query((item['block_x'], item['block_z']))
+            source_radius = float(sites['visual_radius'][int(site_index)])
+            if float(distance) > min(64.0, source_radius * 0.48):
+                continue
+            item['island_distance'] = float(distance)
+            item['source_radius'] = source_radius
+            item['height_gate'] = 'source-shaped outer-island support'
+            accepted.append(item)
+    accepted.sort(key=lambda item: (
+        math.hypot(item['block_x'], item['block_z']),
+        math.atan2(item['block_z'], item['block_x']),
+    ))
+    return accepted
 
 
 def pillar_seed(world_seed):

@@ -23,6 +23,10 @@ class DragonFrame:
     crystals_alive: int
     current_node: int | None
     target_node: int | None
+    alive_crystals: tuple[int, ...] | None = None
+    fireball_position: np.ndarray | None = None
+    explosion_index: int | None = None
+    explosion_phase: float = 0.0
 
 
 def build_dragon_nodes():
@@ -145,6 +149,29 @@ def smooth_segment(start, end, samples=12, bend=0.0):
     return points
 
 
+def catmull_rom_path(control_points, samples_per_segment=10):
+    """Interpolate a fluid curve through a sequence of graph targets."""
+    values = np.asarray(control_points, dtype=float)
+    if len(values) < 2:
+        return values.copy()
+    padded = np.vstack((values[0], values, values[-1]))
+    output = []
+    for index in range(1, len(padded) - 2):
+        p0, p1, p2, p3 = padded[index - 1:index + 3]
+        for t in np.linspace(0.0, 1.0, int(samples_per_segment), endpoint=False):
+            t2 = t * t
+            t3 = t2 * t
+            point = 0.5 * (
+                2.0 * p1
+                + (-p0 + p2) * t
+                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
+            )
+            output.append(point)
+    output.append(values[-1].copy())
+    return np.asarray(output)
+
+
 def path_coordinates(indices, samples_per_edge=10, bend=1.2):
     if len(indices) == 1:
         return [DRAGON_NODES[indices[0]].copy()]
@@ -208,7 +235,10 @@ def simulate_perch_trajectory(
     return np.array(coordinates), node_path
 
 
-def _append_frames(frames, start, end, count, state, crystals, bend=0.0):
+def _append_frames(
+    frames, start, end, count, state, crystals, bend=0.0,
+    alive_crystals=None,
+):
     points = smooth_segment(start, end, samples=count, bend=bend)
     for index, point in enumerate(points):
         frames.append(DragonFrame(
@@ -217,55 +247,96 @@ def _append_frames(frames, start, end, count, state, crystals, bend=0.0):
             crystals_alive=crystals,
             current_node=None,
             target_node=None,
+            alive_crystals=(
+                tuple(range(int(crystals)))
+                if alive_crystals is None else tuple(alive_crystals)
+            ),
         ))
 
 
 def scripted_showcase():
-    """Return a compact deterministic loop covering the major phase groups."""
+    """Return a fluid, event-rich fight loop for the README hero."""
     frames = []
-    route = [0, 1, 2, 3, 4]
-    for index, (start, end) in enumerate(zip(route, route[1:])):
-        _append_frames(
-            frames, DRAGON_NODES[start], DRAGON_NODES[end], 7,
-            'holding', 10 - index, bend=1.1,
-        )
+    alive = set(range(10))
 
-    _append_frames(
-        frames, DRAGON_NODES[4], np.array([30.0, -18.0]), 10,
-        'strafing', 6, bend=-4.0,
+    def append_curve(points, state, samples=9, fireball=False):
+        curve = catmull_rom_path(points, samples_per_segment=samples)
+        player = np.array([31.0, -17.0])
+        for index, point in enumerate(curve):
+            fireball_position = None
+            if fireball and 0.34 <= index / max(len(curve) - 1, 1) <= 0.82:
+                phase = (index / max(len(curve) - 1, 1) - 0.34) / 0.48
+                fireball_position = (1.0 - phase) * point + phase * player
+            frames.append(DragonFrame(
+                np.asarray(point), state, len(alive), None, None,
+                alive_crystals=tuple(sorted(alive)),
+                fireball_position=fireball_position,
+            ))
+
+    append_curve(
+        [DRAGON_NODES[index] for index in (0, 1, 2, 3, 4, 5, 6)],
+        'holding', samples=9,
     )
-    _append_frames(
-        frames, np.array([30.0, -18.0]), DRAGON_NODES[5], 8,
-        'charging', 5, bend=2.0,
+    append_curve(
+        [DRAGON_NODES[6], np.array([-12.0, -44.0]),
+         np.array([31.0, -17.0]), DRAGON_NODES[8]],
+        'strafing', samples=11, fireball=True,
+    )
+    append_curve(
+        [DRAGON_NODES[index] for index in (8, 9, 10, 11, 0, 1)],
+        'charging', samples=8,
     )
 
-    landing_route = shortest_path(5, 15, crystals_alive=4)
-    for start, end in zip(landing_route, landing_route[1:]):
-        _append_frames(
-            frames, DRAGON_NODES[start], DRAGON_NODES[end], 6,
-            'landing_approach', 4, bend=0.8,
-        )
-    _append_frames(
-        frames, DRAGON_NODES[landing_route[-1]], np.zeros(2), 12,
-        'landing', 3, bend=-1.5,
+    # Crystal losses start after the flight has been established and jump
+    # around the spike ring instead of walking it in angular order.
+    explosion_order = (7, 2, 9, 4)
+    holding_curve = catmull_rom_path(
+        [DRAGON_NODES[index] for index in (1, 2, 3, 4, 5, 6)],
+        samples_per_segment=10,
+    )
+    event_frames = (10, 23, 36, 47)
+    for frame_index, point in enumerate(holding_curve):
+        explosion_index = None
+        explosion_phase = 0.0
+        for event_index, start in enumerate(event_frames):
+            crystal_index = explosion_order[event_index]
+            if start <= frame_index < start + 6:
+                explosion_index = crystal_index
+                explosion_phase = (frame_index - start + 1) / 6.0
+            if frame_index >= start + 3:
+                alive.discard(crystal_index)
+        frames.append(DragonFrame(
+            np.asarray(point), 'holding', len(alive), None, None,
+            alive_crystals=tuple(sorted(alive)),
+            explosion_index=explosion_index,
+            explosion_phase=explosion_phase,
+        ))
+
+    landing_route = shortest_path(6, 15, crystals_alive=len(alive))
+    append_curve(
+        [DRAGON_NODES[index] for index in landing_route],
+        'landing_approach', samples=9,
+    )
+    append_curve(
+        [DRAGON_NODES[landing_route[-1]], np.array([11.0, -6.0]), np.zeros(2)],
+        'landing', samples=12,
     )
 
-    for index in range(18):
-        angle = 2.0 * math.pi * index / 18.0
-        point = np.array([0.7 * math.cos(angle), 0.45 * math.sin(angle)])
-        frames.append(DragonFrame(point, 'perching', 2, None, None))
+    for index in range(26):
+        angle = 2.0 * math.pi * index / 26.0
+        point = np.array([0.9 * math.cos(angle), 0.55 * math.sin(angle)])
+        frames.append(DragonFrame(
+            point, 'perching', len(alive), None, None,
+            alive_crystals=tuple(sorted(alive)),
+        ))
 
-    takeoff_route = shortest_path(20, 0, crystals_alive=1)
-    previous = np.zeros(2)
-    for node in takeoff_route:
-        _append_frames(
-            frames, previous, DRAGON_NODES[node], 6,
-            'takeoff', 1, bend=1.3,
-        )
-        previous = DRAGON_NODES[node]
-    _append_frames(
-        frames, previous, DRAGON_NODES[0], 8,
-        'holding', 1, bend=-1.0,
+    takeoff_route = shortest_path(20, 8, crystals_alive=len(alive))
+    append_curve(
+        [np.zeros(2)] + [DRAGON_NODES[index] for index in takeoff_route],
+        'takeoff', samples=9,
     )
-    frames.append(DragonFrame(DRAGON_NODES[0].copy(), 'holding', 1, 0, 1))
+    append_curve(
+        [DRAGON_NODES[index] for index in (8, 9, 10, 11, 0)],
+        'holding', samples=8,
+    )
     return frames

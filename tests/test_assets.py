@@ -10,14 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 PLOTS = ROOT / 'Plots'
 
 RENDERED_GIFS = {
-    'dragon_pathfinding_hero.gif': (1200, 700, 80),
+    'dragon_pathfinding_hero.gif': (1200, 700, 240),
     'dragon_holding_strafe.gif': (900, 500, 20),
     'dragon_landing_perch.gif': (900, 500, 20),
     'dragon_takeoff.gif': (900, 500, 20),
-    'dragon_trajectory_ensemble.gif': (900, 600, 80),
+    'dragon_trajectory_ensemble.gif': (1150, 620, 130),
     'seed_loading.gif': (800, 800, 60),
-    'structure_placement.gif': (1000, 550, 70),
-    'multi_structure_generation.gif': (1000, 550, 70),
+    'structure_placement.gif': (1000, 550, 90),
+    'multi_structure_generation.gif': (1000, 550, 80),
     'redstone_quasi_connectivity.gif': (900, 550, 45),
 }
 
@@ -29,6 +29,7 @@ README_ASSETS = (
     'dragon_takeoff.gif',
     'dragon_trajectory_ensemble.gif',
     'end_dimension_overview.png',
+    'end_structure_generation.png',
     'seed_loading.gif',
     'structure_placement.gif',
     'multi_structure_generation.gif',
@@ -38,6 +39,12 @@ README_ASSETS = (
 
 class AssetIntegrityTests(unittest.TestCase):
     def test_retained_new_gifs_decode_and_are_bounded(self):
+        maximum_sizes = {
+            'dragon_pathfinding_hero.gif': 16 * 1024 * 1024,
+            'dragon_trajectory_ensemble.gif': 13 * 1024 * 1024,
+            'structure_placement.gif': 11 * 1024 * 1024,
+            'multi_structure_generation.gif': 9 * 1024 * 1024,
+        }
         for name, dimensions in RENDERED_GIFS.items():
             minimum_width, minimum_height, minimum_frames = dimensions
             asset = PLOTS / name
@@ -48,14 +55,23 @@ class AssetIntegrityTests(unittest.TestCase):
                 self.assertGreaterEqual(image.n_frames, minimum_frames, name)
                 image.seek(image.n_frames - 1)
                 image.convert('RGB').getpixel((0, 0))
-            self.assertLess(asset.stat().st_size, 8 * 1024 * 1024, name)
+            self.assertLess(
+                asset.stat().st_size,
+                maximum_sizes.get(name, 8 * 1024 * 1024),
+                name,
+            )
+
+    def test_new_static_end_structure_figure_is_readable(self):
+        with Image.open(PLOTS / 'end_structure_generation.png') as image:
+            self.assertGreaterEqual(image.width, 2500)
+            self.assertGreaterEqual(image.height, 1500)
 
     def test_deliberately_slow_animations_retain_their_timing(self):
         expected_duration_ranges = {
-            'dragon_trajectory_ensemble.gif': (20_000, 28_000),
+            'dragon_trajectory_ensemble.gif': (16_000, 20_000),
             'seed_loading.gif': (10_000, 13_500),
             'structure_placement.gif': (10_000, 13_500),
-            'multi_structure_generation.gif': (10_000, 13_500),
+            'multi_structure_generation.gif': (10_000, 14_000),
             'redstone_quasi_connectivity.gif': (13_000, 16_000),
         }
         for name, (minimum_ms, maximum_ms) in expected_duration_ranges.items():

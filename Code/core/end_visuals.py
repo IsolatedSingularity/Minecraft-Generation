@@ -3,7 +3,7 @@
 import math
 
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.patches import Circle, Rectangle, RegularPolygon
+from matplotlib.patches import Circle, Rectangle
 import numpy as np
 
 from .end_generation import central_island_projection, spike_layout
@@ -132,9 +132,8 @@ def draw_end_spikes(
             edgecolor='none', alpha=(0.24 if alive else 0.06) * alpha,
             zorder=zorder + 1,
         )
-        crystal = RegularPolygon(
-            (x, z), numVertices=4, radius=1.35,
-            orientation=math.pi / 4.0,
+        crystal = Circle(
+            (x, z), radius=1.25,
             facecolor=CRYSTAL if alive else COLORS['coral'],
             edgecolor=CRYSTAL_CORE, linewidth=0.55,
             alpha=(0.98 if alive else 0.14) * alpha,
@@ -165,6 +164,8 @@ def draw_end_spikes(
                 zorder=zorder + 2.5,
             )
         artists.append({
+            'x': x,
+            'z': z,
             'tower': tower,
             'core': core,
             'glow': glow,
@@ -179,8 +180,14 @@ def draw_end_spikes(
 
 def set_crystals_alive(spike_artists, crystals_alive):
     """Update crystal visibility without changing the permanent towers."""
+    set_crystal_states(spike_artists, range(int(crystals_alive)))
+
+
+def set_crystal_states(spike_artists, alive_indices):
+    """Update an arbitrary, possibly non-circular set of living crystals."""
+    alive_indices = set(int(index) for index in alive_indices)
     for index, artists in enumerate(spike_artists):
-        alive = index < int(crystals_alive)
+        alive = index in alive_indices
         artists['glow'].set_facecolor(
             COLORS['magenta'] if alive else COLORS['coral']
         )

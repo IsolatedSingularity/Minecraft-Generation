@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT / 'Code'))
 
 from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
-    DRAGON_EDGES, DRAGON_NODES, perch_probability, shortest_path,
+    DRAGON_EDGES, DRAGON_NODES, perch_probability, scripted_showcase,
+    shortest_path,
 )
 from core.end_generation import (
     SimplexNoise2D,
@@ -20,15 +21,24 @@ from core.end_generation import (
     end_overflow_generation_mask,
     end_overflow_ring_boundaries,
     gateway_positions,
+    end_city_candidates,
+    outer_gateway_positions,
     outer_island_seed_field,
     pillar_seed,
     spike_layout,
 )
 from core.lcg import MinecraftLCG, generate_population_seed, generate_region_seed
-from core.minecraft_visuals import minecraft_biome_grid
+from core.minecraft_visuals import (
+    NETHER_BIOMES,
+    OVERWORLD_BIOMES,
+    minecraft_biome_grid,
+    minecraft_nether_biome_grid,
+)
 from core.strongholds import generate_stronghold_candidates
 from core.structures import (
     NETHER_RUINED_PORTAL,
+    END_CITY,
+    OCEAN_MONUMENT,
     OVERWORLD_STRUCTURES,
     VILLAGE,
     candidate_in_region,
@@ -75,6 +85,24 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertAlmostEqual(perch_probability(10), 1.0 / 13.0)
         self.assertAlmostEqual(perch_probability(0), 1.0 / 3.0)
 
+    def test_showcase_delays_and_varies_crystal_destruction(self):
+        frames = scripted_showcase()
+        self.assertGreaterEqual(len(frames), 260)
+        first_explosion = next(
+            index for index, frame in enumerate(frames)
+            if frame.explosion_index is not None
+        )
+        self.assertGreater(first_explosion, len(frames) * 0.35)
+        order = []
+        for frame in frames:
+            if (
+                frame.explosion_index is not None
+                and frame.explosion_index not in order
+            ):
+                order.append(frame.explosion_index)
+        self.assertEqual(order, [7, 2, 9, 4])
+        self.assertTrue(any(frame.fireball_position is not None for frame in frames))
+
 
 class StructureTests(unittest.TestCase):
     def test_uniform_candidates_stay_inside_window(self):
@@ -100,6 +128,32 @@ class StructureTests(unittest.TestCase):
             'plains', 'desert', 'savanna', 'jungle', 'swamp', 'taiga',
             'snowy_tundra', 'mushroom_fields', 'badlands',
         }.issubset(set(minecraft_biome_grid(42, 384).ravel())))
+
+    def test_expanded_structure_catalog_and_distribution_examples(self):
+        self.assertEqual(
+            {config.name for config in OVERWORLD_STRUCTURES},
+            {
+                'village', 'desert_pyramid', 'jungle_pyramid', 'swamp_hut',
+                'pillager_outpost', 'igloo', 'woodland_mansion',
+                'ocean_monument', 'shipwreck', 'ocean_ruin', 'ruined_portal',
+            },
+        )
+        village = candidate_in_region(42, 0, 0, VILLAGE)
+        monument = candidate_in_region(42, 0, 0, OCEAN_MONUMENT)
+        end_city = candidate_in_region(42, 0, 0, END_CITY)
+        self.assertEqual((village['offset_x'], village['offset_z']), (1, 20))
+        self.assertEqual((monument['offset_x'], monument['offset_z']), (8, 16))
+        self.assertEqual((end_city['offset_x'], end_city['offset_z']), (8, 7))
+
+    def test_registered_biomes_are_visible_in_showcase_maps(self):
+        overworld = minecraft_biome_grid(
+            42, 384, (-168, 168), coordinate_scale=16.0, showcase=True,
+        )
+        nether = minecraft_nether_biome_grid(
+            42, 384, (-140, 140), coordinate_scale=16.0, showcase=True,
+        )
+        self.assertEqual(set(overworld.ravel()), set(OVERWORLD_BIOMES))
+        self.assertEqual(set(nether.ravel()), set(NETHER_BIOMES))
 
     def test_nether_shared_split_converges_to_two_fifths(self):
         candidates = [
@@ -178,6 +232,21 @@ class EndGeometryTests(unittest.TestCase):
         self.assertEqual(len(spikes), 10)
         self.assertEqual(sum(spike['caged'] for spike in spikes), 2)
         self.assertEqual(sorted(spike['height'] for spike in spikes), list(range(76, 104, 3)))
+
+    def test_outer_gateway_pairing_and_end_city_gate(self):
+        gateways = outer_gateway_positions(42)
+        self.assertEqual(len(gateways), 20)
+        self.assertEqual(len({(item['x'], item['z']) for item in gateways}), 20)
+        self.assertTrue(all(
+            1023.0 <= math.hypot(item['ideal_x'], item['ideal_z']) <= 1025.0
+            for item in gateways
+        ))
+        cities = end_city_candidates(42, max_coordinate_blocks=2400)
+        self.assertGreater(len(cities), 20)
+        self.assertTrue(all(
+            math.hypot(item['block_x'], item['block_z']) > 1024.0
+            for item in cities
+        ))
 
     def test_vectorized_simplex_and_island_projection(self):
         simplex = SimplexNoise2D(42)

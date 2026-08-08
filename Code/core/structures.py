@@ -5,6 +5,18 @@ from dataclasses import dataclass
 from .constants import (
     CHUNK_SIZE,
     DESERT_PYRAMID_SALT,
+    END_CITY_SALT,
+    END_CITY_SEPARATION,
+    END_CITY_SPACING,
+    IGLOO_SALT,
+    IGLOO_SEPARATION,
+    IGLOO_SPACING,
+    MANSION_SALT,
+    MANSION_SEPARATION,
+    MANSION_SPACING,
+    MONUMENT_SALT,
+    MONUMENT_SEPARATION,
+    MONUMENT_SPACING,
     JUNGLE_PYRAMID_SALT,
     NETHER_RUINED_PORTAL_SEPARATION,
     NETHER_RUINED_PORTAL_SPACING,
@@ -12,7 +24,15 @@ from .constants import (
     NETHER_STRUCTURE_SEPARATION,
     NETHER_STRUCTURE_SPACING,
     PILLAGER_OUTPOST_SALT,
+    OCEAN_RUIN_SALT,
+    OCEAN_RUIN_SEPARATION,
+    OCEAN_RUIN_SPACING,
+    OVERWORLD_RUINED_PORTAL_SEPARATION,
+    OVERWORLD_RUINED_PORTAL_SPACING,
     RUINED_PORTAL_SALT,
+    SHIPWRECK_SALT,
+    SHIPWRECK_SEPARATION,
+    SHIPWRECK_SPACING,
     SWAMP_HUT_SALT,
     VILLAGE_SALT,
     VILLAGE_SEPARATION,
@@ -27,6 +47,7 @@ class StructureConfig:
     spacing: int
     separation: int
     salt: int
+    uniform: bool = False
 
 
 VILLAGE = StructureConfig(
@@ -47,6 +68,26 @@ PILLAGER_OUTPOST = StructureConfig(
     'pillager_outpost', VILLAGE_SPACING, VILLAGE_SEPARATION,
     PILLAGER_OUTPOST_SALT,
 )
+IGLOO = StructureConfig(
+    'igloo', IGLOO_SPACING, IGLOO_SEPARATION, IGLOO_SALT,
+)
+WOODLAND_MANSION = StructureConfig(
+    'woodland_mansion', MANSION_SPACING, MANSION_SEPARATION, MANSION_SALT,
+)
+OCEAN_MONUMENT = StructureConfig(
+    'ocean_monument', MONUMENT_SPACING, MONUMENT_SEPARATION,
+    MONUMENT_SALT, uniform=True,
+)
+SHIPWRECK = StructureConfig(
+    'shipwreck', SHIPWRECK_SPACING, SHIPWRECK_SEPARATION, SHIPWRECK_SALT,
+)
+OCEAN_RUIN = StructureConfig(
+    'ocean_ruin', OCEAN_RUIN_SPACING, OCEAN_RUIN_SEPARATION, OCEAN_RUIN_SALT,
+)
+OVERWORLD_RUINED_PORTAL = StructureConfig(
+    'ruined_portal', OVERWORLD_RUINED_PORTAL_SPACING,
+    OVERWORLD_RUINED_PORTAL_SEPARATION, RUINED_PORTAL_SALT,
+)
 
 OVERWORLD_STRUCTURES = (
     VILLAGE,
@@ -54,6 +95,12 @@ OVERWORLD_STRUCTURES = (
     JUNGLE_PYRAMID,
     SWAMP_HUT,
     PILLAGER_OUTPOST,
+    IGLOO,
+    WOODLAND_MANSION,
+    OCEAN_MONUMENT,
+    SHIPWRECK,
+    OCEAN_RUIN,
+    OVERWORLD_RUINED_PORTAL,
 )
 
 OVERWORLD_STRUCTURE_BIOMES = {
@@ -66,6 +113,16 @@ OVERWORLD_STRUCTURE_BIOMES = {
     'pillager_outpost': frozenset({
         'plains', 'desert', 'savanna', 'taiga', 'snowy_tundra',
     }),
+    'igloo': frozenset({'snowy_tundra'}),
+    'woodland_mansion': frozenset({'dark_forest'}),
+    'ocean_monument': frozenset({'water', 'deep_water'}),
+    'shipwreck': frozenset({'shore', 'water', 'deep_water'}),
+    'ocean_ruin': frozenset({'water', 'deep_water'}),
+    'ruined_portal': frozenset({
+        'shore', 'plains', 'forest', 'dark_forest', 'desert', 'savanna',
+        'jungle', 'swamp', 'taiga', 'snowy_tundra', 'mountains',
+        'badlands', 'mushroom_fields', 'water', 'deep_water',
+    }),
 }
 NETHER_SHARED = StructureConfig(
     'nether_shared', NETHER_STRUCTURE_SPACING,
@@ -75,17 +132,25 @@ NETHER_RUINED_PORTAL = StructureConfig(
     'nether_ruined_portal', NETHER_RUINED_PORTAL_SPACING,
     NETHER_RUINED_PORTAL_SEPARATION, RUINED_PORTAL_SALT,
 )
+END_CITY = StructureConfig(
+    'end_city', END_CITY_SPACING, END_CITY_SEPARATION,
+    END_CITY_SALT, uniform=True,
+)
 
 
 def candidate_in_region(world_seed, region_x, region_z, config):
-    """Return the exact uniform-grid candidate before biome validation."""
+    """Return an exact random-spread candidate before biome validation."""
     region_seed = generate_region_seed(
         world_seed, region_x, region_z, config.salt,
     )
     random = MinecraftLCG(region_seed)
     window = config.spacing - config.separation
-    offset_x = random.next_int(window)
-    offset_z = random.next_int(window)
+    if config.uniform:
+        offset_x = random.next_int(window)
+        offset_z = random.next_int(window)
+    else:
+        offset_x = (random.next_int(window) + random.next_int(window)) // 2
+        offset_z = (random.next_int(window) + random.next_int(window)) // 2
     chunk_x = region_x * config.spacing + offset_x
     chunk_z = region_z * config.spacing + offset_z
     return {
@@ -138,7 +203,7 @@ def nether_shared_candidate(world_seed, region_x, region_z):
 
 
 def region_grid(world_seed, region_radius, config):
-    """Generate a square grid of exact uniform candidates."""
+    """Generate a square grid of exact random-spread candidates."""
     return [
         candidate_in_region(world_seed, region_x, region_z, config)
         for region_x in range(-region_radius, region_radius + 1)

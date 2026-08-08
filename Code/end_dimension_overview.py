@@ -34,8 +34,8 @@ def _panel_label(ax, label):
 
 def _draw_million_scale_overflow(ax):
     """Draw exact point samples of the modular radial overflow field."""
-    limit = 6_000_000.0
-    resolution = 1401
+    limit = 30_000_000.0
+    resolution = 1501
     coordinates = np.linspace(-limit, limit, resolution)
     x, z = np.meshgrid(coordinates, coordinates)
     generated = end_overflow_generation_mask(x, z)
@@ -49,7 +49,7 @@ def _draw_million_scale_overflow(ax):
         origin='lower', interpolation='nearest', cmap=colormap,
         vmin=0.0, vmax=1.0, zorder=1,
     )
-    ticks = [-6_000_000, -3_000_000, 0, 3_000_000, 6_000_000]
+    ticks = [-30_000_000, -15_000_000, 0, 15_000_000, 30_000_000]
     labels = [f'{value / 1_000_000:.0f}M' for value in ticks]
     ax.set_xticks(ticks, labels)
     ax.set_yticks(ticks, labels)
@@ -57,7 +57,7 @@ def _draw_million_scale_overflow(ax):
     ax.set_ylim(-limit, limit)
     ax.set_xlabel('X (blocks)')
     ax.set_ylabel('Z (blocks)')
-    ax.set_title('Signed-32 overflow lattice at map scale', fontsize=11, pad=8)
+    ax.set_title('World-border sample: apparent overflow lattice', fontsize=11, pad=8)
     style_axis(ax, equal=True, grid=False)
     _panel_label(ax, '(a)')
 

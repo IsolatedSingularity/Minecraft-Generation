@@ -13,6 +13,7 @@ from dragon_pathfinding import (
     create_trajectory_ensemble_animation,
 )
 from end_dimension_overview import create_end_dimension_overview
+from end_structure_generation import create_end_structure_generation
 from multi_structure_generation import create_multi_structure_animation
 from redstone_quasi_connectivity import (
     create_quasi_connectivity_animation,
@@ -40,6 +41,8 @@ def main():
         plots / 'end_dimension_overview.png'))
     _render('Stronghold rings', lambda: create_stronghold_distribution(
         plots / 'stronghold_rings.png'))
+    _render('End structure generation', lambda: create_end_structure_generation(
+        plots / 'end_structure_generation.png'))
     _render('Quasi-connectivity diagram', lambda: create_quasi_connectivity_diagram(
         plots / 'redstone_quasi_connectivity.png'))
 

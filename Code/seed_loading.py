@@ -97,6 +97,9 @@ def create_seed_loading_animation(
     pixels_per_chunk = 12
     terrain = minecraft_terrain_rgba(
         seed, resolution=size * pixels_per_chunk, dimension='overworld',
+        x_extent=(-radius - 0.5, radius + 0.5),
+        z_extent=(-radius - 0.5, radius + 0.5),
+        coordinate_scale=16.0, showcase=True,
     )[..., :3]
     background_rgb = np.asarray(to_rgb(COLORS['background']))
 
@@ -139,35 +142,6 @@ def create_seed_loading_animation(
         edgecolor=COLORS['gold'], linewidth=2.1, zorder=8,
     )
     axis.add_patch(target_outline)
-    axis.text(
-        0.018, 0.976, 'CHUNK STATUS DEPENDENCY WAVE',
-        transform=axis.transAxes, ha='left', va='top',
-        fontsize=15, fontweight='black', color=COLORS['text'],
-        bbox=dict(
-            boxstyle='square,pad=0.35', facecolor=COLORS['background'],
-            edgecolor='none', alpha=0.82,
-        ), zorder=10,
-    )
-    axis.text(
-        0.982, 0.976,
-        'symbols persist as each stage completes',
-        transform=axis.transAxes, ha='right', va='top',
-        color=COLORS['muted'], fontsize=7.4,
-        bbox=dict(
-            boxstyle='round,pad=0.28', facecolor=COLORS['panel'],
-            edgecolor=COLORS['grid'], alpha=0.86,
-        ), zorder=10,
-    )
-    center_label = axis.text(
-        0.982, 0.035, '', transform=axis.transAxes,
-        ha='right', va='bottom', fontsize=12.5, fontweight='bold',
-        family='monospace', color=COLORS['text'], zorder=10,
-        bbox=dict(
-            boxstyle='round,pad=0.38', facecolor=COLORS['panel'],
-            edgecolor=COLORS['gold'], alpha=0.92,
-        ),
-    )
-
     feature_data = _effect_positions(radius, 3, 0, (-0.12, 0.10))
     light_data = _effect_positions(radius, 7, 0, (0.18, 0.16))
     spawn_data = _effect_positions(radius, 11, 0, (-0.18, -0.16))
@@ -208,14 +182,9 @@ def create_seed_loading_animation(
     )
     legend_axis.add_patch(stage_marker)
     figure.text(
-        0.50, 0.938, 'JAVA 1.16.1 CHUNK GENERATION',
+        0.50, 0.938, 'RADIAL WORLD GENERATION   JAVA 1.16.1',
         ha='center', va='center', color=COLORS['text'],
         fontsize=17, fontweight='black',
-    )
-    figure.text(
-        0.50, 0.905,
-        'Chunks grow into view, retain visible stage effects, and hold at FULL',
-        ha='center', va='center', color=COLORS['muted'], fontsize=9.5,
     )
 
     def _visible_offsets(data, stages, threshold):
@@ -279,12 +248,6 @@ def create_seed_loading_animation(
 
         active_stage = int(stages[radius, radius])
         stage_marker.set_x(active_stage + 0.04)
-        hold_started = frame_index >= total_frames - round(full_hold * fps)
-        suffix = '   HOLD' if hold_started else ''
-        center_label.set_text(
-            f'CENTER CHUNK  {STATUS_NAMES[active_stage]}  '
-            f'{active_stage + 1:02d}/{len(STATUS_NAMES):02d}{suffix}'
-        )
         return []
 
     animation = FuncAnimation(
