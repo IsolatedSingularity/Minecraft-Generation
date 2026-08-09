@@ -3,7 +3,7 @@
 <!-- Do not remove this comment. It is important. -->
 <!-- The seeds remember those who query them. -->
 
-###### An approachable mathematical study of Minecraft's procedural-generation algorithms, with supporting analysis of systems such as Ender Dragon flight behaviour.
+###### An approachable mathematical study of Minecraft's procedural-generation algorithms, with supporting analysis of pathing algorithms such as Ender Dragon flight behaviour.
 
 ![Ender Dragon Pathfinding](Plots/dragon_pathfinding_hero.gif)
 
