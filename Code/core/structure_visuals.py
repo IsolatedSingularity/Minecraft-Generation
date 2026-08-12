@@ -197,17 +197,32 @@ def draw_structure_schematic(
         rectangle(x + .04 * radius, z + .14 * radius,
                   .32 * radius, .72 * radius, '#C29B60', order=3)
     elif name == 'end_city':
-        rectangle(x, z, .52 * radius, 1.56 * radius, style.primary)
-        rectangle(x, z + .62 * radius, 1.16 * radius, .42 * radius,
-                  style.secondary, order=1)
-        for dx in (-.56, .56):
-            circle(x + dx * radius, z + .62 * radius,
-                   .24 * radius, style.primary, order=2)
         polygon([
-            (x + .58 * radius, z - .52 * radius),
-            (x + 1.15 * radius, z - .70 * radius),
-            (x + .82 * radius, z - .28 * radius),
-        ], '#D9C0B5', order=3)
+            (x - .92 * radius, z),
+            (x - .55 * radius, z + .38 * radius),
+            (x + .58 * radius, z + .30 * radius),
+            (x + 1.04 * radius, z),
+            (x + .58 * radius, z - .30 * radius),
+            (x - .55 * radius, z - .38 * radius),
+        ], style.primary)
+        polygon([
+            (x - .52 * radius, z),
+            (x - .22 * radius, z + .22 * radius),
+            (x + .56 * radius, z + .17 * radius),
+            (x + .82 * radius, z),
+            (x + .56 * radius, z - .17 * radius),
+            (x - .22 * radius, z - .22 * radius),
+        ], style.secondary, order=1)
+        rectangle(x - .42 * radius, z, .32 * radius, .50 * radius,
+                  '#9B5FA0', order=2)
+        circle(x + .08 * radius, z, .12 * radius, '#E8D6E7', order=3)
+        rectangle(x + .08 * radius, z, .08 * radius, .72 * radius,
+                  '#6D4477', order=3, line=0.22)
+        polygon([
+            (x + .98 * radius, z),
+            (x + 1.18 * radius, z + .11 * radius),
+            (x + 1.18 * radius, z - .11 * radius),
+        ], '#D9C0B5', order=4)
     else:
         raise KeyError(f'No schematic registered for {name}')
 

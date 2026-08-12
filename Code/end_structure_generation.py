@@ -3,15 +3,16 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Circle
 import numpy as np
 
 from core.end_generation import (
     end_city_candidates,
+    end_city_qualification_probability,
     gateway_positions,
     outer_gateway_positions,
-    outer_island_seed_field,
+    outer_island_projection,
 )
 from core.end_visuals import ISLAND_CMAP, draw_central_island
 from core.structure_visuals import draw_structure_schematic
@@ -21,30 +22,45 @@ from core.style import COLORS, apply_style, style_axis
 apply_style()
 
 
+CITY_PROBABILITY_CMAP = LinearSegmentedColormap.from_list(
+    'end_city_qualification',
+    [COLORS['background'], '#31234A', '#7650A5', '#D978B2', '#F4D46A'],
+)
+
+
 def create_end_structure_generation(save_path, dpi=210, seed=42):
     """Render End-city placement and both gateway endpoints."""
     limit = 3600.0
-    sites = outer_island_seed_field(seed, max_coordinate_blocks=int(limit))
-    radii = np.hypot(sites['block_x'], sites['block_z'])
-    outer = radii > 1024.0
-    strength = 22.0 - sites['falloff'][outer]
+    island_x, island_z, island_projection = outer_island_projection(
+        seed, max_coordinate_blocks=int(limit), resolution=901,
+    )
     cities = end_city_candidates(seed, max_coordinate_blocks=int(limit))
+    probability_x, probability_z, qualification_probability = (
+        end_city_qualification_probability(
+            seed, max_coordinate_blocks=int(limit),
+        )
+    )
     outer_gateways = outer_gateway_positions(seed)
     central_gateways = gateway_positions()
 
     figure = plt.figure(figsize=(16.0, 9.0), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[3.8, 1.18],
-        left=0.055, right=0.98, top=0.91, bottom=0.08, wspace=0.10,
+        1, 2, width_ratios=[3.55, 1.30],
+        left=0.055, right=0.985, top=0.91, bottom=0.08, wspace=0.025,
     )
     axis = figure.add_subplot(grid[0, 0])
     side = figure.add_subplot(grid[0, 1])
 
-    axis.scatter(
-        sites['block_x'][outer], sites['block_z'][outer],
-        s=2.0 + 0.75 * strength, c=strength,
-        cmap=ISLAND_CMAP, vmin=1.0, vmax=13.0,
-        marker='o', linewidths=0, alpha=0.58, zorder=1,
+    island_values = island_projection.filled(0.0)
+    island_rgba = ISLAND_CMAP(island_values)
+    island_visible = ~np.ma.getmaskarray(island_projection)
+    island_rgba[..., 3] = np.where(
+        island_visible, 0.50 + 0.46 * island_values, 0.0,
+    )
+    axis.imshow(
+        island_rgba,
+        extent=(island_x[0], island_x[-1], island_z[0], island_z[-1]),
+        origin='lower', interpolation='nearest', zorder=1,
     )
     axis.add_patch(Circle(
         (0, 0), 1024, fill=False, edgecolor=COLORS['end_stone'],
@@ -73,7 +89,7 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     for city in cities:
         draw_structure_schematic(
             axis, 'end_city', city['block_x'], city['block_z'],
-            size=42.0, zorder=7,
+            size=76.0, zorder=7,
         )
 
     axis.set_xlim(-limit, limit)
@@ -90,7 +106,7 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         0.0, 0.98, 'GATEWAY PAIRING', color=COLORS['text'],
         fontsize=10.5, fontweight='black', va='top',
     )
-    inset = side.inset_axes([0.05, 0.57, 0.90, 0.35])
+    inset = side.inset_axes([0.04, 0.60, 0.92, 0.34])
     draw_central_island(inset, seed=seed, extent=112, alpha=0.68, zorder=0)
     inset.add_patch(Circle(
         (0, 0), 96, fill=False, edgecolor=COLORS['cyan'],
@@ -112,33 +128,53 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     inset.axis('off')
 
     side.text(
-        0.0, 0.51, 'MAP LEGEND', color=COLORS['text'],
-        fontsize=10.5, fontweight='black', va='top',
+        0.0, 0.535, 'FIXED-SEED CITY QUALIFICATION PRIOR',
+        color=COLORS['text'], fontsize=10.0, fontweight='black', va='top',
     )
-    legend_handles = [
-        Line2D([0], [0], marker='s', linestyle='none', markersize=7,
-               markerfacecolor=COLORS['cyan'], markeredgecolor=COLORS['text'],
-               label='Central gateway, radius 96'),
-        Line2D([0], [0], marker='D', linestyle='none', markersize=7,
-               markerfacecolor=COLORS['portal'], markeredgecolor=COLORS['text'],
-               label='Outer safe destination'),
-        Line2D([0], [0], marker='o', linestyle='none', markersize=6,
-               markerfacecolor=COLORS['end_stone'], markeredgecolor='none',
-               label='Outer-island source site'),
-    ]
-    side.legend(
-        handles=legend_handles, loc='upper left', bbox_to_anchor=(-0.02, 0.47),
-        frameon=False, fontsize=8.1, labelcolor=COLORS['text'],
+    probability_axis = side.inset_axes([0.04, 0.115, 0.92, 0.375])
+    probability_image = probability_axis.imshow(
+        qualification_probability * 100.0,
+        extent=(
+            probability_x[0], probability_x[-1],
+            probability_z[0], probability_z[-1],
+        ),
+        origin='lower', cmap=CITY_PROBABILITY_CMAP,
+        vmin=0.0, vmax=100.0 / 81.0,
+        interpolation='bilinear', zorder=1,
     )
-    draw_structure_schematic(side, 'end_city', 0.10, 0.25, size=0.055, zorder=5)
+    probability_axis.add_patch(Circle(
+        (0, 0), 1024, fill=False, edgecolor=COLORS['end_stone'],
+        linewidth=0.8, linestyle='--', alpha=0.78, zorder=3,
+    ))
+    for city in cities:
+        draw_structure_schematic(
+            probability_axis, 'end_city', city['block_x'], city['block_z'],
+            size=62.0, zorder=4, alpha=0.82,
+        )
+    probability_axis.set_xlim(-limit, limit)
+    probability_axis.set_ylim(-limit, limit)
+    probability_axis.set_xticks((-3000, 0, 3000))
+    probability_axis.set_yticks((-3000, 0, 3000))
+    probability_axis.set_title(
+        '1/81 candidate prior masked by modeled island support',
+        fontsize=7.2, pad=4,
+    )
+    style_axis(probability_axis, equal=True, grid=False)
+    probability_axis.tick_params(labelsize=5.8, pad=1.5)
+
+    colorbar_axis = side.inset_axes([0.14, 0.060, 0.72, 0.020])
+    colorbar = figure.colorbar(
+        probability_image, cax=colorbar_axis, orientation='horizontal',
+    )
+    colorbar.ax.set_title(
+        'Modeled qualification probability (%)', fontsize=6.3, pad=3,
+    )
+    colorbar.ax.tick_params(labelsize=5.7, pad=1.5)
+    colorbar.outline.set_edgecolor(COLORS['grid'])
     side.text(
-        0.22, 0.25, f'End city\n{len(cities)} qualified starts shown',
-        color=COLORS['text'], fontsize=8.0, va='center', linespacing=1.35,
-    )
-    side.text(
-        0.0, 0.13,
-        'City grid: 20 x 20 chunks\nCandidate window: 9 x 9 chunks\nSalt: 10387313\n\nOuter endpoints snap the 1,024-block\nideal vector to this 2D island model.',
-        color=COLORS['muted'], fontsize=7.6, va='top', linespacing=1.45,
+        0.50, 0.010,
+        f'{len(cities)} qualified starts | ship glyph is a symbolic End-city marker',
+        color=COLORS['muted'], fontsize=6.5, ha='center', va='bottom',
     )
 
     figure.suptitle(

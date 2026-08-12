@@ -14,7 +14,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.path import Path as MarkerPath
 from matplotlib.patches import (
-    Circle, Ellipse, FancyArrowPatch, FancyBboxPatch, Rectangle,
+    Circle, Ellipse, FancyArrowPatch, FancyBboxPatch, RegularPolygon,
 )
 import numpy as np
 from scipy.ndimage import maximum_filter
@@ -42,12 +42,15 @@ apply_style()
 
 DRAGON_MARKER = MarkerPath(
     np.array([
-        [1.00, 0.00], [0.55, 0.18], [0.24, 0.14], [0.03, 0.72],
-        [-0.22, 0.78], [-0.08, 0.18], [-0.78, 0.35], [-1.00, 0.00],
-        [-0.78, -0.35], [-0.08, -0.18], [-0.22, -0.78], [0.03, -0.72],
-        [0.24, -0.14], [0.55, -0.18], [1.00, 0.00],
+        [1.24, 0.00], [1.02, 0.14], [1.10, 0.34], [0.82, 0.18],
+        [0.55, 0.16], [0.27, 0.27], [0.05, 0.70], [-0.17, 0.55],
+        [-0.43, 0.80], [-0.54, 0.56], [-0.29, 0.20], [-0.56, 0.12],
+        [-1.67, 0.00], [-0.56, -0.12], [-0.29, -0.20], [-0.54, -0.56],
+        [-0.43, -0.80], [-0.17, -0.55], [0.05, -0.70], [0.27, -0.27],
+        [0.55, -0.16], [0.82, -0.18], [1.10, -0.34], [1.02, -0.14],
+        [1.24, 0.00],
     ]),
-    [MarkerPath.MOVETO] + [MarkerPath.LINETO] * 13 + [MarkerPath.CLOSEPOLY],
+    [MarkerPath.MOVETO] + [MarkerPath.LINETO] * 23 + [MarkerPath.CLOSEPOLY],
 )
 
 
@@ -64,7 +67,11 @@ def _arena_static(
     else:
         ax.set_xlabel('X (blocks)')
         ax.set_ylabel('Z (blocks)')
-        ax.grid(color=COLORS['grid'], alpha=0.22, linewidth=0.45)
+        ax.set_axisbelow(False)
+        ax.grid(
+            color='#59677E', alpha=0.44, linewidth=0.68,
+            zorder=3.1,
+        )
         for spine in ax.spines.values():
             spine.set_color(COLORS['grid'])
         ax.tick_params(colors=COLORS['muted'], labelsize=8)
@@ -77,18 +84,19 @@ def _arena_static(
         ax.plot(
             [DRAGON_NODES[start, 0], DRAGON_NODES[end, 0]],
             [DRAGON_NODES[start, 1], DRAGON_NODES[end, 1]],
-            color='#7C8391', linewidth=0.50 if compact else 0.76,
-            alpha=0.24 if compact else 0.38, zorder=1,
+            color='#A4AEC0', linewidth=0.72 if compact else 1.02,
+            alpha=0.42 if compact else 0.54, zorder=1,
         )
 
     ax.scatter(
         DRAGON_NODES[:, 0], DRAGON_NODES[:, 1],
-        s=8 if compact else 13, c=COLORS['end_stone'], alpha=0.58,
+        s=11 if compact else 17, c=COLORS['end_stone'], alpha=0.76,
         edgecolors=COLORS['end_shadow'], linewidths=0.22, zorder=2,
     )
     spikes = draw_end_spikes(
         ax, seed=seed, crystals_alive=10, zorder=4,
-        tower_edgecolor='#3D334A', cage_linewidth=1.55, cage_extent=3.25,
+        tower_edgecolor='#786A8B', tower_linewidth=1.35,
+        cage_linewidth=1.75, cage_extent=3.25,
     )
     draw_end_fountain(ax, active=False, zorder=7)
     ax.set_xlim(-limits, limits)
@@ -103,112 +111,149 @@ def _draw_state_machine(ax):
     ax.set_facecolor(COLORS['background'])
 
     positions = {
-        'holding': (0.50, 0.90),
-        'strafing': (0.20, 0.74),
-        'charging': (0.80, 0.74),
-        'landing_approach': (0.50, 0.64),
-        'landing': (0.50, 0.48),
-        'perching': (0.50, 0.32),
-        'takeoff': (0.80, 0.48),
+        'holding': (0.50, 0.95),
+        'strafing': (0.17, 0.85),
+        'charging_player': (0.83, 0.85),
+        'landing_approach': (0.50, 0.81),
+        'landing': (0.50, 0.69),
+        'sitting_scanning': (0.27, 0.58),
+        'sitting_attacking': (0.27, 0.47),
+        'sitting_flaming': (0.27, 0.36),
+        'takeoff': (0.68, 0.47),
+        'hover': (0.74, 0.60),
+        'dying': (0.74, 0.34),
     }
     transitions = [
-        ('holding', 'strafing', 0.12),
-        ('strafing', 'holding', 0.12),
-        ('holding', 'charging', -0.12),
-        ('charging', 'holding', -0.12),
-        ('holding', 'landing_approach', 0.0),
-        ('landing_approach', 'landing', 0.0),
-        ('landing', 'perching', 0.0),
-        ('perching', 'takeoff', 0.0),
-        ('takeoff', 'holding', 0.06),
+        ('holding', 'strafing', 0.10, False),
+        ('strafing', 'holding', 0.10, False),
+        ('holding', 'charging_player', -0.10, False),
+        ('charging_player', 'holding', -0.10, False),
+        ('holding', 'landing_approach', 0.0, False),
+        ('landing_approach', 'landing', 0.0, False),
+        ('landing', 'sitting_scanning', 0.05, False),
+        ('sitting_scanning', 'sitting_attacking', 0.0, False),
+        ('sitting_attacking', 'sitting_flaming', 0.0, False),
+        ('sitting_flaming', 'sitting_scanning', 0.20, False),
+        ('sitting_flaming', 'takeoff', 0.04, False),
+        ('sitting_scanning', 'takeoff', -0.08, False),
+        ('takeoff', 'holding', -0.32, False),
     ]
-    for start, end, curvature in transitions:
+    for start, end, curvature, exceptional in transitions:
         connection = FancyArrowPatch(
             positions[start], positions[end], arrowstyle='-|>',
-            mutation_scale=12.0, color='#65458C', linewidth=1.65,
-            connectionstyle=f'arc3,rad={curvature}', alpha=0.82,
-            shrinkA=30, shrinkB=30, zorder=2,
+            mutation_scale=9.0,
+            color='#566785' if exceptional else '#7455A3',
+            linewidth=1.0 if exceptional else 1.35,
+            linestyle='--' if exceptional else '-',
+            connectionstyle=f'arc3,rad={curvature}',
+            alpha=0.48 if exceptional else 0.80,
+            shrinkA=23, shrinkB=23, zorder=2,
         )
         ax.add_patch(connection)
 
     labels = {
         'holding': 'HOLDING',
         'strafing': 'STRAFE',
-        'charging': 'CHARGE',
+        'charging_player': 'CHARGE',
         'landing_approach': 'APPROACH',
         'landing': 'LAND',
-        'perching': 'PERCH',
         'takeoff': 'TAKEOFF',
+        'sitting_flaming': 'BREATH',
+        'sitting_scanning': 'SEARCH',
+        'sitting_attacking': 'ROAR',
+        'dying': 'DYING',
+        'hover': 'HOVER',
     }
     nodes = {}
-    node_width = 0.245
-    node_height = 0.095
+    exceptional_states = {'dying', 'hover'}
+    node_width = 0.215
+    node_height = 0.066
     for state in STATE_ORDER:
         position = positions[state]
         shadow = Ellipse(
-            (position[0], position[1] - 0.012),
+            (position[0], position[1] - 0.008),
             node_width, node_height,
             facecolor=COLORS['end_shadow'], edgecolor='none',
-            alpha=0.34, zorder=3,
+            alpha=0.18 if state in exceptional_states else 0.30, zorder=3,
         )
         node = Ellipse(
             position, node_width, node_height,
-            facecolor=to_rgba(STATE_COLORS[state], 0.62),
-            edgecolor=STATE_COLORS[state], linewidth=1.25, zorder=4,
+            facecolor=to_rgba(
+                STATE_COLORS[state], 0.24 if state in exceptional_states else 0.58,
+            ),
+            edgecolor=STATE_COLORS[state],
+            linewidth=0.85 if state in exceptional_states else 1.15,
+            zorder=4,
         )
         ax.add_patch(shadow)
         ax.add_patch(node)
         ax.text(
             position[0], position[1], labels[state],
             ha='center', va='center', color=COLORS['text'],
-            fontsize=9.3, fontweight='black', family='monospace',
+            fontsize=7.2, fontweight='black', family='monospace',
+            alpha=0.66 if state in exceptional_states else 1.0,
             zorder=5,
         )
         nodes[state] = node
 
     hud = FancyBboxPatch(
-        (0.055, 0.018), 0.89, 0.190,
+        (0.045, 0.018), 0.91, 0.182,
         boxstyle='round,pad=0.012,rounding_size=0.025',
-        facecolor=to_rgba(COLORS['panel'], 0.94),
-        edgecolor='#65458C', linewidth=1.15, zorder=4,
+        facecolor=to_rgba(COLORS['panel_alt'], 0.96),
+        edgecolor='#7455A3', linewidth=1.25, zorder=4,
     )
     ax.add_patch(hud)
     ax.text(
-        0.09, 0.160, 'PERCH CHANCE', ha='left', va='center',
-        color=COLORS['muted'], fontsize=7.1, family='monospace', zorder=5,
+        0.075, 0.166, 'NEXT HOLDING-PATH LANDING ROLL',
+        ha='left', va='center', color=COLORS['muted'],
+        fontsize=6.5, fontweight='bold', family='monospace', zorder=5,
     )
     probability_background = FancyBboxPatch(
-        (0.34, 0.145), 0.40, 0.030,
-        boxstyle='round,pad=0.002,rounding_size=0.014',
+        (0.43, 0.118), 0.47, 0.028,
+        boxstyle='round,pad=0.002,rounding_size=0.012',
         facecolor=COLORS['grid'], edgecolor=COLORS['muted'],
-        linewidth=0.35, alpha=0.82, zorder=5,
+        linewidth=0.38, alpha=0.88, zorder=5,
     )
     probability_fill = FancyBboxPatch(
-        (0.34, 0.145), 0.002, 0.030,
-        boxstyle='round,pad=0.002,rounding_size=0.014',
-        facecolor='#65458C', edgecolor='none', zorder=6,
+        (0.43, 0.118), 0.002, 0.028,
+        boxstyle='round,pad=0.002,rounding_size=0.012',
+        facecolor='#8B5CB5', edgecolor='none', zorder=6,
     )
     ax.add_patch(probability_background)
     ax.add_patch(probability_fill)
     probability_text = ax.text(
-        0.91, 0.160, '', ha='right', va='center',
-        color=COLORS['text'], fontsize=7.0, family='monospace', zorder=6,
+        0.925, 0.166, '', ha='right', va='center',
+        color=COLORS['text'], fontsize=7.5, fontweight='bold',
+        family='monospace', zorder=6,
     )
-    ax.text(
-        0.09, 0.076, 'END CRYSTALS', ha='left', va='center',
-        color=COLORS['muted'], fontsize=7.1, family='monospace', zorder=5,
+    probability_formula = ax.text(
+        0.075, 0.132, '', ha='left', va='center',
+        color='#B9C5D8', fontsize=6.7, family='monospace', zorder=6,
+    )
+    crystal_label = ax.text(
+        0.075, 0.069, 'END CRYSTALS', ha='left', va='center',
+        color=COLORS['muted'], fontsize=6.6, fontweight='bold',
+        family='monospace', zorder=5,
     )
     crystal_icons = []
     for index in range(10):
-        x = 0.36 + index * 0.052
-        icon = Circle(
-            (x, 0.076), radius=0.014,
-            facecolor='#9B5DE5',
-            edgecolor=COLORS['text'], linewidth=0.32, zorder=6,
+        x = 0.43 + index * 0.051
+        glow = Circle(
+            (x, 0.069), radius=0.018,
+            facecolor='#A86BE0', edgecolor='none', alpha=0.20, zorder=5.5,
         )
+        icon = RegularPolygon(
+            (x, 0.069), numVertices=4, radius=0.0125,
+            orientation=np.pi / 4.0, facecolor='#B66FED',
+            edgecolor=COLORS['text'], linewidth=0.38, zorder=6,
+        )
+        ax.add_patch(glow)
         ax.add_patch(icon)
-        crystal_icons.append(icon)
-    return nodes, crystal_icons, probability_fill, probability_text
+        crystal_icons.append({'glow': glow, 'core': icon})
+    return (
+        nodes, crystal_icons, probability_fill, probability_text,
+        probability_formula, crystal_label,
+    )
 
 
 def create_dragon_pathfinding_animation(
@@ -227,14 +272,15 @@ def create_dragon_pathfinding_animation(
     arena = figure.add_subplot(grid[0, 0])
     machine = figure.add_subplot(grid[0, 1])
     spike_artists = _arena_static(arena)
-    state_nodes, crystal_icons, probability_fill, probability_text = (
-        _draw_state_machine(machine)
-    )
+    (
+        state_nodes, crystal_icons, probability_fill, probability_text,
+        probability_formula, crystal_label,
+    ) = _draw_state_machine(machine)
 
     trail = LineCollection([], linewidths=2.8, capstyle='round', zorder=9)
     arena.add_collection(trail)
     active = arena.scatter(
-        [], [], s=235, marker=DRAGON_MARKER, c=COLORS['blue'],
+        [], [], s=520, marker=DRAGON_MARKER, c=COLORS['blue'],
         edgecolors=COLORS['text'], linewidths=1.1, zorder=11,
     )
     fireball_glow = arena.scatter(
@@ -299,15 +345,20 @@ def create_dragon_pathfinding_animation(
 
         for state, node in state_nodes.items():
             is_active = state == frame.state
-            node.set_facecolor(to_rgba(STATE_COLORS[state], 0.84 if is_active else 0.60))
+            inactive_alpha = 0.24 if state in {'dying', 'hover'} else 0.56
+            node.set_facecolor(to_rgba(
+                STATE_COLORS[state], 0.86 if is_active else inactive_alpha,
+            ))
             node.set_edgecolor(COLORS['text'] if is_active else STATE_COLORS[state])
-            node.set_linewidth(3.0 if is_active else 1.25)
+            node.set_linewidth(
+                2.7 if is_active else (0.85 if state in {'dying', 'hover'} else 1.15)
+            )
 
         probability = perch_probability(frame.crystals_alive)
-        probability_fill.set_width(max(0.004, 0.40 * probability / (1.0 / 3.0)))
-        probability_text.set_text(
-            f'{probability * 100:4.1f}%  1/(3+{frame.crystals_alive})'
-        )
+        probability_fill.set_width(max(0.004, 0.47 * probability / (1.0 / 3.0)))
+        probability_text.set_text(f'{probability * 100:4.1f}%')
+        probability_formula.set_text(f'1 / (3 + {frame.crystals_alive})')
+        crystal_label.set_text(f'END CRYSTALS  {frame.crystals_alive}/10')
         alive_indices = (
             set(frame.alive_crystals)
             if frame.alive_crystals is not None
@@ -316,9 +367,10 @@ def create_dragon_pathfinding_animation(
         for index, icon in enumerate(crystal_icons):
             alive = index in alive_indices
             color = '#9B5DE5' if alive else COLORS['coral']
-            alpha = 0.95 if alive else 0.18
-            icon.set_facecolor(color)
-            icon.set_alpha(alpha)
+            icon['core'].set_facecolor(color)
+            icon['core'].set_alpha(0.98 if alive else 0.16)
+            icon['glow'].set_facecolor(color)
+            icon['glow'].set_alpha(0.28 if alive else 0.04)
         set_crystal_states(spike_artists, alive_indices)
         return []
 
@@ -355,7 +407,7 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
         trail = LineCollection([], linewidths=3.2, capstyle='round', zorder=9)
         arena.add_collection(trail)
         active = arena.scatter(
-            [], [], s=210, marker=DRAGON_MARKER,
+            [], [], s=420, marker=DRAGON_MARKER,
             c=COLORS['blue'], edgecolors=COLORS['text'],
             linewidths=1.0, zorder=11,
         )
@@ -412,11 +464,21 @@ def create_trajectory_ensemble_animation(
     save_path, seed=12031, trajectories=240, fps=8, frames=144,
 ):
     """Animate dragon approaches with distinct-trajectory intersection counts."""
+    golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+    player_positions = [
+        (
+            (24.0 + 24.0 * ((index * 37) % trajectories) / max(trajectories - 1, 1))
+            * np.cos(index * golden_angle),
+            (24.0 + 24.0 * ((index * 37) % trajectories) / max(trajectories - 1, 1))
+            * np.sin(index * golden_angle),
+        )
+        for index in range(trajectories)
+    ]
     paths = [
         simulate_perch_trajectory(
             seed + index * 7919,
             crystals_alive=10 - (index % 6),
-            player_position=(34.0, -18.0),
+            player_position=player_positions[index],
         )[0]
         for index in range(trajectories)
     ]
@@ -438,7 +500,7 @@ def create_trajectory_ensemble_animation(
         column = hotspot_columns[candidate]
         center_x = (bins[column] + bins[column + 1]) / 2.0
         center_z = (bins[row] + bins[row + 1]) / 2.0
-        if np.hypot(center_x, center_z) <= 8.0:
+        if np.hypot(center_x, center_z) <= 24.0:
             continue
         if any(
             (row - hotspot_rows[other]) ** 2
@@ -458,14 +520,14 @@ def create_trajectory_ensemble_animation(
 
     figure = plt.figure(figsize=(13.4, 7.2), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[1.58, 1.0],
-        left=0.065, right=0.98, top=0.90, bottom=0.17, wspace=0.24,
+        1, 2, width_ratios=[1.54, 1.0],
+        left=0.055, right=0.985, top=0.90, bottom=0.17, wspace=0.11,
     )
     axis = figure.add_subplot(grid[0, 0])
     frequency_axis = figure.add_subplot(grid[0, 1])
     _arena_static(
         axis, seed=42, compact=True, axis_off=False,
-        limits=88, island_alpha=0.42,
+        limits=88, island_alpha=0.48,
     )
 
     image = axis.imshow(
@@ -481,7 +543,7 @@ def create_trajectory_ensemble_animation(
     local_trail = LineCollection([], linewidths=3.1, capstyle='round', zorder=10)
     axis.add_collection(local_trail)
     dragon = axis.scatter(
-        [], [], s=245, marker=DRAGON_MARKER,
+        [], [], s=520, marker=DRAGON_MARKER,
         c='#7E57C2', edgecolors=COLORS['text'], linewidths=1.15, zorder=12,
     )
     count_text = axis.text(
@@ -495,7 +557,7 @@ def create_trajectory_ensemble_animation(
     )
     bars = frequency_axis.barh(
         np.arange(len(hotspot_values)), np.zeros(len(hotspot_values)),
-        color=plt.get_cmap('plasma')(np.linspace(0.28, 0.88, len(hotspot_values))),
+        color=plt.get_cmap('magma')(0.12),
         edgecolor=COLORS['text'], linewidth=0.45, alpha=0.92,
     )
     frequency_axis.set_yticks(
@@ -503,17 +565,27 @@ def create_trajectory_ensemble_animation(
         [f'({x:+.0f}, {z:+.0f})' for x, z in zip(hotspot_x, hotspot_z)],
     )
     frequency_axis.invert_yaxis()
-    frequency_axis.set_xlim(0, max(hotspot_values) * 1.12)
-    frequency_axis.set_xlabel('Distinct trajectories entering the cell')
-    frequency_axis.set_ylabel('Critical X, Z cell (blocks)')
-    frequency_axis.set_title('Intersection frequency at critical flight cells', fontsize=11, pad=8)
+    maximum_hotspot = max(float(np.max(hotspot_values)), 1.0)
+    frequency_axis.set_xlim(0, maximum_hotspot * 1.18)
+    frequency_axis.set_xlabel('Distinct legal routes entering the cell')
+    frequency_axis.set_ylabel('Final hotspot center X, Z (blocks)')
+    frequency_axis.set_title(
+        'Final repeatability hotspots (counts accumulating)', fontsize=10.8, pad=8,
+    )
     frequency_axis.grid(axis='x', color=COLORS['grid'], alpha=0.35, linewidth=0.55)
     for spine in frequency_axis.spines.values():
         spine.set_color(COLORS['grid'])
     frequency_axis.tick_params(colors=COLORS['muted'], labelsize=7.7)
+    bar_value_texts = [
+        frequency_axis.text(
+            0.0, index, '', ha='left', va='center',
+            color=COLORS['text'], fontsize=7.2, family='monospace',
+        )
+        for index in range(len(hotspot_values))
+    ]
     figure.text(
-        0.665, 0.055,
-        'Each trajectory contributes at most once per cell.\nHigh bars mark repeatable approach corridors.',
+        0.645, 0.055,
+        'Final cells are fixed for comparison; each route contributes once per cell.\nPlayer targets span a deterministic 24-48 block annulus; the portal zone is excluded.',
         color=COLORS['muted'],
         fontsize=7.4, ha='left', va='top', linespacing=1.35,
     )
@@ -541,7 +613,7 @@ def create_trajectory_ensemble_animation(
         ]
         lines.set_colors(line_colors)
 
-        feature_frames = 16
+        feature_frames = 24
         feature_count = max(1, int(np.ceil(frames / feature_frames)))
         feature_slot = min(frame_index // feature_frames, feature_count - 1)
         featured_index = round(
@@ -552,6 +624,8 @@ def create_trajectory_ensemble_animation(
         point_index = min(len(featured) - 1, round(local_phase * (len(featured) - 1)))
         point = featured[point_index]
         dragon.set_offsets(point.reshape(1, 2))
+        edge_fade = min(local_phase / 0.12, (1.0 - local_phase) / 0.12, 1.0)
+        dragon.set_alpha(0.35 + 0.65 * max(edge_fade, 0.0))
         trail_start = max(0, point_index - 22)
         local_points = featured[trail_start:point_index + 1]
         if len(local_points) > 1:
@@ -571,8 +645,15 @@ def create_trajectory_ensemble_animation(
         else:
             local_trail.set_segments([])
 
-        for bar, row, column in zip(bars, hotspot_rows, hotspot_columns):
-            bar.set_width(current_frequency[row, column])
+        for bar, label, row, column in zip(
+            bars, bar_value_texts, hotspot_rows, hotspot_columns,
+        ):
+            value = float(current_frequency[row, column])
+            bar.set_width(value)
+            color_value = 0.12 + 0.82 * value / maximum_hotspot
+            bar.set_facecolor(plt.get_cmap('magma')(color_value))
+            label.set_x(value + maximum_hotspot * 0.015)
+            label.set_text(str(int(value)) if value > 0 else '')
         count_text.set_text(f'{shown:03d} seeded approaches')
         return []
 

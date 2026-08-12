@@ -60,7 +60,7 @@ def draw_end_fountain(ax, active=False, zorder=7):
             block = Rectangle(
                 (block_x - 0.5, block_z - 0.5), 1.0, 1.0,
                 facecolor=color, edgecolor=BEDROCK_DARK,
-                linewidth=0.42, zorder=zorder,
+                linewidth=0.68, zorder=zorder,
             )
             ax.add_patch(block)
             artists.append(block)
@@ -68,10 +68,17 @@ def draw_end_fountain(ax, active=False, zorder=7):
     pillar = Rectangle(
         (-0.5, -0.5), 1.0, 1.0,
         facecolor='#74717E', edgecolor=COLORS['text'],
-        linewidth=0.55, zorder=zorder + 2,
+        linewidth=0.92, zorder=zorder + 2,
     )
     ax.add_patch(pillar)
     artists.append(pillar)
+    rim = Circle(
+        (0.0, 0.0), 3.62, fill=False,
+        edgecolor='#8D8998', linewidth=1.25, alpha=0.88,
+        zorder=zorder + 1.5,
+    )
+    ax.add_patch(rim)
+    artists.append(rim)
     if active:
         portal_points = np.array([
             [-1.7, -0.7], [-0.9, 1.3], [0.8, -1.5], [1.6, 0.8],
@@ -96,7 +103,7 @@ def draw_end_fountain(ax, active=False, zorder=7):
 def draw_end_spikes(
     ax, seed=42, crystals_alive=10, alpha=1.0, zorder=5,
     radius_override=None, tower_edgecolor='#6E4B86',
-    cage_linewidth=0.75, cage_extent=2.7,
+    tower_linewidth=0.7, cage_linewidth=0.75, cage_extent=2.7,
 ):
     """Draw spike footprints with top-down crystals and cage marks.
 
@@ -115,7 +122,7 @@ def draw_end_spikes(
         tower = Circle(
             (x, z), radius,
             facecolor=COLORS['obsidian'], edgecolor=tower_edgecolor,
-            linewidth=0.7, alpha=0.96 * alpha, zorder=zorder,
+            linewidth=tower_linewidth, alpha=0.96 * alpha, zorder=zorder,
         )
         core = Circle(
             (x, z), radius * 0.68,

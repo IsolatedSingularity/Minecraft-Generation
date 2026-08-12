@@ -30,12 +30,12 @@ from core.constants import STRONGHOLD_RINGS, BIOME_COLORS
 Real-time simulation of dragon behavior with:
 
 - 24 pathfinding nodes across 60, 40, and 20-block rings
-- 7 behavioral states with probability-weighted transitions
+- All 11 Java 1.16.1 phase types, with nine normal combat phases and two subdued exceptional phases
 - Crystal destruction mechanics affecting perch probability
 - Source-shaped central-island projection with exact spike footprints
-- Graph-based navigation with weighted edges
-- Uniform horizontal state ovals with bright directed connections
-- A 240-route ensemble with age-temperature fading and sparse direction arrows
+- Graph-based navigation expanded exclusively through legal weighted edges
+- Compact phase ovals with an explicit next-holding-path landing roll
+- A 240-route legal-edge ensemble with stable final hotspots and frequency-mapped bars
 
 ```python
 class EnderDragonAI:
@@ -45,6 +45,16 @@ class EnderDragonAI:
 ```
 
 **Outputs**: `Plots/dragon_pathfinding_hero.gif`, detail clips, and `Plots/dragon_trajectory_ensemble.gif`
+
+#### `end_structure_generation.py`
+**Fixed-Seed End-City Qualification Visualization**
+
+- Continuous projected outer-island footprints rather than isolated source dots
+- Exact 20 by 20 chunk placement regions and uniform 9 by 9 candidate windows
+- Fixed-seed `1/81` candidate prior masked by the documented 2D island-support gate
+- Simplified ship glyphs used symbolically for qualified End-city starts
+
+**Output**: `Plots/end_structure_generation.png`
 
 #### `end_dimension_overview.py`
 **Three-Panel End Dimension Overview**

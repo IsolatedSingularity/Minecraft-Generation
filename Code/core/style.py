@@ -32,11 +32,15 @@ COLORS = {
 STATE_COLORS = {
     'holding': COLORS['blue'],
     'strafing': COLORS['coral'],
-    'charging': COLORS['orange'],
     'landing_approach': COLORS['violet'],
     'landing': COLORS['magenta'],
-    'perching': COLORS['green'],
     'takeoff': COLORS['gold'],
+    'sitting_flaming': COLORS['green'],
+    'sitting_scanning': '#5FBFA6',
+    'sitting_attacking': '#89D486',
+    'charging_player': COLORS['orange'],
+    'dying': '#C95C74',
+    'hover': '#7C8BA1',
 }
 
 

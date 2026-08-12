@@ -189,7 +189,7 @@ for neighbor in adjacency[current]:
     weight = np.linalg.norm(DRAGON_NODES[current] - DRAGON_NODES[neighbor])
 ```
 
-The graph selects meaningful targets. A Catmull-Rom curve then passes smoothly through those targets so the dragon flows between and around nodes instead of hopping in rigid straight segments. This interpolation is visual steering, not a claim that Minecraft uses that exact spline formula.
+The graph selects meaningful targets. Every graph-bound portion of a seeded route is expanded through legal decoded edges before a Catmull-Rom curve passes through those targets. This prevents disconnected chords while allowing the dragon to cross the inner graph instead of being locked to the outer ring. The interpolation is visual steering, not a claim that Minecraft uses that exact spline formula.
 
 #### The animation
 
@@ -197,9 +197,9 @@ The graph selects meaningful targets. A Catmull-Rom curve then passes smoothly t
 
 The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, explosions, and recent trail. Grey lines show legal graph edges. The dragon-shaped marker rotates with its direction of travel.
 
-The right panel shows the seven-state cycle. Every state keeps its own colour. The currently selected state alone receives a thick white outline. Dark-purple arrows show legal transitions, including the return from Takeoff to Holding. The rounded progress bar displays perch probability, while circular crystal indicators mirror the surviving, non-circular destruction order on the island.
+The right panel shows all 11 Java 1.16.1 phase types. The normal combat chain distinguishes Holding, Strafe, Charging Player, Landing Approach, Landing, Sitting Scanning, Sitting Attacking, Sitting Flaming, and Takeoff. Dying and Hover remain visible as subdued exceptional phases rather than being presented as part of the repeating combat loop. The currently selected phase alone receives a thick white outline.
 
-Crystal destruction begins after the opening flight has been established. Fireball motion appears during the strafing pass, and expanding rings identify crystal explosions. The same GIF is used here and as the repository hero so the introduction and technical explanation cannot drift apart.
+The dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event, while fireball motion appears during the representative strafing pass. The same GIF is used here and as the repository hero so the introduction and technical explanation cannot drift apart.
 
 #### Phase details
 
@@ -211,7 +211,7 @@ Crystal destruction begins after the opening flight has been established. Fireba
 </tr>
 <tr>
 <td><img src="Plots/dragon_holding_strafe.gif" alt="Holding, strafing, and charging dragon path states" /></td>
-<td><img src="Plots/dragon_landing_perch.gif" alt="Landing approach and perching dragon path states" /></td>
+<td><img src="Plots/dragon_landing_perch.gif" alt="Landing approach and distinct sitting dragon phases" /></td>
 <td><img src="Plots/dragon_takeoff.gif" alt="Dragon takeoff path state" /></td>
 </tr>
 </table>
@@ -238,7 +238,7 @@ $$
 F_{ab} = \sum_i \mathbf{1}\!\left[\gamma_i \text{ enters cell } (a,b)\right].
 $$
 
-This prevents a slow trajectory from inflating a cell merely because it supplied many nearby samples. High $F_{ab}$ values identify repeatable approach corridors and critical flight cells. The universal fountain endpoint is excluded from hotspot ranking because every landing route would otherwise report the same trivial terminal point.
+This prevents a slow trajectory from inflating a cell merely because it supplied many nearby samples. High $F_{ab}$ values identify repeatable approach corridors and critical flight cells. The shared 24-block fountain-approach zone is excluded from hotspot ranking because every landing route would otherwise report the same trivial terminal funnel.
 
 [`Code/dragon_pathfinding.py`](Code/dragon_pathfinding.py) forms a binary grid contribution for each trajectory:
 
@@ -250,9 +250,9 @@ cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The left panel accumulates 240 seeded approaches. The large dragon plan follows selected example routes slowly enough to reveal its direction. The most recent local trail stays attached to the dragon and changes continuously from cool purple to warm gold.
+The left panel accumulates 240 seeded approaches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, while the final spline supplies only continuous top-down steering. The large dragon plan follows selected example routes slowly enough to reveal its direction. The most recent local trail stays attached to the dragon and changes continuously from cool purple to warm gold.
 
-The right panel ranks separated local maxima by the number of distinct trajectories entering each cell. Coordinates are reported in blocks. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
+The right panel fixes the final separated hotspot cells so their labels do not jump during the animation, then accumulates their counts honestly from the routes shown so far. Both bar length and the sequential purple-to-gold colour encode the number of distinct routes entering a cell. Coordinates are reported in blocks. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
 
 ### End Dimension Structure
 
@@ -338,11 +338,21 @@ $$
 
 The plot then snaps that ideal vector to the nearest qualified outer-island source site, standing in for the safe-position search performed by the gateway system.
 
+For a fixed terrain seed, the lower-right panel shows the model-qualified candidate prior
+
+$$
+Q(c_x,c_z)=\frac{1}{81}\,
+\mathbf{1}[0\leq j_x,j_z<9]\,
+\mathbf{1}[\text{2D island support}],
+$$
+
+where $(j_x,j_z)$ is the chunk offset inside its 20 by 20 placement region. This is the exact uniform candidate prior masked by the repository's fixed-seed two-dimensional support gate. It is not a multi-seed frequency estimate or a replacement for Minecraft's complete three-dimensional height test.
+
 ![End Structure Generation](Plots/end_structure_generation.png)
 
-The main panel uses the first outer-island distribution. Cyan squares clustered around the center are the exact radius-96 central gateways. Green diamonds are their paired outer destinations. Thin lines preserve the pairing index and direction. Purpur block plans show biome-and-island-qualified End-city candidates.
+The main panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Cyan squares clustered around the center are the exact radius-96 central gateways. Green diamonds are their paired outer destinations. Thin lines preserve the pairing index and direction. Enlarged purpur ship glyphs mark island-qualified End-city candidates.
 
-The right side enlarges the central gateway ring and provides a legend. The End-city plans are deliberately enlarged so their towers and ship-like projection remain readable. They mark candidate starts, not the complete final template assembly of a particular vanilla save.
+The right side enlarges the central gateway ring and repeats the map extent as a fixed-seed qualification heatmap. The ship glyph is deliberately enlarged and simplified as a symbolic End-city marker. It does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
 
 ### Radial World Generation
 
@@ -571,6 +581,7 @@ Run `render_all.py` from inside `Code/`. The visualization modules use sibling i
 7. [Mojang MC-159283](https://bugs-legacy.mojang.com/browse/MC-159283): distant End terrain loss caused by integer overflow.
 8. [Deltanic's End overflow derivation](https://gist.github.com/Deltanic/b98d005c9025f10a67de9e966fa57ebb): transition sequence linked from the Mojang issue.
 9. [Alan Zucconi, Minecraft World Generation](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/): accessible procedural-generation background.
+10. [Fabric Yarn 1.16.1 `PhaseType`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/entity/boss/dragon/phase/PhaseType.html): the complete 11-type Ender Dragon phase taxonomy.
 
 *Author: Jeffrey Morais*
 

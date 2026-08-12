@@ -11,8 +11,9 @@ from .lcg import MinecraftLCG
 
 
 STATE_ORDER = [
-    'holding', 'strafing', 'charging', 'landing_approach',
-    'landing', 'perching', 'takeoff',
+    'holding', 'strafing', 'landing_approach', 'landing', 'takeoff',
+    'sitting_flaming', 'sitting_scanning', 'sitting_attacking',
+    'charging_player', 'dying', 'hover',
 ]
 
 
@@ -65,6 +66,20 @@ def dragon_edges():
 DRAGON_EDGES = dragon_edges()
 
 
+def dragon_adjacency():
+    """Return the decoded source graph as a node-to-neighbours mapping."""
+    adjacency = {index: [] for index in range(24)}
+    for left, right in DRAGON_EDGES:
+        adjacency[left].append(right)
+        adjacency[right].append(left)
+    for neighbors in adjacency.values():
+        neighbors.sort()
+    return adjacency
+
+
+DRAGON_ADJACENCY = dragon_adjacency()
+
+
 def shortest_path(start, finish, crystals_alive=10):
     """Run the dragon's weighted node search on the allowed node subset."""
     minimum_node = 0 if crystals_alive > 0 else 12
@@ -77,18 +92,13 @@ def shortest_path(start, finish, crystals_alive=10):
     queue = [(0.0, start)]
     distance = {start: 0.0}
     previous = {}
-    adjacency = {index: [] for index in range(24)}
-    for left, right in DRAGON_EDGES:
-        adjacency[left].append(right)
-        adjacency[right].append(left)
-
     while queue:
         current_distance, current = heapq.heappop(queue)
         if current == finish:
             break
         if current_distance != distance.get(current):
             continue
-        for neighbor in adjacency[current]:
+        for neighbor in DRAGON_ADJACENCY[current]:
             if neighbor not in allowed:
                 continue
             weight = float(np.linalg.norm(
@@ -173,17 +183,14 @@ def catmull_rom_path(control_points, samples_per_segment=10):
 
 
 def path_coordinates(indices, samples_per_edge=10, bend=1.2):
+    """Return a continuous spline through a legal sequence of path nodes."""
     if len(indices) == 1:
         return [DRAGON_NODES[indices[0]].copy()]
-    points = []
-    for edge_index, (start, end) in enumerate(zip(indices, indices[1:])):
-        direction = -1.0 if edge_index % 2 else 1.0
-        points.extend(smooth_segment(
-            DRAGON_NODES[start], DRAGON_NODES[end],
-            samples=samples_per_edge, bend=bend * direction,
-        ))
-    points.append(DRAGON_NODES[indices[-1]].copy())
-    return points
+    del bend  # Retained for compatibility with older callers.
+    return list(catmull_rom_path(
+        [DRAGON_NODES[index] for index in indices],
+        samples_per_segment=samples_per_edge,
+    ))
 
 
 def simulate_perch_trajectory(
@@ -198,7 +205,6 @@ def simulate_perch_trajectory(
     random = MinecraftLCG(seed)
     player = np.asarray(player_position, dtype=float)
     current = random.next_int(12) if crystals_alive > 0 else 12 + random.next_int(8)
-    clockwise = random.next_int(2) == 0
     node_path = [current]
 
     for _ in range(max_holding_segments):
@@ -207,19 +213,22 @@ def simulate_perch_trajectory(
         )
         if decision == 'landing_approach':
             break
-        if random.next_int(8) == 0:
-            clockwise = not clockwise
-            current += 6
-        if crystals_alive > 0:
-            current = (current + (1 if clockwise else -1)) % 12
-        else:
-            current = 12 + ((current - 12 + (1 if clockwise else -1)) & 7)
-        node_path.append(current)
+
         if decision == 'strafing':
             side = 1.0 if random.next_int(2) else -1.0
             strafe_point = player + np.array([side * 8.0, -side * 5.0])
-            node_path.append(nearest_node(strafe_point, crystals_alive))
-            current = node_path[-1]
+            target = nearest_node(strafe_point, crystals_alive)
+        else:
+            minimum_node = 0 if crystals_alive > 0 else 12
+            allowed = list(range(minimum_node, 24))
+            target_index = random.next_int(len(allowed))
+            target = allowed[target_index]
+            if target == current:
+                target = allowed[(target_index + 1) % len(allowed)]
+
+        route = shortest_path(current, target, crystals_alive)
+        node_path.extend(route[1:])
+        current = node_path[-1]
 
     direction = player / max(float(np.linalg.norm(player)), 1.0)
     opposite = -direction * 40.0
@@ -227,12 +236,10 @@ def simulate_perch_trajectory(
     approach = shortest_path(current, landing_node, crystals_alive)
     node_path.extend(approach[1:])
 
-    coordinates = path_coordinates(node_path, samples_per_edge=7, bend=1.4)
-    coordinates.extend(smooth_segment(
-        coordinates[-1], np.zeros(2), samples=18, bend=2.0,
-    ))
-    coordinates.append(np.zeros(2))
-    return np.array(coordinates), node_path
+    control_points = [DRAGON_NODES[index] for index in node_path]
+    control_points.extend((-direction * 18.0, np.zeros(2)))
+    coordinates = catmull_rom_path(control_points, samples_per_segment=7)
+    return coordinates, node_path
 
 
 def _append_frames(
@@ -255,7 +262,11 @@ def _append_frames(
 
 
 def scripted_showcase():
-    """Return a fluid, event-rich fight loop for the README hero."""
+    """Return a fluid representative fight loop for the README hero.
+
+    The path-node portions use legal routes. Player-targeted strafe and charge
+    portions leave the graph, as their corresponding vanilla phases do.
+    """
     frames = []
     alive = set(range(10))
 
@@ -273,28 +284,27 @@ def scripted_showcase():
                 fireball_position=fireball_position,
             ))
 
+    first_holding = shortest_path(0, 15, crystals_alive=len(alive))
+    append_curve([DRAGON_NODES[index] for index in first_holding], 'holding', samples=10)
     append_curve(
-        [DRAGON_NODES[index] for index in (0, 1, 2, 3, 4, 5, 6)],
-        'holding', samples=9,
-    )
-    append_curve(
-        [DRAGON_NODES[6], np.array([-12.0, -44.0]),
-         np.array([31.0, -17.0]), DRAGON_NODES[8]],
+        [DRAGON_NODES[15], np.array([-10.0, -38.0]),
+         np.array([31.0, -17.0]), DRAGON_NODES[6]],
         'strafing', samples=11, fireball=True,
     )
     append_curve(
-        [DRAGON_NODES[index] for index in (8, 9, 10, 11, 0, 1)],
-        'charging', samples=8,
+        [DRAGON_NODES[6], np.array([-30.0, 14.0]),
+         np.array([31.0, -17.0]), DRAGON_NODES[18]],
+        'charging_player', samples=9,
     )
 
     # Crystal losses start after the flight has been established and jump
     # around the spike ring instead of walking it in angular order.
     explosion_order = (7, 2, 9, 4)
+    second_holding = shortest_path(18, 3, crystals_alive=len(alive))
     holding_curve = catmull_rom_path(
-        [DRAGON_NODES[index] for index in (1, 2, 3, 4, 5, 6)],
-        samples_per_segment=10,
+        [DRAGON_NODES[index] for index in second_holding], samples_per_segment=11,
     )
-    event_frames = (10, 23, 36, 47)
+    event_frames = (8, 18, 28, 38)
     for frame_index, point in enumerate(holding_curve):
         explosion_index = None
         explosion_phase = 0.0
@@ -312,7 +322,7 @@ def scripted_showcase():
             explosion_phase=explosion_phase,
         ))
 
-    landing_route = shortest_path(6, 15, crystals_alive=len(alive))
+    landing_route = shortest_path(3, 15, crystals_alive=len(alive))
     append_curve(
         [DRAGON_NODES[index] for index in landing_route],
         'landing_approach', samples=9,
@@ -322,13 +332,21 @@ def scripted_showcase():
         'landing', samples=12,
     )
 
-    for index in range(26):
-        angle = 2.0 * math.pi * index / 26.0
-        point = np.array([0.9 * math.cos(angle), 0.55 * math.sin(angle)])
-        frames.append(DragonFrame(
-            point, 'perching', len(alive), None, None,
-            alive_crystals=tuple(sorted(alive)),
-        ))
+    sitting_phases = (
+        ('sitting_scanning', 12),
+        ('sitting_attacking', 10),
+        ('sitting_flaming', 26),
+    )
+    sitting_index = 0
+    for state, count in sitting_phases:
+        for _ in range(count):
+            angle = 2.0 * math.pi * sitting_index / 48.0
+            point = np.array([0.9 * math.cos(angle), 0.55 * math.sin(angle)])
+            sitting_index += 1
+            frames.append(DragonFrame(
+                point, state, len(alive), None, None,
+                alive_crystals=tuple(sorted(alive)),
+            ))
 
     takeoff_route = shortest_path(20, 8, crystals_alive=len(alive))
     append_curve(

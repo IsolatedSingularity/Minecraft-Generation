@@ -12,8 +12,8 @@ sys.path.insert(0, str(ROOT / 'Code'))
 
 from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
-    DRAGON_EDGES, DRAGON_NODES, perch_probability, scripted_showcase,
-    shortest_path,
+    DRAGON_EDGES, DRAGON_NODES, STATE_ORDER, perch_probability,
+    scripted_showcase, shortest_path, simulate_perch_trajectory,
 )
 from core.end_generation import (
     SimplexNoise2D,
@@ -22,6 +22,7 @@ from core.end_generation import (
     end_overflow_ring_boundaries,
     gateway_positions,
     end_city_candidates,
+    end_city_qualification_probability,
     outer_gateway_positions,
     outer_island_seed_field,
     pillar_seed,
@@ -85,6 +86,32 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertAlmostEqual(perch_probability(10), 1.0 / 13.0)
         self.assertAlmostEqual(perch_probability(0), 1.0 / 3.0)
 
+    def test_phase_taxonomy_matches_java_1_16_1(self):
+        self.assertEqual(
+            STATE_ORDER,
+            [
+                'holding', 'strafing', 'landing_approach', 'landing',
+                'takeoff', 'sitting_flaming', 'sitting_scanning',
+                'sitting_attacking', 'charging_player', 'dying', 'hover',
+            ],
+        )
+
+    def test_seeded_approaches_only_traverse_legal_graph_edges(self):
+        legal_edges = set(DRAGON_EDGES)
+        sampled_coordinates = []
+        for index in range(40):
+            coordinates, nodes = simulate_perch_trajectory(
+                12031 + index * 7919,
+                crystals_alive=10 - (index % 6),
+                player_position=(34.0, -18.0),
+            )
+            self.assertTrue(np.all(np.isfinite(coordinates)))
+            sampled_coordinates.append(coordinates)
+            for left, right in zip(nodes, nodes[1:]):
+                self.assertIn(tuple(sorted((left, right))), legal_edges)
+        radii = np.linalg.norm(np.vstack(sampled_coordinates), axis=1)
+        self.assertLess(float(np.mean(radii >= 50.0)), 0.45)
+
     def test_showcase_delays_and_varies_crystal_destruction(self):
         frames = scripted_showcase()
         self.assertGreaterEqual(len(frames), 260)
@@ -102,6 +129,11 @@ class DragonTopologyTests(unittest.TestCase):
                 order.append(frame.explosion_index)
         self.assertEqual(order, [7, 2, 9, 4])
         self.assertTrue(any(frame.fireball_position is not None for frame in frames))
+        shown_states = {frame.state for frame in frames}
+        self.assertTrue({
+            'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
+            'charging_player',
+        }.issubset(shown_states))
 
 
 class StructureTests(unittest.TestCase):
@@ -247,6 +279,13 @@ class EndGeometryTests(unittest.TestCase):
             math.hypot(item['block_x'], item['block_z']) > 1024.0
             for item in cities
         ))
+
+        x, z, probability = end_city_qualification_probability(
+            42, max_coordinate_blocks=1600,
+        )
+        self.assertEqual(probability.shape, (len(z), len(x)))
+        self.assertAlmostEqual(float(probability.max()), 1.0 / 81.0)
+        self.assertTrue(np.all(probability[np.hypot(*np.meshgrid(x, z)) <= 1024.0] == 0.0))
 
     def test_vectorized_simplex_and_island_projection(self):
         simplex = SimplexNoise2D(42)

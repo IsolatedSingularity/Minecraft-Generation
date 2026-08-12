@@ -412,6 +412,56 @@ def end_city_candidates(world_seed, max_coordinate_blocks=3600):
     return accepted
 
 
+def end_city_qualification_probability(
+    world_seed, max_coordinate_blocks=3600,
+):
+    """Return the fixed-seed 2D End-city qualification prior by chunk.
+
+    Each chunk in the exact uniform 9 by 9 candidate window has prior
+    probability 1/81. The field is then masked by the same source-shaped
+    island-support gate used by :func:`end_city_candidates`. This is not a
+    full vanilla heightmap or an across-seed empirical frequency.
+    """
+    from .structures import END_CITY
+
+    maximum_chunk = int(max_coordinate_blocks) // 16
+    chunk_coordinates = np.arange(
+        -maximum_chunk, maximum_chunk + 1, dtype=np.int64,
+    )
+    chunk_x, chunk_z = np.meshgrid(chunk_coordinates, chunk_coordinates)
+    region_x = np.floor_divide(chunk_x, END_CITY.spacing)
+    region_z = np.floor_divide(chunk_z, END_CITY.spacing)
+    offset_x = chunk_x - region_x * END_CITY.spacing
+    offset_z = chunk_z - region_z * END_CITY.spacing
+    window = END_CITY.spacing - END_CITY.separation
+    in_candidate_window = (
+        (offset_x >= 0) & (offset_x < window)
+        & (offset_z >= 0) & (offset_z < window)
+    )
+
+    block_x = chunk_x.astype(float) * 16.0
+    block_z = chunk_z.astype(float) * 16.0
+    outside_gulf = np.hypot(block_x, block_z) > 1024.0
+    sites = outer_island_seed_field(
+        world_seed, max_coordinate_blocks=int(max_coordinate_blocks),
+    )
+    site_positions = np.column_stack((sites['block_x'], sites['block_z']))
+    tree = cKDTree(site_positions)
+    query_points = np.column_stack((block_x.ravel(), block_z.ravel()))
+    distances, site_indices = tree.query(query_points)
+    distances = distances.reshape(block_x.shape)
+    source_radii = sites['visual_radius'][site_indices].reshape(block_x.shape)
+    supported = distances <= np.minimum(64.0, source_radii * 0.48)
+
+    probability = np.where(
+        in_candidate_window & outside_gulf & supported,
+        1.0 / float(window * window),
+        0.0,
+    )
+    block_coordinates = chunk_coordinates.astype(float) * 16.0
+    return block_coordinates, block_coordinates, probability
+
+
 def pillar_seed(world_seed):
     """Derive the 16-bit End spike seed from the 64-bit world seed."""
     return MinecraftLCG(world_seed).next_long() & 0xFFFF
