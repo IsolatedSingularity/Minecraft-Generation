@@ -12,8 +12,9 @@ sys.path.insert(0, str(ROOT / 'Code'))
 
 from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
-    DRAGON_EDGES, DRAGON_NODES, STATE_ORDER, perch_probability,
-    scripted_showcase, shortest_path, simulate_perch_trajectory,
+    DRAGON_EDGES, DRAGON_NODES, SOURCE_PHASE_TRANSITIONS, STATE_ORDER,
+    perch_probability, scripted_showcase, shortest_path,
+    simulate_perch_trajectory,
 )
 from core.end_generation import (
     SimplexNoise2D,
@@ -44,8 +45,10 @@ from core.structures import (
     VILLAGE,
     candidate_in_region,
     nether_shared_candidate,
-    structure_biome_compatible,
+    pillager_outpost_source_gate,
 )
+from dragon_pathfinding import trajectory_animation_state
+from multi_structure_generation import nether_structure_candidates
 from redstone_quasi_connectivity import bud_animation_state
 from seed_loading import chunk_status_snapshot
 from structure_placement import overworld_structure_candidates
@@ -95,6 +98,13 @@ class DragonTopologyTests(unittest.TestCase):
                 'sitting_attacking', 'charging_player', 'dying', 'hover',
             ],
         )
+        self.assertIn(
+            ('sitting_scanning', 'charging_player'),
+            SOURCE_PHASE_TRANSITIONS,
+        )
+        self.assertNotIn(
+            ('holding', 'charging_player'), SOURCE_PHASE_TRANSITIONS,
+        )
 
     def test_seeded_approaches_only_traverse_legal_graph_edges(self):
         legal_edges = set(DRAGON_EDGES)
@@ -130,10 +140,17 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertEqual(order, [7, 2, 9, 4])
         self.assertTrue(any(frame.fireball_position is not None for frame in frames))
         shown_states = {frame.state for frame in frames}
-        self.assertTrue({
-            'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
-            'charging_player',
-        }.issubset(shown_states))
+        self.assertEqual(shown_states, set(STATE_ORDER))
+
+    def test_trajectory_batches_and_exact_final_hold(self):
+        active_last = trajectory_animation_state(127)
+        hold_first = trajectory_animation_state(128)
+        hold_last = trajectory_animation_state(151)
+        self.assertEqual(active_last, (240, 239, 1.0))
+        self.assertEqual(hold_first, (240, 239, 1.0))
+        self.assertEqual(hold_last, (240, 239, 1.0))
+        shown = [trajectory_animation_state(index)[0] for index in range(152)]
+        self.assertTrue(all(left <= right for left, right in zip(shown, shown[1:])))
 
 
 class StructureTests(unittest.TestCase):
@@ -145,21 +162,42 @@ class StructureTests(unittest.TestCase):
             self.assertGreaterEqual(item['offset_z'], 0)
             self.assertLess(item['offset_z'], config.spacing - config.separation)
 
-    def test_overworld_candidates_respect_visual_biome_gate(self):
-        candidates, biomes, _ = overworld_structure_candidates(42)
+    def test_overworld_candidate_view_is_inclusive_not_biome_gated(self):
+        candidates, biomes, _ = overworld_structure_candidates(
+            42, region_radius=5, resolution=256,
+        )
         self.assertGreater(len(candidates), 0)
         self.assertEqual(
             {item['name'] for item in candidates},
             {config.name for config in OVERWORLD_STRUCTURES},
         )
-        for item in candidates:
-            self.assertTrue(
-                structure_biome_compatible(item['name'], item['biome'])
-            )
-        self.assertTrue({
-            'plains', 'desert', 'savanna', 'jungle', 'swamp', 'taiga',
-            'snowy_tundra', 'mushroom_fields', 'badlands',
-        }.issubset(set(minecraft_biome_grid(42, 384).ravel())))
+        self.assertTrue(any(
+            not item['illustrative_biome_match'] for item in candidates
+        ))
+        self.assertEqual(biomes.shape, (256, 256))
+        self.assertGreater(
+            sum(item['name'] == 'village' for item in candidates), 16,
+        )
+
+    def test_outpost_direct_source_gate_and_nether_extent(self):
+        outcomes = [
+            pillager_outpost_source_gate(42, chunk_x, chunk_z)
+            for chunk_x in range(-96, 97, 8)
+            for chunk_z in range(-96, 97, 8)
+        ]
+        self.assertTrue(any(outcomes))
+        self.assertTrue(any(not value for value in outcomes))
+
+        shared, portals, _, (minimum, maximum) = nether_structure_candidates(
+            42, region_radius=3, resolution=128,
+        )
+        self.assertTrue(shared)
+        self.assertTrue(portals)
+        self.assertTrue(all(
+            minimum <= item['chunk_x'] <= maximum
+            and minimum <= item['chunk_z'] <= maximum
+            for item in (*shared, *portals)
+        ))
 
     def test_expanded_structure_catalog_and_distribution_examples(self):
         self.assertEqual(
@@ -216,17 +254,22 @@ class StructureTests(unittest.TestCase):
 
 
 class ChunkStatusTests(unittest.TestCase):
-    def test_dependency_wave_reveals_then_holds_full_map(self):
+    def test_dependency_wave_reaches_source_target_status_rings(self):
         stages, growth, hidden = chunk_status_snapshot(0)
-        self.assertEqual(stages[7, 7], 0)
-        self.assertEqual(growth[7, 7], 0.0)
-        self.assertTrue(hidden[0, 0])
+        self.assertEqual(stages[15, 15], 0)
+        self.assertEqual(growth[15, 15], 0.0)
+        self.assertFalse(np.any(hidden))
 
         final_generation = chunk_status_snapshot(79)
         first_hold = chunk_status_snapshot(80)
         for snapshot in (final_generation, first_hold):
             stages, growth, hidden = snapshot
-            self.assertTrue(np.all(stages == 12))
+            self.assertEqual(stages[15, 15], 12)
+            self.assertEqual(stages[15, 16], 8)
+            self.assertEqual(stages[15, 17], 7)
+            self.assertEqual(stages[15, 18], 1)
+            self.assertEqual(stages[15, 25], 1)
+            self.assertEqual(stages[15, 26], 0)
             self.assertTrue(np.all(growth == 1.0))
             self.assertFalse(np.any(hidden))
 

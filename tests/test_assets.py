@@ -14,8 +14,9 @@ RENDERED_GIFS = {
     'dragon_holding_strafe.gif': (900, 500, 20),
     'dragon_landing_perch.gif': (900, 500, 20),
     'dragon_takeoff.gif': (900, 500, 20),
-    'dragon_trajectory_ensemble.gif': (1150, 620, 130),
-    'seed_loading.gif': (800, 800, 60),
+    # The 3 s final hold is coalesced into the final optimized GIF frame.
+    'dragon_trajectory_ensemble.gif': (1150, 620, 120),
+    'seed_loading.gif': (1200, 700, 60),
     'structure_placement.gif': (1000, 550, 90),
     'multi_structure_generation.gif': (1000, 550, 80),
     'redstone_quasi_connectivity.gif': (900, 550, 45),
@@ -42,8 +43,8 @@ class AssetIntegrityTests(unittest.TestCase):
         maximum_sizes = {
             'dragon_pathfinding_hero.gif': 16 * 1024 * 1024,
             'dragon_trajectory_ensemble.gif': 13 * 1024 * 1024,
-            'structure_placement.gif': 11 * 1024 * 1024,
-            'multi_structure_generation.gif': 9 * 1024 * 1024,
+            'structure_placement.gif': 15 * 1024 * 1024,
+            'multi_structure_generation.gif': 13 * 1024 * 1024,
         }
         for name, dimensions in RENDERED_GIFS.items():
             minimum_width, minimum_height, minimum_frames = dimensions
@@ -82,6 +83,11 @@ class AssetIntegrityTests(unittest.TestCase):
                     total_ms += image.info.get('duration', 0)
             self.assertGreaterEqual(total_ms, minimum_ms, name)
             self.assertLessEqual(total_ms, maximum_ms, name)
+
+    def test_trajectory_final_state_lingers(self):
+        with Image.open(PLOTS / 'dragon_trajectory_ensemble.gif') as image:
+            image.seek(image.n_frames - 1)
+            self.assertGreaterEqual(image.info.get('duration', 0), 2_000)
 
     def test_readme_references_restored_and_retained_assets(self):
         root_text = (ROOT / 'README.md').read_text(encoding='utf-8')

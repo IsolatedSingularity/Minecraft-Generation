@@ -1,16 +1,14 @@
-"""End-city candidates and paired End-gateway visualization."""
+"""End-city candidates and fixed-seed qualification-prior visualization."""
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Circle
 import numpy as np
 
 from core.end_generation import (
     end_city_candidates,
     end_city_qualification_probability,
-    gateway_positions,
     outer_gateway_positions,
     outer_island_projection,
 )
@@ -22,14 +20,8 @@ from core.style import COLORS, apply_style, style_axis
 apply_style()
 
 
-CITY_PROBABILITY_CMAP = LinearSegmentedColormap.from_list(
-    'end_city_qualification',
-    [COLORS['background'], '#31234A', '#7650A5', '#D978B2', '#F4D46A'],
-)
-
-
 def create_end_structure_generation(save_path, dpi=210, seed=42):
-    """Render End-city placement and both gateway endpoints."""
+    """Render equal-size End-city map and binary analytic prior panels."""
     limit = 3600.0
     island_x, island_z, island_projection = outer_island_projection(
         seed, max_coordinate_blocks=int(limit), resolution=901,
@@ -41,15 +33,15 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         )
     )
     outer_gateways = outer_gateway_positions(seed)
-    central_gateways = gateway_positions()
 
-    figure = plt.figure(figsize=(16.0, 9.0), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(16.6, 8.4), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[3.55, 1.30],
-        left=0.055, right=0.985, top=0.91, bottom=0.08, wspace=0.025,
+        1, 3, width_ratios=[1.0, 1.0, 0.035],
+        left=0.045, right=0.965, top=0.90, bottom=0.105, wspace=0.075,
     )
     axis = figure.add_subplot(grid[0, 0])
-    side = figure.add_subplot(grid[0, 1])
+    probability_axis = figure.add_subplot(grid[0, 1])
+    colorbar_axis = figure.add_subplot(grid[0, 2])
 
     island_values = island_projection.filled(0.0)
     island_rgba = ISLAND_CMAP(island_values)
@@ -68,23 +60,11 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     ))
     draw_central_island(axis, seed=seed, extent=180, resolution=121, alpha=0.98, zorder=4)
 
-    for outer_gateway in outer_gateways:
-        axis.plot(
-            [outer_gateway['central_x'], outer_gateway['x']],
-            [outer_gateway['central_z'], outer_gateway['z']],
-            color=COLORS['portal'], linewidth=0.48, alpha=0.26, zorder=2,
-        )
     axis.scatter(
         [item['x'] for item in outer_gateways],
         [item['z'] for item in outer_gateways],
-        s=42, marker='D', c=COLORS['portal'],
-        edgecolors=COLORS['text'], linewidths=0.55, zorder=8,
-    )
-    axis.scatter(
-        [item['x'] for item in central_gateways],
-        [item['z'] for item in central_gateways],
-        s=14, marker='s', c=COLORS['cyan'],
-        edgecolors=COLORS['text'], linewidths=0.25, zorder=8,
+        s=21, marker='D', c=COLORS['portal'], alpha=0.72,
+        edgecolors=COLORS['text'], linewidths=0.35, zorder=8,
     )
     for city in cities:
         draw_structure_schematic(
@@ -96,51 +76,21 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     axis.set_ylim(-limit, limit)
     axis.set_xlabel('Block X')
     axis.set_ylabel('Block Z')
-    axis.set_title('First outer-island band and qualified End-city candidates', fontsize=12, pad=9)
+    axis.set_title(
+        f'Outer-island support and {len(cities)} qualified model starts',
+        fontsize=11.5, pad=9,
+    )
     style_axis(axis, equal=True, grid=False)
 
-    side.set_xlim(0, 1)
-    side.set_ylim(0, 1)
-    side.axis('off')
-    side.text(
-        0.0, 0.98, 'GATEWAY PAIRING', color=COLORS['text'],
-        fontsize=10.5, fontweight='black', va='top',
-    )
-    inset = side.inset_axes([0.04, 0.60, 0.92, 0.34])
-    draw_central_island(inset, seed=seed, extent=112, alpha=0.68, zorder=0)
-    inset.add_patch(Circle(
-        (0, 0), 96, fill=False, edgecolor=COLORS['cyan'],
-        linewidth=1.0, linestyle='--', alpha=0.82,
-    ))
-    inset.scatter(
-        [item['x'] for item in central_gateways],
-        [item['z'] for item in central_gateways],
-        s=24, marker='s', c=COLORS['cyan'],
-        edgecolors=COLORS['text'], linewidths=0.4, zorder=4,
-    )
-    for item in central_gateways[::2]:
-        inset.text(
-            item['x'] * 1.10, item['z'] * 1.10, str(item['index']),
-            color=COLORS['muted'], fontsize=5.5, ha='center', va='center',
-        )
-    inset.set_xlim(-116, 116)
-    inset.set_ylim(-116, 116)
-    inset.axis('off')
-
-    side.text(
-        0.0, 0.535, 'FIXED-SEED CITY QUALIFICATION PRIOR',
-        color=COLORS['text'], fontsize=10.0, fontweight='black', va='top',
-    )
-    probability_axis = side.inset_axes([0.04, 0.115, 0.92, 0.375])
     probability_image = probability_axis.imshow(
         qualification_probability * 100.0,
         extent=(
             probability_x[0], probability_x[-1],
             probability_z[0], probability_z[-1],
         ),
-        origin='lower', cmap=CITY_PROBABILITY_CMAP,
+        origin='lower', cmap='viridis',
         vmin=0.0, vmax=100.0 / 81.0,
-        interpolation='bilinear', zorder=1,
+        interpolation='nearest', zorder=1,
     )
     probability_axis.add_patch(Circle(
         (0, 0), 1024, fill=False, edgecolor=COLORS['end_stone'],
@@ -149,32 +99,34 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     for city in cities:
         draw_structure_schematic(
             probability_axis, 'end_city', city['block_x'], city['block_z'],
-            size=62.0, zorder=4, alpha=0.82,
+            size=52.0, zorder=4, alpha=0.88,
         )
     probability_axis.set_xlim(-limit, limit)
     probability_axis.set_ylim(-limit, limit)
-    probability_axis.set_xticks((-3000, 0, 3000))
-    probability_axis.set_yticks((-3000, 0, 3000))
+    probability_axis.set_xlabel('Block X')
+    probability_axis.set_ylabel('Block Z')
     probability_axis.set_title(
-        '1/81 candidate prior masked by modeled island support',
-        fontsize=7.2, pad=4,
+        'Binary 1/81 candidate prior on modeled island support',
+        fontsize=11.5, pad=9,
     )
     style_axis(probability_axis, equal=True, grid=False)
-    probability_axis.tick_params(labelsize=5.8, pad=1.5)
+    probability_axis.tick_params(labelsize=8.0)
 
-    colorbar_axis = side.inset_axes([0.14, 0.060, 0.72, 0.020])
     colorbar = figure.colorbar(
-        probability_image, cax=colorbar_axis, orientation='horizontal',
+        probability_image, cax=colorbar_axis, orientation='vertical',
     )
-    colorbar.ax.set_title(
-        'Modeled qualification probability (%)', fontsize=6.3, pad=3,
+    colorbar.set_label(
+        'Analytic candidate prior (%)', fontsize=8.2, labelpad=7,
     )
-    colorbar.ax.tick_params(labelsize=5.7, pad=1.5)
+    colorbar.set_ticks((0.0, 100.0 / 81.0))
+    colorbar.set_ticklabels(('0', '1.2346'))
+    colorbar.ax.tick_params(labelsize=7.4, pad=2)
     colorbar.outline.set_edgecolor(COLORS['grid'])
-    side.text(
-        0.50, 0.010,
-        f'{len(cities)} qualified starts | ship glyph is a symbolic End-city marker',
-        color=COLORS['muted'], fontsize=6.5, ha='center', va='bottom',
+    figure.text(
+        0.50, 0.042,
+        'Fixed world seed 42 | exact 20-chunk grid and 9x9 offset prior | '
+        'island/height qualification remains a source-shaped 2D model',
+        color=COLORS['muted'], fontsize=7.5, ha='center', va='center',
     )
 
     figure.suptitle(

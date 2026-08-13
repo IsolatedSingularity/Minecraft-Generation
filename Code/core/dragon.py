@@ -16,6 +16,30 @@ STATE_ORDER = [
     'charging_player', 'dying', 'hover',
 ]
 
+# Direct phase changes observed in the Java 1.16.1 phase implementations.
+# HOVER -> HOLDING is the fight-manager bootstrap, while the representative
+# airborne -> DYING edge is handled separately by EnderDragonEntity damage.
+SOURCE_PHASE_TRANSITIONS = (
+    ('holding', 'strafing'),
+    ('strafing', 'holding'),
+    ('holding', 'landing_approach'),
+    ('landing_approach', 'landing'),
+    ('landing', 'sitting_scanning'),
+    ('sitting_scanning', 'sitting_attacking'),
+    ('sitting_scanning', 'takeoff'),
+    ('sitting_scanning', 'charging_player'),
+    ('sitting_attacking', 'sitting_flaming'),
+    ('sitting_flaming', 'sitting_scanning'),
+    ('sitting_flaming', 'takeoff'),
+    ('takeoff', 'holding'),
+    ('charging_player', 'holding'),
+)
+
+EXCEPTION_PHASE_TRANSITIONS = (
+    ('hover', 'holding', 'fight bootstrap'),
+    ('holding', 'dying', 'representative lethal airborne damage'),
+)
+
 
 @dataclass(frozen=True)
 class DragonFrame:
@@ -270,6 +294,15 @@ def scripted_showcase():
     frames = []
     alive = set(range(10))
 
+    # PhaseManager initializes an entity in HOVER; EnderDragonFight then
+    # bootstraps the live fight into HOLDING_PATTERN. Keep the exceptional
+    # phase visible without pretending it belongs to the repeating fight loop.
+    for _ in range(12):
+        frames.append(DragonFrame(
+            np.zeros(2), 'hover', len(alive), None, None,
+            alive_crystals=tuple(sorted(alive)),
+        ))
+
     def append_curve(points, state, samples=9, fireball=False):
         curve = catmull_rom_path(points, samples_per_segment=samples)
         player = np.array([31.0, -17.0])
@@ -285,7 +318,10 @@ def scripted_showcase():
             ))
 
     first_holding = shortest_path(0, 15, crystals_alive=len(alive))
-    append_curve([DRAGON_NODES[index] for index in first_holding], 'holding', samples=10)
+    append_curve(
+        [np.zeros(2)] + [DRAGON_NODES[index] for index in first_holding],
+        'holding', samples=10,
+    )
     append_curve(
         [DRAGON_NODES[15], np.array([-10.0, -38.0]),
          np.array([31.0, -17.0]), DRAGON_NODES[6]],
@@ -356,5 +392,13 @@ def scripted_showcase():
     append_curve(
         [DRAGON_NODES[index] for index in (8, 9, 10, 11, 0)],
         'holding', samples=8,
+    )
+    # DyingPhase steers toward the exit portal. This is an explicit exceptional
+    # showcase after the ordinary combat loop, not a transition caused by the
+    # preceding scripted holding decision.
+    append_curve(
+        [DRAGON_NODES[0], np.array([38.0, 5.0]), np.array([17.0, -2.0]),
+         np.zeros(2)],
+        'dying', samples=6,
     )
     return frames

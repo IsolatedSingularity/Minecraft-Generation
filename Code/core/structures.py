@@ -173,6 +173,40 @@ def structure_biome_compatible(structure_name, biome_name):
     return biome_name in OVERWORLD_STRUCTURE_BIOMES[structure_name]
 
 
+def pillager_outpost_source_gate(world_seed, chunk_x, chunk_z):
+    """Apply the Java 1.16.1 outpost 1/5 roll and village exclusion.
+
+    This is the structure-specific gate in ``PillagerOutpostFeature``. Biome
+    qualification remains a separate generator/configuration concern.
+    """
+    section_x = int(chunk_x) >> 4
+    section_z = int(chunk_z) >> 4
+    random = MinecraftLCG(section_x ^ (section_z << 4) ^ int(world_seed))
+    random.next_int()
+    if random.next_int(5) != 0:
+        return False
+
+    minimum_x = int(chunk_x) - 10
+    maximum_x = int(chunk_x) + 10
+    minimum_z = int(chunk_z) - 10
+    maximum_z = int(chunk_z) + 10
+    first_region_x = minimum_x // VILLAGE.spacing - 1
+    last_region_x = maximum_x // VILLAGE.spacing + 1
+    first_region_z = minimum_z // VILLAGE.spacing - 1
+    last_region_z = maximum_z // VILLAGE.spacing + 1
+    for region_x in range(first_region_x, last_region_x + 1):
+        for region_z in range(first_region_z, last_region_z + 1):
+            village = candidate_in_region(
+                world_seed, region_x, region_z, VILLAGE,
+            )
+            if (
+                minimum_x <= village['chunk_x'] <= maximum_x
+                and minimum_z <= village['chunk_z'] <= maximum_z
+            ):
+                return False
+    return True
+
+
 def nether_shared_candidate(world_seed, region_x, region_z):
     """Return the shared fortress or bastion candidate and its exact split."""
     region_seed = generate_region_seed(

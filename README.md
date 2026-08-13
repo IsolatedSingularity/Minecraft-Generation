@@ -2,6 +2,15 @@
 
 <!-- Do not remove this comment. It is important. -->
 <!-- The seeds remember those who query them. -->
+<!--
+LOCAL AGENT NOTE: A private, version-locked Minecraft Java 1.16.1 corpus may
+exist at `Game Reference/`. It is deliberately gitignored and must never be
+committed. When source verification is relevant and the user has asked for it,
+read `Game Reference/README.md`, then route through
+`Game Reference/08_mc_1_16_1_agent_reference/START_HERE.md`. Use its index and
+topic-specific retrieval conservatively; do not recursively read the corpus,
+raw JAR extractions, assets, tooling environments, or all mapped sources.
+-->
 
 ###### An approachable mathematical study of Minecraft's procedural-generation algorithms, with supporting analysis of pathing algorithms such as Ender Dragon flight behaviour.
 
@@ -197,9 +206,9 @@ The graph selects meaningful targets. Every graph-bound portion of a seeded rout
 
 The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, explosions, and recent trail. Grey lines show legal graph edges. The dragon-shaped marker rotates with its direction of travel.
 
-The right panel shows all 11 Java 1.16.1 phase types. The normal combat chain distinguishes Holding, Strafe, Charging Player, Landing Approach, Landing, Sitting Scanning, Sitting Attacking, Sitting Flaming, and Takeoff. Dying and Hover remain visible as subdued exceptional phases rather than being presented as part of the repeating combat loop. The currently selected phase alone receives a thick white outline.
+The right panel shows all 11 Java 1.16.1 phase types and highlights every one at least once. Solid arrows follow source-confirmed phase changes: Holding can enter Strafe or Landing Approach; Landing Approach enters Landing and then Sitting Scanning; scanning can attack, take off, or select Charging Player; attacking enters Flaming; Flaming returns to scanning or takeoff; and Takeoff, Strafe, and Charging Player return to Holding. Dashed arrows identify exceptional initialization and lethal-damage paths for Hover and Dying. The currently selected phase alone receives a thick white outline.
 
-The dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event, while fireball motion appears during the representative strafing pass. The same GIF is used here and as the repository hero so the introduction and technical explanation cannot drift apart.
+The polished dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance, and the segmented rail no longer permits its percentage label to clip. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event, while fireball motion appears during the representative strafing pass. The smaller direction-aware sprite uses a wider, emphasized wing plan so it reads as a dragon without obscuring the graph.
 
 #### Phase details
 
@@ -250,9 +259,9 @@ cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The left panel accumulates 240 seeded approaches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, while the final spline supplies only continuous top-down steering. The large dragon plan follows selected example routes slowly enough to reveal its direction. The most recent local trail stays attached to the dragon and changes continuously from cool purple to warm gold.
+The left panel accumulates 240 seeded approaches in 16 fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, while the final spline supplies only continuous top-down steering. During each batch the smaller dragon traverses a representative route at the same rate that the corresponding paths are added. The route raster and recent trail use viridis, with a square-root normalization stated in the panel.
 
-The right panel fixes the final separated hotspot cells so their labels do not jump during the animation, then accumulates their counts honestly from the routes shown so far. Both bar length and the sequential purple-to-gold colour encode the number of distinct routes entering a cell. Coordinates are reported in blocks. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
+The right panel fixes the final separated local-maximum cells so their labels do not jump during the animation, then accumulates their distinct-route counts from exactly the routes shown so far. Hollow markers on the map identify those same cells. Both bar length and viridis colour encode frequency, coordinates are reported in blocks, and the completed result lingers for more than three seconds. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
 
 ### End Dimension Structure
 
@@ -338,7 +347,7 @@ $$
 
 The plot then snaps that ideal vector to the nearest qualified outer-island source site, standing in for the safe-position search performed by the gateway system.
 
-For a fixed terrain seed, the lower-right panel shows the model-qualified candidate prior
+For a fixed terrain seed, the right panel shows the model-qualified candidate prior
 
 $$
 Q(c_x,c_z)=\frac{1}{81}\,
@@ -350,9 +359,9 @@ where $(j_x,j_z)$ is the chunk offset inside its 20 by 20 placement region. This
 
 ![End Structure Generation](Plots/end_structure_generation.png)
 
-The main panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Cyan squares clustered around the center are the exact radius-96 central gateways. Green diamonds are their paired outer destinations. Thin lines preserve the pairing index and direction. Enlarged purpur ship glyphs mark island-qualified End-city candidates.
+The left panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Subtle cyan diamonds retain the exact radius-96 central gateways without competing with the structure field. Enlarged purpur ship glyphs mark island-qualified End-city candidates.
 
-The right side enlarges the central gateway ring and repeats the map extent as a fixed-seed qualification heatmap. The ship glyph is deliberately enlarged and simplified as a symbolic End-city marker. It does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
+The equally sized right panel repeats the left map extent as a nearest-cell viridis heatmap of $Q(c_x,c_z)$, with its probability colourbar on the right. Purple represents zero probability and yellow represents the exact $1/81$ uniform-region prior where the repository's two-dimensional island support gate passes. The ship glyph is deliberately enlarged and simplified as a symbolic End-city marker. It does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
 
 ### Radial World Generation
 
@@ -373,30 +382,29 @@ flowchart LR
     I --> J["FULL"]
 ```
 
-Neighbouring chunks introduce dependencies, so status completion propagates outward as a wave. The explanatory scheduling phase is
+Neighbouring chunks introduce dependencies, so a center chunk can advance only while wider shells have reached the statuses it requires. The displayed status at Chebyshev distance $d$ is
 
 $$
-\phi_{ij}(t)=tL-\lambda d_{ij},
+s_d(t)=\min\left(\left\lfloor12t\right\rfloor,T(d)\right),
 $$
 
-where $t$ is normalized animation progress, $L$ is the total wave extent, $d_{ij}$ is the Chebyshev distance from the target chunk, and $\lambda$ is a dependency lag. A chunk is hidden while $\phi_{ij}<0$, and its visible status is the integer part of $\phi_{ij}$ after clipping to the valid status range.
+where $t$ is normalized animation progress and $T(d)$ is the source-required terminal status for that shell. The schedule is explanatory, but the terminal dependency profile is source-mapped.
 
-This status wave determines *when* a chunk may expose each result. The Brownian-style composition introduced in [Noise, scale, and Brownian composition](#noise-scale-and-brownian-composition) determines *what terrain* the `BIOMES`, `NOISE`, and `SURFACE` stages reveal. The animation keeps those two ideas separate: a dependency schedule advances across the grid while coordinate-consistent noise supplies the terrain underneath it.
+This modeled wave determines *when* a chunk may expose each result. Its final targets, however, come directly from Java 1.16.1 `ChunkStatus`: Chebyshev distance 0 reaches `FULL`, distance 1 reaches `FEATURES`, distance 2 reaches `LIQUID_CARVERS`, and distances 3 through 10 reach `STRUCTURE_STARTS`. The Brownian-style composition introduced in [Noise, scale, and Brownian composition](#noise-scale-and-brownian-composition) supplies source-informed terrain context underneath the status field.
 
 [`Code/seed_loading.py`](Code/seed_loading.py) implements that relationship directly:
 
 ```python
-phase = progress * wave_extent - distances * dependency_lag
-stages = np.floor(phase).astype(int)
-hidden = phase < 0.0
-stages = np.clip(stages, 0, len(STATUS_NAMES) - 1)
+target[distances <= 10] = STRUCTURE_STARTS
+target[distances == 2] = LIQUID_CARVERS
+target[distances == 1] = FEATURES
+target[distances == 0] = FULL
+stages = np.minimum(int(np.floor(12 * progress)), target)
 ```
 
 ![Radial World Generation](Plots/seed_loading.gif)
 
-The map begins empty. Tiles grow into view only after the dependency wave reaches them. Early statuses use muted stage colours, `NOISE` reveals luminance structure, and `SURFACE` restores biome colour. Later symbols remain visible for carvers, features, lighting, spawn preparation, and heightmaps. The strip along the bottom is both a status key and a progress indicator for the center chunk.
-
-This animation uses a deliberately rare-biome showcase seed with compressed biome spacing. All biome classes appear within a small 15 by 15 chunk window so their colours and textures can be compared. Their displayed frequency is not intended to match ordinary vanilla rarity.
+The 31 by 31 overview begins empty and advances only to each chunk's required target status. A 7 by 7 inset keeps the central dependency detail legible, while the right-hand key shows the complete 13-status order. The scheduling speed remains an explanatory model; the source-mapped terminal rings and status taxonomy are the scientific result.
 
 ### Overworld Structure Generation
 
@@ -432,31 +440,27 @@ flowchart LR
     A["World seed, region, salt"] --> B["48-bit Java Random"]
     B --> C["Uniform or center-biased offset"]
     C --> D["Candidate chunk"]
-    E["Biome class"] --> F["Compatibility gate"]
-    D --> F
-    F --> G["Displayed structure start"]
+    D --> E["Candidate-stage map"]
+    D --> F["Biome and terrain checks"]
+    F --> G["Later start qualification"]
 ```
 
-[`Code/core/structures.py`](Code/core/structures.py) keeps the offset rule and biome gate separate:
+[`Code/core/structures.py`](Code/core/structures.py) keeps the exact offset rule separate from later biome and terrain qualification:
 
 ```python
 if config.uniform:
     offset_x = random.next_int(window)
 else:
     offset_x = (random.next_int(window) + random.next_int(window)) // 2
-
-compatible = structure_biome_compatible(config.name, biome_name)
 ```
 
-The visualization includes villages, desert pyramids, jungle pyramids, swamp huts, pillager outposts, igloos, woodland mansions, ocean monuments, shipwrecks, ocean ruins, and ruined portals. Each family keeps its own spacing, separation, salt, and compatible biome set.
+The visualization includes villages, desert pyramids, jungle pyramids, swamp huts, pillager outposts, igloos, woodland mansions, ocean monuments, shipwrecks, ocean ruins, and ruined portals. Each family keeps its own spacing, separation, salt, and offset distribution. Pillager outposts additionally apply their source-level one-in-five roll and nearby-village exclusion. All other points remain candidate-stage positions, avoiding a false claim that the two-dimensional backdrop reproduces Minecraft's full biome and terrain start checks.
 
 ![Overworld Structure Generation](Plots/structure_placement.gif)
 
-The map is measured in chunks. Faint 32-chunk lines provide a common reference, while the cyan outline shows the currently active structure region and the dashed fill shows its usable candidate window. The text trace reports the structure, region, chunk, biome, and whether its offset distribution is uniform or center-biased.
+The map is measured in chunks and spans about 912 by 912 chunks. Faint 32-chunk lines provide a common reference, while the cyan outline shows the currently active structure region and the dashed fill shows its usable candidate window. A fixed 192 by 192 chunk inset preserves local detail. The text trace reports the structure, region, chunk, terrain context, and whether its offset distribution is uniform or center-biased.
 
-Candidates are drawn as original top-down block plans rather than generic dots. Villages have roads and separate houses, pyramids have stepped plans and corner towers, monuments have a prismarine footprint, mansions use a multi-wing roof plan, shipwrecks show a hull, and ruined portals show an incomplete obsidian frame. The plans are enlarged for readability and anchored to the exact candidate chunk. They do not reproduce the complete jigsaw or template expansion of a final structure.
-
-The right side shows every structure plan and every textured biome class. Rare-biome spacing is compressed for this demonstration seed, which is why mushroom fields, badlands, snow, taiga, jungle, and other uncommon combinations all fit inside one map.
+Candidates use compact, structure-specific symbols so all in-bounds points remain visible at the wider scale. The right side identifies every symbol and every textured terrain class. The backdrop is source-informed coordinate-consistent context, not a biome-compatibility filter or a claim of exact vanilla biome rarity.
 
 ### Nether Structure Generation
 
@@ -488,9 +492,9 @@ structure_type = 'fortress' if type_roll < 2 else 'bastion'
 
 ![Nether Structure Generation](Plots/multi_structure_generation.gif)
 
-Red lines show the shared fortress-or-bastion regions. Purple dotted lines show the independent ruined-portal regions. The active trace reports the shared roll, structure type, candidate chunk, and biome, followed by the current portal candidate.
+The map spans about 685 by 685 chunks. Red lines show the shared fortress-or-bastion regions and purple dotted lines show the independent ruined-portal regions. The moving detail inset retains the active grids at readable scale, including at the terrain boundary. The active trace reports the shared roll, structure type, candidate chunk, terrain context, and current portal candidate.
 
-The map uses top-down fortress corridors, irregular bastion plans, and incomplete portal frames instead of scatter icons. The right legend separates terrain from structures. Terrain entries are large texture-only squares for Nether wastes, crimson forest, warped forest, soul-sand valley, basalt deltas, and lava. The warped forest is intentionally blue-green rather than purple, while crimson forest retains its deep red palette. Bastion starts are suppressed in the illustrative basalt-delta gate.
+The compact symbols distinguish fortress, bastion, and ruined-portal candidates without hiding the wider field. The right legend separates terrain context from structures. The warped forest is intentionally blue-green rather than purple, while crimson forest retains its deep red palette. Every exact shared-grid candidate is shown; the illustrative terrain field does not suppress bastions or pretend to reproduce the later biome start gate.
 
 ### Stronghold Ring Distribution
 

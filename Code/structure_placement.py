@@ -22,6 +22,7 @@ from core.structure_visuals import (
 from core.structures import (
     OVERWORLD_STRUCTURES,
     candidate_in_region,
+    pillager_outpost_source_gate,
     structure_biome_compatible,
 )
 from core.style import COLORS, apply_style
@@ -52,13 +53,15 @@ def _regions_covering(minimum, maximum, spacing):
 
 
 def overworld_structure_candidates(
-    seed=42, region_radius=5, resolution=512, max_per_structure=16,
+    seed=42, region_radius=14, resolution=640, max_per_structure=None,
 ):
-    """Return biome-compatible candidates from every displayed structure grid.
+    """Return exact candidate-stage starts from every displayed structure grid.
 
     ``region_radius`` defines the common map half-width in 32-chunk units. The
     individual grids keep their own spacing, separation, salt, and uniform or
-    triangular offset rule.
+    triangular offset rule. The terrain category is context only, not a
+    vanilla biome gate. The direct outpost 1/5 roll and village exclusion are
+    applied because they are independent source-level start checks.
     """
     half_width = int(region_radius) * 32 + 8
     minimum = -half_width
@@ -66,7 +69,7 @@ def overworld_structure_candidates(
     biomes = minecraft_biome_grid(
         seed, resolution=resolution,
         x_extent=(minimum, maximum), z_extent=(minimum, maximum),
-        coordinate_scale=16.0, showcase=True,
+        coordinate_scale=16.0, showcase=False,
     )
     accepted = []
     for config in OVERWORLD_STRUCTURES:
@@ -83,17 +86,28 @@ def overworld_structure_candidates(
             biome = _biome_at_chunk(
                 biomes, item['chunk_x'], item['chunk_z'], minimum, maximum,
             )
-            if structure_biome_compatible(config.name, biome):
-                item['biome'] = biome
-                item['spacing'] = config.spacing
-                item['separation'] = config.separation
-                item['uniform'] = config.uniform
-                compatible.append(item)
+            if (
+                config.name == 'pillager_outpost'
+                and not pillager_outpost_source_gate(
+                    seed, item['chunk_x'], item['chunk_z'],
+                )
+            ):
+                continue
+            item['biome'] = biome
+            item['illustrative_biome_match'] = structure_biome_compatible(
+                config.name, biome,
+            )
+            item['spacing'] = config.spacing
+            item['separation'] = config.separation
+            item['uniform'] = config.uniform
+            compatible.append(item)
         compatible.sort(key=lambda item: (
             math.hypot(item['chunk_x'], item['chunk_z']),
             math.atan2(item['chunk_z'], item['chunk_x']),
         ))
-        accepted.extend(compatible[:int(max_per_structure)])
+        if max_per_structure is not None:
+            compatible = compatible[:int(max_per_structure)]
+        accepted.extend(compatible)
     accepted.sort(key=lambda item: (
         math.hypot(item['chunk_x'], item['chunk_z']), item['name'],
     ))
@@ -147,13 +161,14 @@ def _draw_legends(axis):
         )
     axis.text(
         0.0, 0.018,
-        'Rare-biome spacing is compressed so every\nclass can be compared in one demonstration seed.',
+        'Terrain is source-informed context, not a biome gate.\n'
+        'All in-bounds candidates are shown; outpost direct gates apply.',
         color=COLORS['muted'], fontsize=6.6, va='bottom', linespacing=1.35,
     )
 
 
 def create_structure_placement_animation(
-    save_path, seed=42, region_radius=5, fps=8, duration=14,
+    save_path, seed=42, region_radius=14, fps=8, duration=12,
 ):
     candidates, _, (minimum, maximum) = overworld_structure_candidates(
         seed=seed, region_radius=region_radius,
@@ -178,8 +193,8 @@ def create_structure_placement_animation(
 
     draw_minecraft_terrain(
         axis, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='overworld', resolution=512, alpha=0.82,
-        coordinate_scale=16.0, showcase=True,
+        dimension='overworld', resolution=640, alpha=0.82,
+        coordinate_scale=16.0, showcase=False,
     )
     for coordinate in range(
         math.floor(minimum / 32), math.ceil(maximum / 32) + 1,
@@ -191,14 +206,20 @@ def create_structure_placement_animation(
     axis.axvline(0, color=COLORS['muted'], linewidth=0.65, alpha=0.55)
     axis.scatter([0], [0], marker='+', s=80, c=COLORS['text'], linewidths=1.0, zorder=9)
 
-    schematic_groups = []
-    for item in candidates:
-        group = draw_structure_schematic(
-            axis, item['name'], item['chunk_x'], item['chunk_z'],
-            size=3.2, zorder=6,
+    marker_by_name = {
+        'village': 'o', 'desert_pyramid': '^', 'jungle_pyramid': 'v',
+        'swamp_hut': 's', 'pillager_outpost': 'P', 'igloo': 'h',
+        'woodland_mansion': 'D', 'ocean_monument': 'X',
+        'shipwreck': '>', 'ocean_ruin': '<', 'ruined_portal': '*',
+    }
+    candidate_collections = {}
+    for config in OVERWORLD_STRUCTURES:
+        style = STRUCTURE_SCHEMATICS[config.name]
+        candidate_collections[config.name] = axis.scatter(
+            [], [], s=15, marker=marker_by_name[config.name],
+            c=style.primary, edgecolors=COLORS['text'], linewidths=0.22,
+            alpha=0.88, zorder=6,
         )
-        group.set_visible(False)
-        schematic_groups.append(group)
 
     current_region = Rectangle(
         (0, 0), 1, 1, fill=False,
@@ -210,12 +231,52 @@ def create_structure_placement_animation(
         alpha=0.0, zorder=3,
     )
     active_outline = Circle(
-        (0, 0), 5.8, fill=False, edgecolor=COLORS['text'],
+        (0, 0), 8.5, fill=False, edgecolor=COLORS['text'],
         linewidth=1.2, alpha=0.0, zorder=12,
     )
     axis.add_patch(current_window)
     axis.add_patch(current_region)
     axis.add_patch(active_outline)
+    detail = axis.inset_axes([0.715, 0.685, 0.27, 0.29])
+    draw_minecraft_terrain(
+        detail, (minimum, maximum, minimum, maximum), seed=seed,
+        dimension='overworld', resolution=640, alpha=0.96,
+        coordinate_scale=16.0, showcase=False,
+    )
+    detail.set_facecolor(COLORS['panel'])
+    detail.tick_params(colors=COLORS['muted'], labelsize=5.8, pad=1)
+    for spine in detail.spines.values():
+        spine.set_color(COLORS['text'])
+        spine.set_linewidth(0.8)
+    detail_region = Rectangle(
+        (0, 0), 1, 1, fill=False, edgecolor=COLORS['cyan'],
+        linewidth=1.4, zorder=8,
+    )
+    detail_window = Rectangle(
+        (0, 0), 1, 1, facecolor=COLORS['blue'],
+        edgecolor=COLORS['cyan'], linewidth=0.9, linestyle='--',
+        alpha=0.18, zorder=7,
+    )
+    detail_candidate = detail.scatter(
+        [], [], s=48, c=COLORS['gold'], marker='o',
+        edgecolors=COLORS['text'], linewidths=0.55, zorder=10,
+    )
+    detail.add_patch(detail_window)
+    detail.add_patch(detail_region)
+    detail_window.set_visible(False)
+    detail_region.set_visible(False)
+    detail_candidate.set_visible(False)
+    detail.set_xlim(-96, 96)
+    detail.set_ylim(-96, 96)
+    detail_collections = {}
+    for config in OVERWORLD_STRUCTURES:
+        style = STRUCTURE_SCHEMATICS[config.name]
+        detail_collections[config.name] = detail.scatter(
+            [], [], s=12, marker=marker_by_name[config.name],
+            c=style.primary, edgecolors=COLORS['text'], linewidths=0.18,
+            alpha=0.9, zorder=9,
+        )
+    detail.set_title('CENTRAL 192 x 192 CHUNK DETAIL', fontsize=6.8, pad=3)
     trace_text = figure.text(
         0.405, 0.055, '', ha='center', va='center',
         color=COLORS['text'], fontsize=8.6, fontweight='bold', family='monospace',
@@ -226,15 +287,23 @@ def create_structure_placement_animation(
     )
     _draw_legends(legend_axis)
     figure.suptitle(
-        'STRUCTURE CANDIDATE PLACEMENT   JAVA 1.16.1',
+        'OVERWORLD STRUCTURE CANDIDATE PLACEMENT   JAVA 1.16.1',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.965,
     )
 
     def update(frame_index):
         progress = frame_index / max(total_frames - 1, 1)
         shown = min(len(candidates), max(1, round(progress * len(candidates))))
-        for index, group in enumerate(schematic_groups):
-            group.set_visible(index < shown)
+        visible = candidates[:shown]
+        for config in OVERWORLD_STRUCTURES:
+            offsets = np.asarray([
+                (entry['chunk_x'], entry['chunk_z'])
+                for entry in visible if entry['name'] == config.name
+            ], dtype=float)
+            if offsets.size == 0:
+                offsets = np.empty((0, 2))
+            candidate_collections[config.name].set_offsets(offsets)
+            detail_collections[config.name].set_offsets(offsets)
 
         item = candidates[shown - 1]
         spacing = item['spacing']
@@ -258,7 +327,8 @@ def create_structure_placement_animation(
             f"{STRUCTURE_SCHEMATICS[item['name']].label.upper()}   "
             f"REGION ({item['region_x']:+03d},{item['region_z']:+03d})   "
             f"CHUNK ({item['chunk_x']:+04d},{item['chunk_z']:+04d})   "
-            f"{OVERWORLD_BIOMES[item['biome']].label.upper()}   {distribution}"
+            f"TERRAIN CONTEXT {OVERWORLD_BIOMES[item['biome']].label.upper()}   "
+            f"{distribution}   {shown}/{len(candidates)}"
         )
         return []
 
@@ -267,7 +337,7 @@ def create_structure_placement_animation(
     )
     animation.save(save_path, writer=PillowWriter(fps=fps), dpi=68)
     plt.close(figure)
-    optimize_gif(save_path, colors=64)
+    optimize_gif(save_path, colors=32)
     return str(save_path)
 
 

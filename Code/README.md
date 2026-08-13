@@ -30,12 +30,12 @@ from core.constants import STRONGHOLD_RINGS, BIOME_COLORS
 Real-time simulation of dragon behavior with:
 
 - 24 pathfinding nodes across 60, 40, and 20-block rings
-- All 11 Java 1.16.1 phase types, with nine normal combat phases and two subdued exceptional phases
+- All 11 Java 1.16.1 phase types, each highlighted, with source-confirmed solid transitions and dashed exceptional transitions
 - Crystal destruction mechanics affecting perch probability
 - Source-shaped central-island projection with exact spike footprints
 - Graph-based navigation expanded exclusively through legal weighted edges
-- Compact phase ovals with an explicit next-holding-path landing roll
-- A 240-route legal-edge ensemble with stable final hotspots and frequency-mapped bars
+- Compact phase ovals with an explicit next-holding-path landing roll and polished crystal HUD
+- A 240-route legal-edge ensemble with synchronized batches, stable final hotspots, viridis frequency encoding, and a three-second hold
 
 ```python
 class EnderDragonAI:
@@ -49,9 +49,9 @@ class EnderDragonAI:
 #### `end_structure_generation.py`
 **Fixed-Seed End-City Qualification Visualization**
 
-- Continuous projected outer-island footprints rather than isolated source dots
+- Two equal map panels with continuous projected outer-island footprints
 - Exact 20 by 20 chunk placement regions and uniform 9 by 9 candidate windows
-- Fixed-seed `1/81` candidate prior masked by the documented 2D island-support gate
+- Nearest-cell viridis heatmap of the fixed-seed `1/81` candidate prior masked by the documented 2D island-support gate
 - Simplified ship glyphs used symbolically for qualified End-city starts
 
 **Output**: `Plots/end_structure_generation.png`
@@ -64,28 +64,28 @@ The large panel evaluates the exact signed 32-bit End overflow mask from -6,000,
 **Output**: `Plots/end_dimension_overview.png`
 
 #### structure_placement.py
-**Java 1.16.1 Village Candidate Animation**
+**Java 1.16.1 Overworld Candidate Animation**
 
-The generator shows one exact candidate attempt per 32 x 32 chunk region:
+The generator shows every in-bounds random-spread candidate across an approximately 912 x 912 chunk view:
 
-- Java-compatible region seed with village salt 10387312
-- Two Java Random nextInt(24) offsets
-- Explicit 24 x 24 chunk candidate window
-- Explicit eight-chunk excluded margins and exact candidate trace
+- Eleven structure families with their own spacing, separation, salt, and offset distribution
+- Exact Java-compatible candidate rolls and direct pillager-outpost gates
+- Source-informed terrain used only as context, never as a fabricated biome filter
+- Fixed 192 x 192 chunk detail inset plus active region and candidate window
 
 **Output**: Plots/structure_placement.gif
 
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Shows the exact thirteen-status order from `EMPTY` through `FULL` as an explicitly modeled dependency wave. The map starts hidden, chunk tiles grow into view, status-specific terrain and feature marks persist, and the completed `FULL` field holds for two seconds. The terrain is illustrative, while the status order is source-mapped to Java 1.16.1.
+Shows the exact thirteen-status order and source-required terminal dependency rings across a 31 x 31 overview. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. A 7 x 7 detail inset preserves local readability. Timing and terrain remain explicitly modeled context.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows the shared 27 x 27 fortress and bastion grid, its exact 2/5 versus 3/5 type roll, and the independent 25 x 25 ruined-portal grid. The Nether backdrop uses crimson, indigo, basalt, soul-sand, and lava-gold tones to keep the exact candidate layers readable.
+Shows every exact candidate across an approximately 685 x 685 chunk view: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The source-informed Nether backdrop is context only and does not suppress candidates. A clamped active-grid detail inset keeps edge regions readable.
 
 **Output**: `Plots/multi_structure_generation.gif`
 

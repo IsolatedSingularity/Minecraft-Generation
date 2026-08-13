@@ -24,6 +24,9 @@ Jenova/
 # Local audit files
 audit-*.md
 
+# Private Minecraft 1.16.1 source/data corpus (large and copyrighted)
+Game Reference/
+
 Jenova/
 
 Jenova/

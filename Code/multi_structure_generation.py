@@ -86,14 +86,18 @@ def _draw_legend(axis):
         )
 
 
-def nether_structure_candidates(seed=42, region_radius=4, resolution=384):
-    """Return displayed candidate layers and their illustrative biome gates."""
+def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
+    """Return inclusive candidate-stage Nether structure layers.
+
+    The shared 27-chunk grid and its 2/5 fortress, 3/5 bastion source roll are
+    exact. The terrain category is retained only as explanatory context.
+    """
     minimum = -region_radius * NETHER_STRUCTURE_SPACING - 5
     maximum = (region_radius + 1) * NETHER_STRUCTURE_SPACING + 5
     biomes = minecraft_nether_biome_grid(
         seed, resolution=resolution,
         x_extent=(minimum, maximum), z_extent=(minimum, maximum),
-        coordinate_scale=16.0, showcase=True,
+        coordinate_scale=16.0, showcase=False,
     )
     regions = _spiral_regions(region_radius)
     shared = []
@@ -104,25 +108,37 @@ def nether_structure_candidates(seed=42, region_radius=4, resolution=384):
             biomes, shared_item['chunk_x'], shared_item['chunk_z'],
             minimum, maximum,
         )
-        # Bastions do not start in basalt deltas. Fortresses remain valid.
-        if not (
-            shared_item['name'] == 'bastion'
-            and shared_item['biome'] == 'basalt_deltas'
-        ):
-            shared.append(shared_item)
+        shared.append(shared_item)
 
-        portal = candidate_in_region(
-            seed, region_x, region_z, NETHER_RUINED_PORTAL,
-        )
-        portal['biome'] = _biome_at_chunk(
-            biomes, portal['chunk_x'], portal['chunk_z'], minimum, maximum,
-        )
-        portals.append(portal)
+    first_portal_region = int(np.floor(minimum / NETHER_RUINED_PORTAL_SPACING)) - 1
+    last_portal_region = int(np.floor(maximum / NETHER_RUINED_PORTAL_SPACING)) + 1
+    for region_x in range(first_portal_region, last_portal_region + 1):
+        for region_z in range(first_portal_region, last_portal_region + 1):
+            portal = candidate_in_region(
+                seed, region_x, region_z, NETHER_RUINED_PORTAL,
+            )
+            if not (
+                minimum <= portal['chunk_x'] <= maximum
+                and minimum <= portal['chunk_z'] <= maximum
+            ):
+                continue
+            portal['biome'] = _biome_at_chunk(
+                biomes, portal['chunk_x'], portal['chunk_z'], minimum, maximum,
+            )
+            portals.append(portal)
+    shared.sort(key=lambda item: (
+        max(abs(item['region_x']), abs(item['region_z'])),
+        np.arctan2(item['region_z'], item['region_x']),
+    ))
+    portals.sort(key=lambda item: (
+        max(abs(item['region_x']), abs(item['region_z'])),
+        np.arctan2(item['region_z'], item['region_x']),
+    ))
     return shared, portals, biomes, (minimum, maximum)
 
 
 def create_multi_structure_animation(
-    save_path, seed=42, region_radius=4, fps=8, duration=14,
+    save_path, seed=42, region_radius=12, fps=8, duration=14,
 ):
     shared, portals, _, (minimum, maximum) = nether_structure_candidates(
         seed, region_radius,
@@ -148,8 +164,8 @@ def create_multi_structure_animation(
 
     draw_minecraft_terrain(
         axis, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='nether', resolution=384, alpha=0.92,
-        coordinate_scale=16.0, showcase=True,
+        dimension='nether', resolution=640, alpha=0.92,
+        coordinate_scale=16.0, showcase=False,
     )
     grid_extent = region_radius + 2
     for coordinate in range(-grid_extent, grid_extent + 1):
@@ -162,22 +178,20 @@ def create_multi_structure_animation(
         axis.axhline(value, color=COLORS['violet'], linewidth=0.58, alpha=0.22, linestyle=':')
     axis.scatter([0], [0], marker='+', s=85, c=COLORS['text'], linewidths=1.1, zorder=12)
 
-    shared_groups = []
-    for item in shared:
-        group = draw_structure_schematic(
-            axis, item['name'], item['chunk_x'], item['chunk_z'],
-            size=4.1, zorder=7,
-        )
-        group.set_visible(False)
-        shared_groups.append(group)
-    portal_groups = []
-    for item in portals:
-        group = draw_structure_schematic(
-            axis, 'ruined_portal', item['chunk_x'], item['chunk_z'],
-            size=3.6, zorder=8,
-        )
-        group.set_visible(False)
-        portal_groups.append(group)
+    candidate_collections = {
+        'fortress': axis.scatter(
+            [], [], s=20, marker='s', c=STRUCTURE_SCHEMATICS['fortress'].primary,
+            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=7,
+        ),
+        'bastion': axis.scatter(
+            [], [], s=22, marker='D', c=STRUCTURE_SCHEMATICS['bastion'].primary,
+            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=7,
+        ),
+        'ruined_portal': axis.scatter(
+            [], [], s=24, marker='*', c=STRUCTURE_SCHEMATICS['ruined_portal'].primary,
+            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=8,
+        ),
+    }
 
     active_shared = Rectangle(
         (0, 0), NETHER_STRUCTURE_SPACING, NETHER_STRUCTURE_SPACING,
@@ -191,6 +205,38 @@ def create_multi_structure_animation(
     )
     axis.add_patch(active_shared)
     axis.add_patch(active_portal)
+    detail = axis.inset_axes([0.715, 0.685, 0.27, 0.29])
+    draw_minecraft_terrain(
+        detail, (minimum, maximum, minimum, maximum), seed=seed,
+        dimension='nether', resolution=640, alpha=0.98,
+        coordinate_scale=16.0, showcase=False,
+    )
+    detail.set_facecolor('#140E12')
+    detail.tick_params(colors=COLORS['muted'], labelsize=5.8, pad=1)
+    for spine in detail.spines.values():
+        spine.set_color(COLORS['text'])
+        spine.set_linewidth(0.8)
+    detail_shared = Rectangle(
+        (0, 0), NETHER_STRUCTURE_SPACING, NETHER_STRUCTURE_SPACING,
+        fill=False, edgecolor=COLORS['coral'], linewidth=1.35, zorder=8,
+    )
+    detail_portal = Rectangle(
+        (0, 0), NETHER_RUINED_PORTAL_SPACING, NETHER_RUINED_PORTAL_SPACING,
+        fill=False, edgecolor=COLORS['violet'], linewidth=1.15,
+        linestyle='--', zorder=8,
+    )
+    detail_shared_point = detail.scatter(
+        [], [], s=44, c=COLORS['coral'],
+        edgecolors=COLORS['text'], linewidths=0.5, zorder=10,
+    )
+    detail_portal_point = detail.scatter(
+        [], [], s=44, c=COLORS['violet'],
+        edgecolors=COLORS['text'], linewidths=0.5, zorder=10,
+    )
+    detail.add_patch(detail_shared)
+    detail.add_patch(detail_portal)
+    detail_portal.set_visible(False)
+    detail.set_title('ACTIVE GRID DETAIL', fontsize=6.8, pad=3)
     trace_text = figure.text(
         0.405, 0.052, '', ha='center', va='center',
         color=COLORS['text'], fontsize=8.9, fontweight='bold',
@@ -212,10 +258,22 @@ def create_multi_structure_animation(
         portal_progress = np.clip((progress - 0.08) / 0.84, 0.0, 1.0)
         shared_count = max(1, round(shared_progress * len(shared)))
         portal_count = max(0, round(portal_progress * len(portals)))
-        for index, group in enumerate(shared_groups):
-            group.set_visible(index < shared_count)
-        for index, group in enumerate(portal_groups):
-            group.set_visible(index < portal_count)
+        visible_shared = shared[:shared_count]
+        for name in ('fortress', 'bastion'):
+            offsets = np.asarray([
+                (item['chunk_x'], item['chunk_z'])
+                for item in visible_shared if item['name'] == name
+            ], dtype=float)
+            candidate_collections[name].set_offsets(
+                offsets if offsets.size else np.empty((0, 2))
+            )
+        portal_offsets = np.asarray([
+            (item['chunk_x'], item['chunk_z'])
+            for item in portals[:portal_count]
+        ], dtype=float)
+        candidate_collections['ruined_portal'].set_offsets(
+            portal_offsets if portal_offsets.size else np.empty((0, 2))
+        )
 
         shared_item = shared[shared_count - 1]
         active_shared.set_xy((
@@ -223,6 +281,10 @@ def create_multi_structure_animation(
             shared_item['region_z'] * NETHER_STRUCTURE_SPACING,
         ))
         active_shared.set_alpha(0.92)
+        detail_shared.set_xy(active_shared.get_xy())
+        detail_shared_point.set_offsets([[
+            shared_item['chunk_x'], shared_item['chunk_z'],
+        ]])
         if portal_count:
             portal_item = portals[portal_count - 1]
             active_portal.set_xy((
@@ -230,16 +292,28 @@ def create_multi_structure_animation(
                 portal_item['region_z'] * NETHER_RUINED_PORTAL_SPACING,
             ))
             active_portal.set_alpha(0.92)
+            detail_portal.set_xy(active_portal.get_xy())
+            detail_portal.set_visible(True)
+            detail_portal_point.set_offsets([[
+                portal_item['chunk_x'], portal_item['chunk_z'],
+            ]])
             portal_text = (
                 f"PORTAL ({portal_item['chunk_x']:+04d},{portal_item['chunk_z']:+04d}) "
                 f"{NETHER_BIOMES[portal_item['biome']].label.upper()}"
             )
         else:
             portal_text = 'PORTAL PENDING'
+            detail_portal.set_visible(False)
+            detail_portal_point.set_offsets(np.empty((0, 2)))
+        detail_center_x = np.clip(shared_item['chunk_x'], minimum + 42, maximum - 42)
+        detail_center_z = np.clip(shared_item['chunk_z'], minimum + 42, maximum - 42)
+        detail.set_xlim(detail_center_x - 42, detail_center_x + 42)
+        detail.set_ylim(detail_center_z - 42, detail_center_z + 42)
         trace_text.set_text(
             f"SHARED ROLL {shared_item['type_roll']} -> {shared_item['name'].upper()} "
             f"({shared_item['chunk_x']:+04d},{shared_item['chunk_z']:+04d}) "
-            f"{NETHER_BIOMES[shared_item['biome']].label.upper()}   {portal_text}"
+            f"TERRAIN CONTEXT {NETHER_BIOMES[shared_item['biome']].label.upper()}   "
+            f"{portal_text}   {shared_count + portal_count}/{len(shared) + len(portals)}"
         )
         return []
 
@@ -248,7 +322,7 @@ def create_multi_structure_animation(
     )
     animation.save(save_path, writer=PillowWriter(fps=fps), dpi=72)
     plt.close(figure)
-    optimize_gif(save_path, colors=64)
+    optimize_gif(save_path, colors=32)
     return str(save_path)
 
 

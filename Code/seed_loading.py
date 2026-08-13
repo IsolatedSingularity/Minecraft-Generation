@@ -34,11 +34,19 @@ STATUS_SHORT = [
     'LIQUID', 'FEATURES', 'LIGHT', 'SPAWN', 'MAPS', 'FULL',
 ]
 
+# ChunkStatus.DISTANCE_TO_TARGET_GENERATION_STATUS in Java 1.16.1:
+# target, one-chunk ring, two-chunk ring, then radii 3 through 10.
+TARGET_STATUS_BY_DISTANCE = {
+    0: 12,  # FULL
+    1: 8,   # FEATURES
+    2: 7,   # LIQUID_CARVERS
+}
+
 
 def chunk_status_snapshot(
-    frame_index, fps=8, duration=12, full_hold=2, radius=7,
+    frame_index, fps=8, duration=12, full_hold=2, radius=15,
 ):
-    """Return stage indices and reveal growth for one animation frame."""
+    """Return the source-backed target-status dependency snapshot."""
     total_frames = int(round(float(fps) * float(duration)))
     hold_frames = int(round(float(fps) * float(full_hold)))
     generation_frames = total_frames - hold_frames
@@ -56,17 +64,20 @@ def chunk_status_snapshot(
     else:
         progress = int(frame_index) / max(generation_frames - 1, 1)
 
-    dependency_lag = 0.72
-    wave_extent = len(STATUS_NAMES) + radius * dependency_lag
-    phase = progress * wave_extent - distances * dependency_lag
-    stages = np.floor(phase).astype(int)
-    hidden = phase < 0.0
-    stages = np.clip(stages, 0, len(STATUS_NAMES) - 1)
-    growth = np.clip(phase, 0.0, 1.0)
+    target = np.zeros(distances.shape, dtype=int)
+    target[distances <= 10] = 1
+    for distance, status in TARGET_STATUS_BY_DISTANCE.items():
+        target[distances == distance] = status
+
+    phase = progress * (len(STATUS_NAMES) - 1)
+    stages = np.minimum(np.floor(phase).astype(int), target)
+    growth = np.where(
+        stages >= target, 1.0, np.clip(phase - stages, 0.0, 1.0),
+    )
+    hidden = np.zeros(distances.shape, dtype=bool)
     if progress >= 1.0:
-        stages.fill(len(STATUS_NAMES) - 1)
+        stages = target
         growth.fill(1.0)
-        hidden.fill(False)
     return stages, growth, hidden
 
 
@@ -92,21 +103,29 @@ def create_seed_loading_animation(
     full_hold=2,
 ):
     total_frames = int(round(fps * duration))
-    radius = 7
+    radius = 15
     size = 2 * radius + 1
-    pixels_per_chunk = 12
+    pixels_per_chunk = 10
     terrain = minecraft_terrain_rgba(
         seed, resolution=size * pixels_per_chunk, dimension='overworld',
         x_extent=(-radius - 0.5, radius + 0.5),
         z_extent=(-radius - 0.5, radius + 0.5),
-        coordinate_scale=16.0, showcase=True,
+        coordinate_scale=16.0, showcase=False,
     )[..., :3]
     background_rgb = np.asarray(to_rgb(COLORS['background']))
 
-    figure, axis = plt.subplots(
-        figsize=(8.4, 8.4), facecolor=COLORS['background'],
+    figure = plt.figure(
+        figsize=(12.8, 7.2), facecolor=COLORS['background'],
     )
-    figure.subplots_adjust(left=0.08, right=0.98, top=0.89, bottom=0.17)
+    grid = figure.add_gridspec(
+        1, 2, width_ratios=[2.18, 0.92],
+        left=0.055, right=0.985, top=0.90, bottom=0.095, wspace=0.075,
+    )
+    axis = figure.add_subplot(grid[0, 0])
+    side = figure.add_subplot(grid[0, 1])
+    side.set_xlim(0, 1)
+    side.set_ylim(0, 1)
+    side.axis('off')
     axis.set_aspect('equal')
     axis.set_xlim(-radius - 0.5, radius + 0.5)
     axis.set_ylim(-radius - 0.5, radius + 0.5)
@@ -128,10 +147,10 @@ def create_seed_loading_animation(
     )
     for value in np.arange(-radius - 0.5, radius + 1.0, 1.0):
         axis.axvline(
-            value, color='#07090E', linewidth=0.52, alpha=0.70, zorder=3,
+            value, color='#07090E', linewidth=0.36, alpha=0.62, zorder=3,
         )
         axis.axhline(
-            value, color='#07090E', linewidth=0.52, alpha=0.70, zorder=3,
+            value, color='#07090E', linewidth=0.36, alpha=0.62, zorder=3,
         )
     axis.scatter(
         [0], [0], marker='+', s=90, c=COLORS['text'],
@@ -142,47 +161,61 @@ def create_seed_loading_animation(
         edgecolor=COLORS['gold'], linewidth=2.1, zorder=8,
     )
     axis.add_patch(target_outline)
-    feature_data = _effect_positions(radius, 3, 0, (-0.12, 0.10))
-    light_data = _effect_positions(radius, 7, 0, (0.18, 0.16))
-    spawn_data = _effect_positions(radius, 11, 0, (-0.18, -0.16))
-    heightmap_data = _effect_positions(radius, 13, 0, (0.16, -0.17))
-    feature_marks = axis.scatter(
-        [], [], s=23, marker='^', c='#E9CE70',
-        edgecolors='#3E3215', linewidths=0.48, zorder=6,
+    detail_axis = side.inset_axes([0.04, 0.61, 0.92, 0.34])
+    detail_axis.set_xlim(-3.5, 3.5)
+    detail_axis.set_ylim(-3.5, 3.5)
+    detail_axis.set_aspect('equal')
+    detail_axis.set_xticks(range(-3, 4))
+    detail_axis.set_yticks(range(-3, 4))
+    detail_axis.tick_params(colors=COLORS['muted'], labelsize=5.8, pad=1)
+    detail_axis.set_title('CENTRAL 7x7 DEPENDENCY DETAIL', fontsize=7.5, pad=4)
+    crop_start = (radius - 3) * pixels_per_chunk
+    crop_stop = (radius + 4) * pixels_per_chunk
+    detail_image = detail_axis.imshow(
+        output[crop_start:crop_stop, crop_start:crop_stop],
+        origin='lower', interpolation='nearest',
+        extent=(-3.5, 3.5, -3.5, 3.5), zorder=1,
     )
-    light_marks = axis.scatter(
-        [], [], s=24, marker='*', c=STATUS_COLORS[9],
-        edgecolors='#5A4916', linewidths=0.36, zorder=6.2,
-    )
-    spawn_marks = axis.scatter(
-        [], [], s=14, marker='o', c=STATUS_COLORS[10],
-        edgecolors=COLORS['text'], linewidths=0.32, zorder=6.3,
-    )
-    heightmap_marks = axis.scatter(
-        [], [], s=30, marker='s', facecolors='none',
-        edgecolors=STATUS_COLORS[11], linewidths=0.62, zorder=6.4,
-    )
+    for value in np.arange(-3.5, 4.0, 1.0):
+        detail_axis.axvline(value, color='#07090E', linewidth=0.58, alpha=0.78, zorder=3)
+        detail_axis.axhline(value, color='#07090E', linewidth=0.58, alpha=0.78, zorder=3)
+    detail_axis.add_patch(Rectangle(
+        (-0.5, -0.5), 1, 1, fill=False,
+        edgecolor=COLORS['gold'], linewidth=1.7, zorder=8,
+    ))
 
-    legend_axis = figure.add_axes([0.04, 0.045, 0.92, 0.075])
-    legend_axis.set_xlim(0, len(STATUS_NAMES))
-    legend_axis.set_ylim(0, 1)
+    legend_axis = side.inset_axes([0.0, 0.03, 1.0, 0.52])
+    legend_axis.set_xlim(0, 2)
+    legend_axis.set_ylim(0, 7.4)
     legend_axis.axis('off')
-    for index, (name, color) in enumerate(zip(STATUS_SHORT, STATUS_COLORS)):
-        legend_axis.add_patch(Rectangle(
-            (index + 0.04, 0.40), 0.90, 0.30,
-            facecolor=color, edgecolor='#07090E', linewidth=0.45,
-        ))
-        legend_axis.text(
-            index + 0.49, 0.19, name, ha='center', va='center',
-            color=COLORS['muted'], fontsize=6.8, fontweight='bold',
-        )
-    stage_marker = Rectangle(
-        (0.04, 0.40), 0.90, 0.30, fill=False,
-        edgecolor=COLORS['text'], linewidth=1.55,
+    legend_axis.text(
+        0.0, 7.18, 'CENTER-CHUNK STATUS', color=COLORS['text'],
+        fontsize=8.6, fontweight='black', va='center',
     )
-    legend_axis.add_patch(stage_marker)
+    stage_boxes = []
+    for index, (name, color) in enumerate(zip(STATUS_SHORT, STATUS_COLORS)):
+        column = index // 7
+        row = index % 7
+        x = column + 0.04
+        y = 6.55 - row * 0.77
+        box = Rectangle(
+            (x, y), 0.22, 0.36,
+            facecolor=color, edgecolor='#07090E', linewidth=0.45,
+        )
+        legend_axis.add_patch(box)
+        stage_boxes.append(box)
+        legend_axis.text(
+            x + 0.29, y + 0.18, name, ha='left', va='center',
+            color=COLORS['muted'], fontsize=7.0, fontweight='bold',
+        )
+    legend_axis.text(
+        0.02, 0.10,
+        'Final source target by Chebyshev radius:\n'
+        '0 FULL | 1 FEATURES | 2 LIQUID CARVERS | 3-10 STRUCTURE STARTS',
+        color=COLORS['muted'], fontsize=6.6, va='bottom', linespacing=1.35,
+    )
     figure.text(
-        0.50, 0.938, 'RADIAL WORLD GENERATION   JAVA 1.16.1',
+        0.50, 0.953, 'CHUNK-STATUS DEPENDENCY WAVE   JAVA 1.16.1',
         ha='center', va='center', color=COLORS['text'],
         fontsize=17, fontweight='black',
     )
@@ -239,15 +272,13 @@ def create_seed_loading_animation(
                 ]
         image.set_data(output)
 
-        feature_marks.set_offsets(_visible_offsets(feature_data, stages, 8))
-        light_marks.set_offsets(_visible_offsets(light_data, stages, 9))
-        spawn_marks.set_offsets(_visible_offsets(spawn_data, stages, 10))
-        heightmap_marks.set_offsets(
-            _visible_offsets(heightmap_data, stages, 11)
-        )
-
         active_stage = int(stages[radius, radius])
-        stage_marker.set_x(active_stage + 0.04)
+        for index, box in enumerate(stage_boxes):
+            box.set_edgecolor(COLORS['text'] if index == active_stage else '#07090E')
+            box.set_linewidth(1.55 if index == active_stage else 0.45)
+        detail_image.set_data(output[
+            crop_start:crop_stop, crop_start:crop_stop,
+        ])
         return []
 
     animation = FuncAnimation(
