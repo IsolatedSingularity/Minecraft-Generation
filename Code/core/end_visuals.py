@@ -104,6 +104,7 @@ def draw_end_spikes(
     ax, seed=42, crystals_alive=10, alpha=1.0, zorder=5,
     radius_override=None, tower_edgecolor='#6E4B86',
     tower_linewidth=0.7, cage_linewidth=0.75, cage_extent=2.7,
+    radius_scale=1.0,
 ):
     """Draw spike footprints with top-down crystals and cage marks.
 
@@ -115,7 +116,7 @@ def draw_end_spikes(
         x = spike['x']
         z = spike['z']
         source_radius = float(spike['radius'])
-        radius = (
+        radius = float(radius_scale) * (
             source_radius if radius_override is None
             else float(radius_override)
         )

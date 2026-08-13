@@ -98,7 +98,7 @@ class DragonSpriteArtist:
         )
 
     def update(self, position, angle, state, scale=1.0):
-        quantized = int(round(float(angle) / 5.0) * 5) % 360
+        quantized = int(round(float(angle) / 2.0) * 2) % 360
         key = (quantized, state)
         if key not in self.cache:
             rotation = quantized - 90
@@ -242,7 +242,7 @@ def _arena_static(
     spikes = draw_end_spikes(
         ax, seed=seed, crystals_alive=10, zorder=4,
         tower_edgecolor='#786A8B', tower_linewidth=1.35,
-        cage_linewidth=1.75, cage_extent=3.25,
+        cage_linewidth=1.75, cage_extent=3.75, radius_scale=1.28,
     )
     draw_end_fountain(ax, active=False, zorder=7)
     ax.set_xlim(-limits, limits)
@@ -352,13 +352,6 @@ def _draw_state_machine(ax):
         )
         ax.add_patch(connection)
 
-    ax.text(
-        0.50, 0.265,
-        'SOLID: PHASE LOGIC | DASHED: BOOTSTRAP / DAMAGE | AIRBORNE LETHAL DAMAGE -> DYING',
-        ha='center', va='center', color='#97A5BA', fontsize=6.8,
-        fontweight='bold', family='DejaVu Sans', linespacing=1.25, zorder=5,
-    )
-
     hud = FancyBboxPatch(
         (0.035, 0.012), 0.93, 0.216,
         boxstyle='round,pad=0.012,rounding_size=0.022',
@@ -382,11 +375,6 @@ def _draw_state_machine(ax):
         0.071, 0.187, 'NEXT HOLDING-PATH LANDING ROLL',
         ha='left', va='center', color='#D7DDEA',
         fontsize=7.7, fontweight='black', family='DejaVu Sans', zorder=5,
-    )
-    ax.text(
-        0.071, 0.151, 'evaluated once at path completion',
-        ha='left', va='center', color='#8492AA',
-        fontsize=6.7, fontweight='bold', family='DejaVu Sans', zorder=5,
     )
     probability_background = FancyBboxPatch(
         (0.405, 0.139), 0.405, 0.036,
@@ -437,13 +425,45 @@ def _draw_state_machine(ax):
     )
 
 
+def _set_active_graph_edge(artist, edge, color):
+    """Show one decoded graph edge without replacing the flight trajectory."""
+    if edge is None:
+        artist.set_segments([])
+        return
+    left, right = edge
+    artist.set_segments([[DRAGON_NODES[left], DRAGON_NODES[right]]])
+    artist.set_color(color)
+
+
+def _nearest_route_edge(position, node_path, maximum_distance=11.0):
+    """Return the route edge nearest a projected continuous flight position."""
+    if len(node_path) < 2:
+        return None
+    point = np.asarray(position, dtype=float)
+    best_edge = None
+    best_distance = float('inf')
+    for left, right in zip(node_path, node_path[1:]):
+        start = DRAGON_NODES[left]
+        end = DRAGON_NODES[right]
+        delta = end - start
+        fraction = np.clip(
+            np.dot(point - start, delta) / max(np.dot(delta, delta), 1.0),
+            0.0, 1.0,
+        )
+        distance = float(np.linalg.norm(point - (start + fraction * delta)))
+        if distance < best_distance:
+            best_distance = distance
+            best_edge = tuple(sorted((int(left), int(right))))
+    return best_edge if best_distance <= float(maximum_distance) else None
+
+
 def create_dragon_pathfinding_animation(
     save_path, fps=12, dpi=100, colors=96,
 ):
     """Create the shorter README hero animation."""
     frames = scripted_showcase()
-    if len(frames) > 320:
-        indices = np.linspace(0, len(frames) - 1, 320).round().astype(int)
+    if len(frames) > 448:
+        indices = np.linspace(0, len(frames) - 1, 448).round().astype(int)
         frames = [frames[index] for index in indices]
     figure = plt.figure(figsize=(12.8, 7.2), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
@@ -458,9 +478,16 @@ def create_dragon_pathfinding_animation(
         probability_formula, crystal_label,
     ) = _draw_state_machine(machine)
 
-    trail = LineCollection([], linewidths=2.8, capstyle='round', zorder=9)
+    active_edge = LineCollection(
+        [], linewidths=5.4, capstyle='round', joinstyle='round',
+        alpha=0.82, zorder=8.4,
+    )
+    arena.add_collection(active_edge)
+    trail = LineCollection(
+        [], linewidths=2.8, capstyle='round', joinstyle='round', zorder=9,
+    )
     arena.add_collection(trail)
-    active = DragonSpriteArtist(arena, size_blocks=15.8, zorder=13)
+    active = DragonSpriteArtist(arena, size_blocks=19.0, zorder=13)
     fireball_glow = arena.scatter(
         [], [], s=185, marker='o', c='#8B36C6',
         edgecolors='none', alpha=0.32, visible=False, zorder=13.2,
@@ -508,6 +535,10 @@ def create_dragon_pathfinding_animation(
         pulse_amplitude = 0.025 if sitting else 0.065
         sprite_scale = 1.0 + pulse_amplitude * np.sin(2.0 * np.pi * frame_index / 7.0)
         active.update(frame.position, angle, frame.state, scale=sprite_scale)
+        _set_active_graph_edge(
+            active_edge, frame.active_edge,
+            to_rgba(STATE_COLORS[frame.state], 0.86),
+        )
 
         if frame.fireball_position is not None:
             offset = np.asarray(frame.fireball_position).reshape(1, 2)
@@ -589,21 +620,28 @@ def _clip_ranges(frames):
     }
 
 
-def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
+def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
     """Create compact zoomed state clips for the README detail section."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     outputs = []
     for name, clip in _clip_ranges(scripted_showcase()).items():
-        if len(clip) > 72:
-            indices = np.linspace(0, len(clip) - 1, 72).round().astype(int)
+        if len(clip) > 96:
+            indices = np.linspace(0, len(clip) - 1, 96).round().astype(int)
             clip = [clip[index] for index in indices]
         figure, arena = plt.subplots(figsize=(9.6, 5.4), facecolor=COLORS['background'])
         _arena_static(arena, compact=True, limits=70)
         figure.subplots_adjust(left=0.02, right=0.98, top=0.94, bottom=0.02)
-        trail = LineCollection([], linewidths=3.2, capstyle='round', zorder=9)
+        active_edge = LineCollection(
+            [], linewidths=5.8, capstyle='round', joinstyle='round',
+            alpha=0.82, zorder=8.4,
+        )
+        arena.add_collection(active_edge)
+        trail = LineCollection(
+            [], linewidths=3.2, capstyle='round', joinstyle='round', zorder=9,
+        )
         arena.add_collection(trail)
-        active = DragonSpriteArtist(arena, size_blocks=15.0, zorder=13)
+        active = DragonSpriteArtist(arena, size_blocks=18.0, zorder=13)
         breath_cloud, breath_particles, breath_stream = _create_breath_artists(arena)
         permanent_titles = {
             'dragon_holding_strafe.gif': 'HOLDING AND STRAFING',
@@ -638,6 +676,10 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
                 frame.position, angle, frame.state,
                 scale=1.0 + 0.05 * np.sin(2.0 * np.pi * frame_index / 7.0),
             )
+            _set_active_graph_edge(
+                active_edge, frame.active_edge,
+                to_rgba(STATE_COLORS[frame.state], 0.86),
+            )
             _update_breath_artists(
                 frame, breath_cloud, breath_particles, breath_stream,
             )
@@ -655,7 +697,7 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
 
 
 def trajectory_animation_state(
-    frame_index, trajectories=240, fps=8, frames=152,
+    frame_index, trajectories=240, fps=10, frames=224,
     final_hold=3.0, batch_size=15,
 ):
     """Return synchronized route-count and representative-path state.
@@ -691,7 +733,7 @@ def trajectory_animation_state(
 
 
 def create_trajectory_ensemble_animation(
-    save_path, seed=12031, trajectories=240, fps=8, frames=152,
+    save_path, seed=12031, trajectories=240, fps=10, frames=224,
     final_hold=3.0, batch_size=15,
 ):
     """Animate dragon approaches with distinct-trajectory intersection counts."""
@@ -705,14 +747,16 @@ def create_trajectory_ensemble_animation(
         )
         for index in range(trajectories)
     ]
-    paths = [
+    simulations = [
         simulate_perch_trajectory(
             seed + index * 7919,
             crystals_alive=10 - (index % 6),
             player_position=player_positions[index],
-        )[0]
+        )
         for index in range(trajectories)
     ]
+    paths = [simulation[0] for simulation in simulations]
+    node_paths = [simulation[1] for simulation in simulations]
     bins = np.linspace(-76, 76, 121)
     contributions = []
     for path in paths:
@@ -779,12 +823,20 @@ def create_trajectory_ensemble_animation(
         interpolation='bilinear', alpha=0.74, zorder=2.8,
     )
     lines = LineCollection(
-        [], linewidths=0.78, colors=COLORS['cyan'], zorder=8,
+        [], linewidths=0.78, colors=COLORS['cyan'],
+        capstyle='round', joinstyle='round', zorder=8,
     )
     axis.add_collection(lines)
-    local_trail = LineCollection([], linewidths=3.1, capstyle='round', zorder=10)
+    active_edge = LineCollection(
+        [], linewidths=5.6, capstyle='round', joinstyle='round',
+        alpha=0.86, zorder=9.2,
+    )
+    axis.add_collection(active_edge)
+    local_trail = LineCollection(
+        [], linewidths=3.1, capstyle='round', joinstyle='round', zorder=10,
+    )
     axis.add_collection(local_trail)
-    dragon = DragonSpriteArtist(axis, size_blocks=15.0, zorder=12)
+    dragon = DragonSpriteArtist(axis, size_blocks=17.5, zorder=12)
     count_text = axis.text(
         0.985, 0.025, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
@@ -857,6 +909,7 @@ def create_trajectory_ensemble_animation(
         lines.set_colors(line_colors)
 
         featured = paths[featured_index]
+        featured_nodes = node_paths[featured_index]
         point_index = min(len(featured) - 1, round(local_phase * (len(featured) - 1)))
         point = featured[point_index]
         edge_fade = min(local_phase / 0.12, 1.0)
@@ -881,6 +934,11 @@ def create_trajectory_ensemble_animation(
             if frame_index < active_frames else 1.0
         )
         dragon.update(point, angle, 'landing_approach', scale=sprite_scale)
+        _set_active_graph_edge(
+            active_edge,
+            _nearest_route_edge(point, featured_nodes),
+            to_rgba(COLORS['cyan'], 0.92),
+        )
 
         for bar, label, row, column in zip(
             bars, bar_value_texts, hotspot_rows, hotspot_columns,

@@ -16,6 +16,7 @@ The `core/` module provides centralized utilities for all generation algorithms:
 | `structures.py` | Exact Java 1.16.1 candidate-stage structure placement |
 | `end_generation.py` | End geometry, simplex fields, and 32-bit overflow rings |
 | `minecraft_visuals.py` | Illustrative pixel-art terrain backdrops for exact overlays |
+| `mathematical_foundations.py` | Exact LCG bit-state and weighted octave-composition figures |
 
 ```python
 from core import MinecraftLCG, generate_region_seed, simple_perlin_noise

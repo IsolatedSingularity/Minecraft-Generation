@@ -17,17 +17,17 @@ topic-specific retrieval conservatively; do not recursively read the corpus,
 raw JAR extractions, assets, tooling environments, or all mapped sources.
 -->
 
-###### An approachable mathematical study of Minecraft's procedural-generation algorithms, with supporting analysis of pathing algorithms such as Ender Dragon flight behaviour.
+###### One seed goes in. Villages, strongholds, strange coastlines, and one very stubborn dragon come out.
 
 ![Ender Dragon Pathfinding](Plots/dragon_pathfinding_hero.gif)
 
-## Objective
+## The Question
 
-Minecraft Generation asks a simple question: how does one integer become a world?
+How does one integer become a world?
 
-The answer is a chain of deterministic decisions. A seed initializes a pseudorandom generator. The generator chooses offsets, noise fields turn nearby coordinates into related values, biome rules classify those values, and structure rules decide which candidate chunks are allowed to survive. The Ender Dragon follows the same broad pattern. Its movement looks organic, but graph edges, state transitions, probabilities, and continuous steering all constrain what it can do.
+There is no single world-generation formula hiding behind the terrain. A seed starts a pseudorandom stream, that stream chooses offsets, noise gives nearby coordinates some memory of one another, and layers of biome and structure rules decide what survives. Even the Ender Dragon, for all its theatrical circling, is fenced in by a graph, a phase machine, and a handful of probabilities.
 
-This repository turns those rules into tested Python models and publication-style visualizations. It aims to make the mathematics understandable without pretending that every explanatory surface is a complete Minecraft server implementation.
+This repository pulls those rules apart with tested Python models and generated figures. The goal is clarity without make-believe: exact arithmetic is called exact, and an explanatory surface is never dressed up as a block-for-block vanilla world.
 
 <table align="center">
 <tr>
@@ -51,22 +51,22 @@ flowchart LR
     F --> G
 ```
 
-### How to read the accuracy labels
+### Where the map ends and Minecraft begins
 
-The repository separates two kinds of result:
+Two labels keep the pictures honest:
 
 - **Exact or Java-compatible** means the implementation follows the stated Java 1.16.1 arithmetic, bit width, seed transform, graph topology, or placement constants.
 - **Source-informed explanatory model** means the visualization preserves the mechanism and coordinate relationships but does not claim to reproduce every block from a vanilla save.
 
-The distinction matters. A structure candidate can be mathematically exact while the coloured biome underneath it is an intentionally readable climate model. Each section states where that boundary lies.
+That boundary matters. A structure candidate can be mathematically exact while the coloured terrain beneath it is deliberately readable rather than vanilla-perfect. Each section says which side of the line it occupies.
 
 ## Mathematical Foundation
 
-### Java's 48-bit generator
+*Before there are mountains or monuments, there is a number moving through a very small machine.*
 
-#### The idea
+### Java's 48-bit clockwork
 
-Minecraft needs a repeatable stream of values that look random. If two worlds use the same seed and the same sequence of calls, they must receive the same answers. Java's `Random` class accomplishes this by storing a 48-bit internal state and repeatedly transforming it.
+Minecraft needs surprise that can be replayed exactly. Give two worlds the same seed and the same sequence of calls, and they must receive the same answers. Java's `Random` class does this with a 48-bit internal state that advances one rigid step at a time.
 
 If the current state is $X_n$, the next state is
 
@@ -87,9 +87,7 @@ This can be read as four small operations:
 3. Keep only the lowest 48 bits.
 4. Return selected high bits as the next random value.
 
-The modulus is not decorative notation. It is the rule that wraps a number back into the finite set of $2^{48}$ possible states. Replacing this generator with NumPy's default random generator would produce plausible-looking points, but not Minecraft's points.
-
-#### The matching code
+The modulus is the edge of the machine. Anything beyond 48 bits wraps back into its finite state space. NumPy's default generator could draw equally convincing dots, but they would not be Minecraft's dots.
 
 [`Code/core/lcg.py`](Code/core/lcg.py) performs the same masked update:
 
@@ -104,13 +102,15 @@ class MinecraftLCG:
         return self.seed >> (48 - bits)
 ```
 
-The hexadecimal mask is $2^{48}-1$. Applying `& MASK` therefore keeps exactly the same 48 low bits as the mathematical modulus.
+The hexadecimal mask is $2^{48}-1$, so `& MASK` keeps the same low 48 bits as the modulus. The figure below follows 64 exact updates. Its bit raster makes the important sleight of hand visible: the state keeps all 48 bits, while `next_bits(16)` hands only the highest 16 back to the caller.
+
+![Java 48-bit LCG state and bit extraction](Plots/lcg_bit_extraction.png)
 
 ### Noise, scale, and Brownian composition
 
-#### Why random dots do not make terrain
+*A landscape needs memory. Nearby blocks should feel related, even when the horizon does not.*
 
-Independent random values jump sharply from one coordinate to the next. Terrain needs spatial memory: nearby coordinates should usually receive similar values, while distant coordinates may belong to completely different landforms.
+Independent random values snap from one coordinate to the next. Terrain needs slower changes underneath the fine ones, so a hillside can belong to a region and a region can belong to a continent.
 
 A useful explanatory model is fractal Brownian motion:
 
@@ -126,7 +126,7 @@ Here:
 - $f$ increases the spatial frequency from one octave to the next.
 - $p$ reduces the amplitude of finer octaves.
 
-For $f=2$ and $p=1/2$, the first layer might describe a continent, the next a region, and the next local terrain detail. Each layer changes twice as quickly but contributes half as strongly.
+For $f=2$ and $p=1/2$, each new layer changes twice as quickly and speaks half as loudly. The broad layer carries the silhouette; the later octaves roughen its edges.
 
 ```mermaid
 flowchart LR
@@ -139,13 +139,15 @@ flowchart LR
 
 [`Code/core/minecraft_visuals.py`](Code/core/minecraft_visuals.py) samples broad, medium, detail, climate, and moisture fields in world coordinates. The same seed and coordinate refer to the same explanatory biome field even when two figures use different zoom levels.
 
+![Weighted Brownian noise octaves and their sum](Plots/brownian_noise_composition.png)
+
 The renderer also defines reusable `BiomeDefinition` objects. A biome definition owns its name, dimension, base colour, accent colour, and texture rule. Mushroom fields receive a distinct mycelium-like texture, badlands receive terracotta bands, snowy tundra receives pale icy detail, taiga receives spruce-like flecks, and the Nether forests retain their characteristic crimson and blue-green palettes.
 
 ## Visualizations
 
 ### Dragon Pathfinding
 
-#### What is being modelled?
+*Twenty-four waypoints hang above the End. The dragon still has to turn between them.*
 
 The Ender Dragon does not choose every position in the sky independently. Java 1.16.1 defines 24 horizontal navigation nodes arranged in three rings:
 
@@ -164,8 +166,6 @@ flowchart LR
     E --> F["Dragon position and direction"]
     F --> A
 ```
-
-#### The mathematics
 
 For an edge from node $u$ to node $v$, the top-down travel cost is its Euclidean length:
 
@@ -189,8 +189,6 @@ $$
 
 With ten crystals alive, the chance is $1/13$, or about $7.7\%$. With no crystals alive, it becomes $1/3$, or about $33.3\%$. Destroying crystals therefore changes both healing pressure and the probability of a landing attempt.
 
-#### The matching code
-
 [`Code/core/dragon.py`](Code/core/dragon.py) keeps graph restrictions separate from edge cost:
 
 ```python
@@ -203,19 +201,17 @@ for neighbor in adjacency[current]:
     weight = np.linalg.norm(DRAGON_NODES[current] - DRAGON_NODES[neighbor])
 ```
 
-The graph selects meaningful targets. Every graph-bound portion of a seeded route is expanded through legal decoded edges, then a reduced top-down integrator applies the source movement terms: wrapped yaw error, a $\pm50^\circ$ turn clamp, retained turn momentum, alignment-sensitive acceleration, and velocity damping. This prevents disconnected chords and the old rigid boundary-following motion. It is still a two-dimensional explanatory projection of the three-dimensional entity controller, not a block-exact replay.
-
-#### The animation
+The graph selects meaningful targets. Every graph-bound route is expanded through legal decoded edges, then a reduced top-down integrator applies the source movement terms: wrapped yaw error, a $\pm50^\circ$ turn clamp, retained turn momentum, alignment-sensitive acceleration, and velocity damping. Path targets advance at the source's ten-block completion boundary. Dense time samples keep the visible trail curved without inventing points between simulated positions. This is still a two-dimensional projection of a three-dimensional controller, not a block-exact replay.
 
 ![Dragon path graph and fight state](Plots/dragon_pathfinding_hero.gif)
 
-The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, breath clouds, explosions, and recent trail. Grey lines show legal graph edges. The enlarged raster sprite rotates with its direction of travel and strongly adopts the colour of its active phase while leaving the graph readable.
+The left panel puts the island, node graph, enlarged spikes, cages, fountain, dragon, fireball, breath clouds, explosions, and recent trail in one block-coordinate system. Grey lines show every legal edge. The edge currently being traversed lights up beneath the continuous steering trail, so the graph decision and the dragon's curved response can be read at the same time.
 
 The right panel shows all 11 Java 1.16.1 phase types and highlights every one at least once. Solid arrows follow source-confirmed phase changes: Holding can enter Strafe or Landing Approach; Landing Approach enters Landing and then Sitting Scanning; scanning can attack, take off, or select Charging Player; attacking enters Flaming; and Takeoff, Strafe, and Charging Player return to Holding. Dashed arrows identify initialization and damage-triggered paths. In particular, sufficient damage while sitting or hovering forces Takeoff, while lethal airborne damage can enter Dying. The currently selected phase alone receives a thick white outline.
 
 The dashboard labels the probability as the next Holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction remains an external scripted demonstration event. The Strafe example launches a translucent purple dragon fireball whose impact cloud grows from radius 3 toward radius 7. Sitting Flaming separately displays a growing, fading radius-5 breath cloud, followed by a visible damage pulse that triggers the source-valid Takeoff path. The timings and radii follow the audited phase and entity sources; their top-down particle rendering is illustrative.
 
-#### Phase details
+#### The fight, closer in
 
 <table>
 <tr>
@@ -230,13 +226,13 @@ The dashboard labels the probability as the next Holding-path landing roll. Its 
 </tr>
 </table>
 
-These shorter clips retain the same arena, source-shaped steering, raster sprite, and state colours. A fixed close view keeps the fight geometry legible, while permanent titles replace the changing annotation boxes that previously obscured the action.
+The shorter clips use the same larger dragon, enlarged towers, highlighted graph edges, source-shaped steering, and phase colours. They linger a little longer than the hero's original cuts, but keep enough pace to feel like a fight rather than a slideshow.
 
 ### Trajectory Distribution and Degeneracy
 
-#### From one path to many paths
+*One flight is an anecdote. Two hundred and forty flights begin to reveal the corridors.*
 
-One route shows what happened in one simulation. An ensemble asks which locations remain important across many seeds and starting states.
+One route only tells us what happened once. An ensemble asks which cells keep mattering when the starting node and the player's direction change.
 
 For trajectories $\gamma_i(t)$, a spatial occupancy field can be written as
 
@@ -264,15 +260,15 @@ cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The figure accumulates 240 seeded approaches in fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, and the same source-shaped steering integrator used by the hero supplies continuous motion. A higher-density raster keeps the left map crisp, while the enlarged representative dragon and its recent trail adopt the active route colour.
+The figure accumulates 240 seeded landing approaches in fixed batches. Each seed chooses a representative current outer-ring node. Player positions are spread deterministically across a 24-to-48-block annulus; as Java 1.16.1 does, the landing phase selects the radius-40 node opposite that player and appends the exit portal as the final target. The intervening node route uses only decoded legal edges. The same steering reduction used by the hero supplies the continuous positions, and the active graph edge glows beneath the representative dragon's trail.
 
 The right panel fixes the final separated local-maximum cells so their labels do not jump during the animation, then accumulates their distinct-route counts from exactly the routes shown so far. Hollow markers on the map identify those same cells. Both bar length and a fixed min-to-max viridis scale encode frequency, so small but meaningful differences remain visible. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
 
 ### End Dimension Structure
 
-#### Three very different scales
+*The End is tidy near the portal, scattered beyond the gulf, and numerically haunted at the world border.*
 
-The End figure combines central fight geometry, the first outer-island band, and a distant integer-overflow effect.
+This figure jumps between three scales that rarely fit in the same conversation: the central fight, the first outer islands, and an integer-overflow scar millions of blocks away.
 
 Ten spike positions occupy a nominal radius of 42 blocks:
 
@@ -316,13 +312,13 @@ generated = signed >= 0
 
 ![End Dimension Structure](Plots/end_dimension_overview.png)
 
-Panel (a) samples the exact predicate across approximately $\pm30$ million blocks, near the ordinary world-border scale. The underlying void bands are centered on the true origin, as described by [Mojang issue MC-159283](https://bugs-legacy.mojang.com/browse/MC-159283). Because the bands become extremely thin, a regular image grid undersamples them. The resulting map-scale alias looks like a repeating checkerboard lattice, matching the archived visual reference. The apparent circles are not new End origins.
+Panel (a) samples the exact predicate across approximately $\pm30$ million blocks, near the ordinary world-border scale. The void bands remain centered on the real origin, as described by [Mojang issue MC-159283](https://bugs-legacy.mojang.com/browse/MC-159283). At this scale the bands become thinner than the image grid, so they alias into a checkerboard-like lattice. Those apparent circles are sampling artifacts, not a secret collection of new End origins.
 
 Panel (b) shows the fight-scale island, spike ring, emphasized cages, active exit fountain, and all 20 central gateways. Panel (c) shows the first outer-island source band as many separate seed sites rather than one continuous ring of End stone.
 
 ### End Structure Generation
 
-#### End cities and paired gateways
+*Past the thousand-block gulf, islands offer possibilities. The height check decides which ones become cities.*
 
 End cities use a random-spread grid before biome and terrain-height checks. For a 20-chunk spacing and 11-chunk separation, the candidate window is
 
@@ -363,13 +359,13 @@ The offset signs come from one of the four rotations and have five-block magnitu
 
 ![End Structure Generation](Plots/end_structure_generation.png)
 
-The left panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Subtle cyan diamonds retain the exact radius-96 central gateways without competing with the structure field. Enlarged purpur ship glyphs mark candidates whose modeled four-sample minimum reaches 60.
+The left panel draws complete visible island footprints instead of reducing each island source to a lonely dot. Cyan diamonds mark the modeled outer gateway endpoints paired with the exact central ring. Purpur ship silhouettes mark candidate chunks whose modeled four-sample minimum reaches 60.
 
-The equally sized right panel repeats the left map extent as a viridis heatmap of the modeled surface height, with its colourbar on the right and the 60-block contour drawn directly on the field. Grey crosses show failed exact-grid candidates and ship glyphs show modeled passes. Visible legends distinguish gateways, outer-island support, qualified starts, and failures without sacrificing a quarter of the map to a diagnostic inset. The glyph is symbolic: it does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
+The right panel repeats the same map as a modeled surface-height field. The pale contour is 60 blocks, grey crosses fail the gate, and the same ship silhouette marks a pass. Both legends sit above the data and use the symbols they describe. The ship remains a symbol for a qualified End-city start; it does not promise that a ship template appears in every generated city.
 
 ### Radial World Generation
 
-#### Chunk generation is a dependency wave
+*A chunk cannot finish alone. Its neighbours have homework too.*
 
 A chunk does not move directly from nonexistent to finished. Java 1.16.1 advances it through an ordered sequence of statuses such as biomes, noise, surface, carvers, features, lighting, spawn preparation, heightmaps, and full completion.
 
@@ -412,7 +408,7 @@ The broad overview shows an illustrative radial request front across 721 by 721 
 
 ### Overworld Structure Generation
 
-#### Candidate first, biome second
+*The grid proposes. The biome and terrain get the final word.*
 
 Many structures begin by dividing the chunk plane into placement regions. For world seed $W$, region coordinate $(R_x,R_z)$, and structure salt $\sigma$, the region seed is
 
@@ -468,7 +464,7 @@ Candidates use compact, structure-specific symbols so all in-bounds points remai
 
 ### Nether Structure Generation
 
-#### Shared and independent random sequences
+*Fortresses and bastions share a throw of the dice. Ruined portals bring their own.*
 
 Nether fortresses and bastion remnants share one Java 1.16.1 candidate grid. Each 27 by 27 chunk region has a 23 by 23 candidate window. After the candidate offsets, Java Random draws
 
@@ -502,7 +498,7 @@ Compact symbols distinguish every displayed fortress, bastion, and ruined-portal
 
 ### Stronghold Ring Distribution
 
-#### Why strongholds form rings
+*The search begins as a spiral, long before an Eye of Ender enters the story.*
 
 Strongholds do not use a rectangular random-spread grid. Java 1.16.1 advances through polar coordinates. A useful expression for the candidate radius in chunks is
 
@@ -552,6 +548,8 @@ Panel (c) separates two quantities that were previously easy to confuse. Bar hei
 
 ## Quick Start
 
+*Run the checks, step into `Code/`, and let the figures rebuild themselves.*
+
 ```bash
 git clone https://github.com/IsolatedSingularity/Minecraft-Generation.git
 cd Minecraft-Generation
@@ -568,6 +566,8 @@ python render_all.py
 Run `render_all.py` from inside `Code/`. The visualization modules use sibling imports, so invoking `python Code/render_all.py` from the repository root is not supported.
 
 ## Scope and Accuracy
+
+*A useful picture should make its limits as visible as its result.*
 
 > [!NOTE]
 > Active mathematical visualizations target Java Edition 1.16.1. Java Random, candidate-region arithmetic, stronghold ring geometry, gateway-ring positions, dragon graph topology, End-city sample geometry, and signed-integer overflow use Java-compatible conventions. Biome noise fields, chunk reveal timing, continuous two-dimensional dragon steering, modeled End heights, and safe outer-gateway destinations are explanatory models unless a section states otherwise. No Bedrock behaviour is represented.
@@ -595,7 +595,7 @@ Run `render_all.py` from inside `Code/`. The visualization modules use sibling i
 
 ## Legacy Simulations
 
-The original dragon animation is retained as a record of the project's earlier reduced-order model. It uses an abstract arena and a larger dashboard rather than the current source-informed central-island projection. Its unconstrained curves helped motivate the smoother steering restored in the new hero, but its graph, effects, and geometry are not used as evidence for current numerical claims.
+The original dragon animation stays as a fossil from an earlier model. Its arena is abstract, its dashboard is larger, and its curves are freer than the source allows. That looseness helped motivate the current steering work, but the old graph, effects, and geometry are not evidence for any numerical claim above.
 
 ![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)
 

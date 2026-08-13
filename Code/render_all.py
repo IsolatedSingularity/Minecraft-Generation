@@ -14,6 +14,10 @@ from dragon_pathfinding import (
 )
 from end_dimension_overview import create_end_dimension_overview
 from end_structure_generation import create_end_structure_generation
+from mathematical_foundations import (
+    create_brownian_composition_figure,
+    create_lcg_bit_figure,
+)
 from multi_structure_generation import create_multi_structure_animation
 from redstone_quasi_connectivity import (
     create_quasi_connectivity_animation,
@@ -39,6 +43,10 @@ def main():
 
     _render('End dimension structure', lambda: create_end_dimension_overview(
         plots / 'end_dimension_overview.png'))
+    _render('LCG bit extraction', lambda: create_lcg_bit_figure(
+        plots / 'lcg_bit_extraction.png'))
+    _render('Brownian noise composition', lambda: create_brownian_composition_figure(
+        plots / 'brownian_noise_composition.png'))
     _render('Stronghold rings', lambda: create_stronghold_distribution(
         plots / 'stronghold_rings.png'))
     _render('End structure generation', lambda: create_end_structure_generation(

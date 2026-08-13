@@ -57,6 +57,7 @@ class DragonFrame:
     explosion_index: int | None = None
     explosion_phase: float = 0.0
     damage_pulse: float = 0.0
+    active_edge: tuple[int, int] | None = None
 
 
 def build_dragon_nodes():
@@ -217,7 +218,7 @@ def _wrap_degrees(value):
 
 
 def source_steered_path(
-    control_points, samples_per_target=12, arrival_radius=3.0,
+    control_points, samples_per_target=12, arrival_radius=10.0,
     maximum_ticks_per_target=220, turn_mode='airborne',
 ):
     """Integrate a top-down reduction of the Java dragon steering loop.
@@ -241,7 +242,6 @@ def source_steered_path(
     microsteps = [position.copy()]
 
     for target in targets[1:]:
-        previous_distance = float('inf')
         for tick in range(int(maximum_ticks_per_target)):
             delta = target - position
             distance = float(np.linalg.norm(delta))
@@ -281,11 +281,11 @@ def source_steered_path(
                 ) / 2.0
                 velocity *= retention
 
-            # A passed target may start receding before it enters the small
-            # arrival disk. Move on once it has clearly crossed the target.
-            if tick > 8 and distance > previous_distance + 1.5:
+            # The Java phases ask for another path target inside a ten-block
+            # radius. In this top-down reduction the same boundary prevents a
+            # missed target from turning into a decorative orbit.
+            if tick > 8 and distance > 150.0:
                 break
-            previous_distance = distance
 
     microsteps = np.asarray(microsteps)
     output_count = max(
@@ -313,48 +313,27 @@ def simulate_perch_trajectory(
     seed, crystals_alive=10, player_position=(34.0, -18.0),
     max_holding_segments=24,
 ):
-    """Simulate holding decisions and the source-shaped landing approach.
+    """Simulate one source-shaped landing approach in top-down projection.
 
-    The node graph and phase rolls are source-faithful. Continuous movement
-    between targets is a reduced-order top-down interpolation.
+    ``LandingApproachPhase`` finds the nearest current node, selects the node
+    opposite the nearby player at radius 40, and appends the exit portal as
+    the final path target. The seed chooses a representative current outer
+    node; the graph route and portal approach then follow that source logic.
+    Continuous movement remains a reduced-order top-down integration.
     """
+    del max_holding_segments  # Kept for compatibility with older callers.
     random = MinecraftLCG(seed)
     player = np.asarray(player_position, dtype=float)
     current = random.next_int(12) if crystals_alive > 0 else 12 + random.next_int(8)
-    node_path = [current]
-
-    for _ in range(max_holding_segments):
-        decision = holding_transition(
-            random, crystals_alive, float(np.linalg.norm(player)),
-        )
-        if decision == 'landing_approach':
-            break
-
-        if decision == 'strafing':
-            side = 1.0 if random.next_int(2) else -1.0
-            strafe_point = player + np.array([side * 8.0, -side * 5.0])
-            target = nearest_node(strafe_point, crystals_alive)
-        else:
-            minimum_node = 0 if crystals_alive > 0 else 12
-            allowed = list(range(minimum_node, 24))
-            target_index = random.next_int(len(allowed))
-            target = allowed[target_index]
-            if target == current:
-                target = allowed[(target_index + 1) % len(allowed)]
-
-        route = shortest_path(current, target, crystals_alive)
-        node_path.extend(route[1:])
-        current = node_path[-1]
 
     direction = player / max(float(np.linalg.norm(player)), 1.0)
     opposite = -direction * 40.0
     landing_node = nearest_node(opposite, crystals_alive)
-    approach = shortest_path(current, landing_node, crystals_alive)
-    node_path.extend(approach[1:])
+    node_path = shortest_path(current, landing_node, crystals_alive)
 
     control_points = [DRAGON_NODES[index] for index in node_path]
-    control_points.extend((-direction * 18.0, np.zeros(2)))
-    coordinates = source_steered_path(control_points, samples_per_target=7)
+    control_points.append(np.zeros(2))
+    coordinates = source_steered_path(control_points, samples_per_target=14)
     return coordinates, node_path
 
 
@@ -395,7 +374,27 @@ def scripted_showcase():
             alive_crystals=tuple(sorted(alive)),
         ))
 
-    def append_curve(points, state, samples=9, fireball=False):
+    def active_route_edge(point, graph_nodes):
+        if graph_nodes is None or len(graph_nodes) < 2:
+            return None
+        position = np.asarray(point, dtype=float)
+        nearest = None
+        nearest_distance = float('inf')
+        for left, right in zip(graph_nodes, graph_nodes[1:]):
+            start = DRAGON_NODES[left]
+            end = DRAGON_NODES[right]
+            delta = end - start
+            fraction = np.clip(
+                np.dot(position - start, delta) / max(np.dot(delta, delta), 1.0),
+                0.0, 1.0,
+            )
+            distance = float(np.linalg.norm(position - (start + fraction * delta)))
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest = tuple(sorted((int(left), int(right))))
+        return nearest if nearest_distance <= 11.0 else None
+
+    def append_curve(points, state, samples=9, fireball=False, graph_nodes=None):
         curve = source_steered_path(
             points, samples_per_target=samples,
             turn_mode='landing' if state == 'landing' else 'airborne',
@@ -430,12 +429,13 @@ def scripted_showcase():
                 breath_radius=breath_radius,
                 breath_alpha=breath_alpha,
                 breath_kind=breath_kind,
+                active_edge=active_route_edge(point, graph_nodes),
             ))
 
     first_holding = shortest_path(0, 15, crystals_alive=len(alive))
     append_curve(
         [np.zeros(2)] + [DRAGON_NODES[index] for index in first_holding],
-        'holding', samples=10,
+        'holding', samples=10, graph_nodes=first_holding,
     )
     append_curve(
         [DRAGON_NODES[15], np.array([-10.0, -38.0]),
@@ -447,7 +447,7 @@ def scripted_showcase():
     strafe_return = shortest_path(6, 18, crystals_alive=len(alive))
     append_curve(
         [DRAGON_NODES[index] for index in strafe_return],
-        'holding', samples=9,
+        'holding', samples=9, graph_nodes=strafe_return,
     )
 
     # Crystal losses start after the flight has been established and jump
@@ -473,12 +473,13 @@ def scripted_showcase():
             alive_crystals=tuple(sorted(alive)),
             explosion_index=explosion_index,
             explosion_phase=explosion_phase,
+            active_edge=active_route_edge(point, second_holding),
         ))
 
     landing_route = shortest_path(3, 15, crystals_alive=len(alive))
     append_curve(
         [DRAGON_NODES[index] for index in landing_route],
-        'landing_approach', samples=9,
+        'landing_approach', samples=9, graph_nodes=landing_route,
     )
     append_curve(
         [DRAGON_NODES[landing_route[-1]], np.array([11.0, -6.0]), np.zeros(2)],
@@ -523,7 +524,7 @@ def scripted_showcase():
     append_curve(
         [player, DRAGON_NODES[charge_node]]
         + [DRAGON_NODES[index] for index in charge_return[1:]],
-        'holding', samples=9,
+        'holding', samples=9, graph_nodes=charge_return,
     )
 
     # Return for a second, abbreviated but transition-valid perched sequence.
@@ -534,7 +535,7 @@ def scripted_showcase():
     second_landing = shortest_path(8, second_landing_node, crystals_alive=len(alive))
     append_curve(
         [DRAGON_NODES[index] for index in second_landing],
-        'landing_approach', samples=8,
+        'landing_approach', samples=8, graph_nodes=second_landing,
     )
     append_curve(
         [DRAGON_NODES[second_landing[-1]], np.array([11.0, -6.0]), np.zeros(2)],
@@ -560,11 +561,11 @@ def scripted_showcase():
     takeoff_route = shortest_path(20, 8, crystals_alive=len(alive))
     append_curve(
         [np.zeros(2)] + [DRAGON_NODES[index] for index in takeoff_route],
-        'takeoff', samples=9,
+        'takeoff', samples=9, graph_nodes=takeoff_route,
     )
     append_curve(
         [DRAGON_NODES[index] for index in (8, 9, 10, 11, 0)],
-        'holding', samples=8,
+        'holding', samples=8, graph_nodes=(8, 9, 10, 11, 0),
     )
     # DyingPhase steers toward the exit portal. This is an explicit exceptional
     # showcase after the ordinary combat loop, not a transition caused by the

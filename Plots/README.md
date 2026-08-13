@@ -10,6 +10,8 @@ This directory contains comprehensive visualizations demonstrating Minecraft's p
 |------|-------------|
 | dragon_pathfinding_hero.gif | Source-shaped steering, enlarged phase-coloured dragon, phase graph, fireball, breath, and damage effects |
 | dragon_trajectory_ensemble.gif | Viridis ensemble of 240 synchronized source-steered approaches and repeatability hotspots |
+| lcg_bit_extraction.png | Exact 48-bit Java Random state updates and high-bit extraction |
+| brownian_noise_composition.png | Four weighted simplex octaves, their sum, and a shared spatial slice |
 | seed_loading.gif | Broad radial request wave with an exact 21 by 21 chunk-status dependency footprint |
 | structure_placement.gif | Complete wide-view Overworld candidates |
 | multi_structure_generation.gif | Exact Nether candidates with a five-biome explanatory proxy |
@@ -53,7 +55,9 @@ P(perch) = 1 / (3 + crystals_alive)
 - **Features**:
   - 240 approaches accumulated in synchronized fixed batches
   - Deterministic player targets sampled across a 24-to-48-block annulus
+  - Source-shaped landing selection from an outer-ring start to the radius-40 node opposite the player, then the exit portal
   - Every graph-bound transition follows a legal decoded edge
+  - The currently traversed graph edge is highlighted beneath the continuous trail
   - Source-shaped yaw, turn-momentum, acceleration, and damping integrator
   - Higher-density route raster for a crisper map
   - Stable hotspot cells whose map markers, bar lengths, and fixed min-to-max viridis colours share distinct-route counts

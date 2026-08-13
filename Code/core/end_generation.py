@@ -476,7 +476,7 @@ def outer_gateway_positions(world_seed, radius_blocks=1024, search_limit=2300):
 def end_city_candidates(world_seed, max_coordinate_blocks=3600):
     """Return End-city grid candidates passing the modeled height audit.
 
-    Candidate chunks use the Java 1.16.1 uniform 20 by 20 grid with an
+    Candidate chunks use the Java 1.16.1 center-biased 20 by 20 grid with an
     11-chunk separation and salt 10387313. Rotation, four sample positions,
     their minimum, and the height-60 comparison match the source. Sample
     values come from the documented 2D height proxy because this repository

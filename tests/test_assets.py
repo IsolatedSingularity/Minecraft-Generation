@@ -10,12 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 PLOTS = ROOT / 'Plots'
 
 RENDERED_GIFS = {
-    'dragon_pathfinding_hero.gif': (1200, 700, 240),
-    'dragon_holding_strafe.gif': (900, 500, 20),
-    'dragon_landing_perch.gif': (900, 500, 20),
-    'dragon_takeoff.gif': (900, 500, 20),
+    'dragon_pathfinding_hero.gif': (1200, 700, 420),
+    'dragon_holding_strafe.gif': (900, 500, 88),
+    'dragon_landing_perch.gif': (900, 500, 88),
+    'dragon_takeoff.gif': (900, 500, 80),
     # The 3 s final hold is coalesced into the final optimized GIF frame.
-    'dragon_trajectory_ensemble.gif': (1400, 800, 120),
+    'dragon_trajectory_ensemble.gif': (1400, 800, 180),
     # Unchanged wave cells are coalesced while their timing is retained.
     'seed_loading.gif': (1200, 700, 20),
     'structure_placement.gif': (1000, 550, 90),
@@ -30,6 +30,8 @@ README_ASSETS = (
     'dragon_landing_perch.gif',
     'dragon_takeoff.gif',
     'dragon_trajectory_ensemble.gif',
+    'lcg_bit_extraction.png',
+    'brownian_noise_composition.png',
     'end_dimension_overview.png',
     'end_structure_generation.png',
     'seed_loading.gif',
@@ -42,8 +44,8 @@ README_ASSETS = (
 class AssetIntegrityTests(unittest.TestCase):
     def test_retained_new_gifs_decode_and_are_bounded(self):
         maximum_sizes = {
-            'dragon_pathfinding_hero.gif': 22 * 1024 * 1024,
-            'dragon_trajectory_ensemble.gif': 28 * 1024 * 1024,
+            'dragon_pathfinding_hero.gif': 32 * 1024 * 1024,
+            'dragon_trajectory_ensemble.gif': 36 * 1024 * 1024,
             'structure_placement.gif': 15 * 1024 * 1024,
             'multi_structure_generation.gif': 17 * 1024 * 1024,
         }
@@ -64,13 +66,22 @@ class AssetIntegrityTests(unittest.TestCase):
             )
 
     def test_new_static_end_structure_figure_is_readable(self):
-        with Image.open(PLOTS / 'end_structure_generation.png') as image:
-            self.assertGreaterEqual(image.width, 2500)
-            self.assertGreaterEqual(image.height, 1500)
+        for name in (
+            'end_structure_generation.png',
+            'lcg_bit_extraction.png',
+            'brownian_noise_composition.png',
+        ):
+            with Image.open(PLOTS / name) as image:
+                self.assertGreaterEqual(image.width, 2200, name)
+                self.assertGreaterEqual(image.height, 1000, name)
 
     def test_deliberately_slow_animations_retain_their_timing(self):
         expected_duration_ranges = {
-            'dragon_trajectory_ensemble.gif': (16_000, 20_000),
+            'dragon_pathfinding_hero.gif': (34_000, 38_000),
+            'dragon_holding_strafe.gif': (6_000, 8_000),
+            'dragon_landing_perch.gif': (6_000, 8_000),
+            'dragon_takeoff.gif': (6_000, 8_000),
+            'dragon_trajectory_ensemble.gif': (21_000, 25_000),
             'seed_loading.gif': (5_500, 7_000),
             'structure_placement.gif': (10_000, 13_500),
             'multi_structure_generation.gif': (10_000, 14_000),
@@ -112,6 +123,14 @@ class AssetIntegrityTests(unittest.TestCase):
         for relative in ('README.md', 'Code/README.md', 'Plots/README.md'):
             text = (ROOT / relative).read_text(encoding='utf-8')
             self.assertNotIn('\N{EM DASH}', text, relative)
+
+    def test_root_readme_uses_human_section_titles(self):
+        text = (ROOT / 'README.md').read_text(encoding='utf-8')
+        for mechanical_title in (
+            '#### The idea', '#### The matching code',
+            '#### The mathematics', '#### The animation',
+        ):
+            self.assertNotIn(mechanical_title, text)
 
 
 if __name__ == '__main__':

@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'Code'))
 from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
     DRAGON_EDGES, DRAGON_NODES, EXCEPTION_PHASE_TRANSITIONS,
-    SOURCE_PHASE_TRANSITIONS, STATE_ORDER, perch_probability,
+    SOURCE_PHASE_TRANSITIONS, STATE_ORDER, nearest_node, perch_probability,
     scripted_showcase, shortest_path, simulate_perch_trajectory,
 )
 from core.end_generation import (
@@ -110,13 +110,23 @@ class DragonTopologyTests(unittest.TestCase):
     def test_seeded_approaches_only_traverse_legal_graph_edges(self):
         legal_edges = set(DRAGON_EDGES)
         sampled_coordinates = []
+        player = np.array([34.0, -18.0])
+        expected_landing = nearest_node(
+            -player / np.linalg.norm(player) * 40.0,
+            crystals_alive=10,
+        )
         for index in range(40):
             coordinates, nodes = simulate_perch_trajectory(
                 12031 + index * 7919,
-                crystals_alive=10 - (index % 6),
-                player_position=(34.0, -18.0),
+                crystals_alive=10,
+                player_position=player,
             )
             self.assertTrue(np.all(np.isfinite(coordinates)))
+            self.assertLess(nodes[0], 12)
+            self.assertEqual(nodes[-1], expected_landing)
+            self.assertEqual(
+                nodes, shortest_path(nodes[0], expected_landing, crystals_alive=10),
+            )
             sampled_coordinates.append(coordinates)
             for left, right in zip(nodes, nodes[1:]):
                 self.assertIn(tuple(sorted((left, right))), legal_edges)
@@ -142,6 +152,7 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertTrue(any(frame.fireball_position is not None for frame in frames))
         shown_states = {frame.state for frame in frames}
         self.assertEqual(shown_states, set(STATE_ORDER))
+        self.assertTrue(any(frame.active_edge is not None for frame in frames))
         collapsed_states = [frames[0].state]
         for frame in frames[1:]:
             if frame.state != collapsed_states[-1]:
@@ -156,13 +167,13 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertTrue(any(frame.damage_pulse > 0.0 for frame in frames))
 
     def test_trajectory_batches_and_exact_final_hold(self):
-        active_last = trajectory_animation_state(127)
-        hold_first = trajectory_animation_state(128)
-        hold_last = trajectory_animation_state(151)
+        active_last = trajectory_animation_state(193)
+        hold_first = trajectory_animation_state(194)
+        hold_last = trajectory_animation_state(223)
         self.assertEqual(active_last, (240, 239, 1.0))
         self.assertEqual(hold_first, (240, 239, 1.0))
         self.assertEqual(hold_last, (240, 239, 1.0))
-        shown = [trajectory_animation_state(index)[0] for index in range(152)]
+        shown = [trajectory_animation_state(index)[0] for index in range(224)]
         self.assertTrue(all(left <= right for left, right in zip(shown, shown[1:])))
 
 
