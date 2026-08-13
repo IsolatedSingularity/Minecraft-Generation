@@ -17,6 +17,7 @@ The `core/` module provides centralized utilities for all generation algorithms:
 | `end_generation.py` | End geometry, simplex fields, and 32-bit overflow rings |
 | `minecraft_visuals.py` | Illustrative pixel-art terrain backdrops for exact overlays |
 | `mathematical_foundations.py` | Exact LCG bit-state and weighted octave-composition figures |
+| `readme_diagrams.py` | Static non-interactive flow figures for the root README |
 
 ```python
 from core import MinecraftLCG, generate_region_seed, simple_perlin_noise
@@ -38,7 +39,8 @@ Real-time simulation of dragon behavior with:
 - Reduced top-down steering with source-derived yaw clamp, turn momentum, acceleration, and velocity retention
 - Enlarged, phase-coloured raster dragon plus audited fireball, growing breath, and damage-triggered Takeoff effects
 - Compact phase ovals with an explicit next-holding-path landing roll and polished crystal HUD
-- A crisp 240-route legal-edge ensemble with synchronized batches, stable final hotspots, and fixed min-to-max viridis frequency encoding
+- A crisp 240-route ensemble whose representative dragon is synchronized to an included route
+- Distinct-route percentages for the ten most-used decoded legal graph edges
 
 ```python
 class EnderDragonAI:
@@ -82,14 +84,14 @@ The generator shows every in-bounds random-spread candidate across a broad chunk
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Shows an illustrative radial request front across a broad world view beside the exact thirteen-status order and source-required 21 x 21 terminal dependency footprint. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Timing and terrain remain explicitly modeled context.
+Builds a source-informed terrain view through visible biome, noise, surface, feature, lighting, and completion layers beside a vanilla-style spawn tracker. The exact thirteen-status order and source-required 21 x 21 terminal dependency footprint remain intact. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Relative timing remains explicitly modeled.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows every exact candidate inside the displayed frame: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The wider active inset preserves exact local grids and later biome-gate labels.
+Shows every exact candidate inside the -500 to 500 chunk frame: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The 160-chunk-wide active inset preserves exact local grids and later biome-gate labels.
 
 **Output**: `Plots/multi_structure_generation.gif`
 

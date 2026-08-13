@@ -38,6 +38,10 @@ README_ASSETS = (
     'structure_placement.gif',
     'multi_structure_generation.gif',
     'stronghold_rings.png',
+    'world_generation_flow.svg',
+    'noise_composition_flow.svg',
+    'dragon_navigation_flow.svg',
+    'structure_candidate_flow.svg',
 )
 
 
@@ -82,7 +86,7 @@ class AssetIntegrityTests(unittest.TestCase):
             'dragon_landing_perch.gif': (6_000, 8_000),
             'dragon_takeoff.gif': (6_000, 8_000),
             'dragon_trajectory_ensemble.gif': (21_000, 25_000),
-            'seed_loading.gif': (5_500, 7_000),
+            'seed_loading.gif': (7_000, 7_500),
             'structure_placement.gif': (10_000, 13_500),
             'multi_structure_generation.gif': (10_000, 14_000),
             'redstone_quasi_connectivity.gif': (13_000, 16_000),
@@ -123,6 +127,17 @@ class AssetIntegrityTests(unittest.TestCase):
         for relative in ('README.md', 'Code/README.md', 'Plots/README.md'):
             text = (ROOT / relative).read_text(encoding='utf-8')
             self.assertNotIn('\N{EM DASH}', text, relative)
+
+    def test_root_readme_uses_static_flow_figures(self):
+        text = (ROOT / 'README.md').read_text(encoding='utf-8')
+        self.assertNotIn('```mermaid', text)
+        for name in (
+            'world_generation_flow.svg', 'noise_composition_flow.svg',
+            'dragon_navigation_flow.svg', 'structure_candidate_flow.svg',
+        ):
+            asset = PLOTS / name
+            self.assertTrue(asset.is_file(), name)
+            self.assertIn(f'Plots/{name}', text, name)
 
     def test_root_readme_uses_human_section_titles(self):
         text = (ROOT / 'README.md').read_text(encoding='utf-8')

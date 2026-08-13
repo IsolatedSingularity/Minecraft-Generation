@@ -1,8 +1,7 @@
-"""Java 1.16.1 chunk-status dependency animation.
+"""Java 1.16.1 spawn preparation and chunk-status visualization.
 
-The status order and terminal dependency footprint are source-exact. The
-large radial request wave is an explicitly illustrative view of world loading,
-not a profiler trace or a claim about scheduler timing.
+The status order, 21 by 21 target footprint, and vanilla loading-screen colour
+mapping are source-backed. Relative task timing is an explanatory schedule.
 """
 
 from pathlib import Path
@@ -10,7 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.colors import ListedColormap, to_rgb
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Rectangle
 import numpy as np
 
 from core.minecraft_visuals import minecraft_terrain_rgba
@@ -26,104 +25,107 @@ STATUS_NAMES = [
     'SURFACE', 'CARVERS', 'LIQ. CARVERS', 'FEATURES', 'LIGHT',
     'SPAWN', 'HEIGHTMAPS', 'FULL',
 ]
-STATUS_COLORS = [
-    '#141822', '#384152', '#4C5264', '#596C86', '#506C9B',
-    '#788657', '#8D7863', '#6D7280', '#7EA65F', '#E0C65B',
-    '#C9865E', '#8EC7B0', '#59C985',
-]
 STATUS_SHORT = [
     'EMPTY', 'STARTS', 'REFS', 'BIOMES', 'NOISE', 'SURFACE', 'CARVE',
     'LIQUID', 'FEATURES', 'LIGHT', 'SPAWN', 'MAPS', 'FULL',
 ]
 
-# ChunkStatus.DISTANCE_TO_TARGET_GENERATION_STATUS in Java 1.16.1:
-# target, one-chunk ring, two-chunk ring, then radii 3 through 10.
-TARGET_STATUS_BY_DISTANCE = {
-    0: 12,  # FULL
-    1: 8,   # FEATURES
-    2: 7,   # LIQUID_CARVERS
-}
+# LevelLoadingScreen.STATUS_TO_COLOR, rendered in a slightly softened dark UI.
+VANILLA_STATUS_COLORS = [
+    '#545454', '#999999', '#5F6251', '#80B252', '#D1D1D1', '#726C49',
+    '#6D6A5C', '#303692', '#21C600', '#CCCCCC', '#F26760', '#EEEEEE', '#FFFFFF',
+]
+STATUS_COLORS = [
+    '#1A1E28', '#5B606C', '#4F554A', '#587A43', '#8B94A6', '#716B4D',
+    '#6B6359', '#414B8D', '#4D9C56', '#B7B7A7', '#C87362', '#BBD0C5', '#73D49B',
+]
+
+# ChunkStatus.DISTANCE_TO_TARGET_GENERATION_STATUS in Java 1.16.1.
+TARGET_STATUS_BY_DISTANCE = {0: 12, 1: 8, 2: 7}
 
 
-def chunk_status_snapshot(
-    frame_index, fps=10, duration=6, full_hold=1, radius=10,
-):
-    """Return one staged view of the exact terminal dependency footprint.
+def _distance_grid(radius):
+    return np.fromfunction(
+        lambda row, column: np.maximum(
+            np.abs(row - radius), np.abs(column - radius),
+        ),
+        (2 * radius + 1, 2 * radius + 1), dtype=float,
+    )
 
-    The animation advances every dependency cell through the ordered status
-    taxonomy and caps it at the source-required terminal status for its
-    Chebyshev distance. The ordering is exact; relative wall-clock scheduling
-    remains illustrative.
-    """
+
+def chunk_status_snapshot(frame_index, fps=10, duration=6, full_hold=1, radius=10):
+    """Return a staged view of the exact terminal dependency footprint."""
     total_frames = int(round(float(fps) * float(duration)))
     hold_frames = int(round(float(fps) * float(full_hold)))
     generation_frames = total_frames - hold_frames
     if generation_frames < 2:
         raise ValueError('duration must leave at least two generation frames')
-
-    distances = np.fromfunction(
-        lambda row, column: np.maximum(
-            np.abs(row - radius), np.abs(column - radius)
-        ),
-        (2 * radius + 1, 2 * radius + 1), dtype=float,
+    progress = (
+        1.0 if int(frame_index) >= generation_frames
+        else int(frame_index) / max(generation_frames - 1, 1)
     )
-    if int(frame_index) >= generation_frames:
-        progress = 1.0
-    else:
-        progress = int(frame_index) / max(generation_frames - 1, 1)
-
+    distances = _distance_grid(radius)
     target = np.zeros(distances.shape, dtype=int)
     target[distances <= 10] = 1
     for distance, status in TARGET_STATUS_BY_DISTANCE.items():
         target[distances == distance] = status
-
-    active_stage = min(
-        len(STATUS_NAMES) - 1,
-        int(np.floor(progress * len(STATUS_NAMES))),
-    )
+    active_stage = min(len(STATUS_NAMES) - 1, int(np.floor(progress * len(STATUS_NAMES))))
     stages = np.minimum(active_stage, target)
     hidden = distances > 10.0
-    growth = np.where(hidden, 0.0, 1.0)
     if progress >= 1.0:
         stages = target
-    return stages, growth, hidden
+    return stages, np.where(hidden, 0.0, 1.0), hidden
+
+
+def _world_stage_rgba(terrain, progress):
+    """Build a visible terrain proxy instead of tinting a finished surface."""
+    height, width, _ = terrain.shape
+    background = np.asarray(to_rgb(COLORS['background']))
+    output = np.empty((height, width, 4), dtype=float)
+    output[..., :3] = background
+    output[..., 3] = 1.0
+
+    luminance = np.mean(terrain, axis=2, keepdims=True)
+    noise_layer = np.repeat(luminance, 3, axis=2) * np.array([0.70, 0.78, 0.92])
+    biome_layer = 0.38 * terrain + 0.62 * np.array([0.19, 0.25, 0.34])
+    surface_layer = 0.78 * terrain + 0.22 * luminance
+    features_layer = np.clip(terrain * 1.10 + 0.035, 0.0, 1.0)
+
+    stages = (
+        (0.10, 0.24, biome_layer),
+        (0.22, 0.42, noise_layer),
+        (0.38, 0.60, surface_layer),
+        (0.56, 0.79, features_layer),
+        (0.74, 0.96, terrain),
+    )
+    for start, end, layer in stages:
+        blend = np.clip((progress - start) / (end - start), 0.0, 1.0)
+        output[..., :3] = output[..., :3] * (1.0 - blend) + layer * blend
+    return output
 
 
 def create_seed_loading_animation(
-    save_path, seed=-4172144997902289642, fps=10, duration=6,
-    full_hold=1,
+    save_path, seed=-4172144997902289642, fps=10, duration=7.2, full_hold=1.2,
 ):
-    """Render a broad radial request wave and exact local dependency inset."""
+    """Render progressive terrain meaning beside the vanilla-style tracker."""
     total_frames = int(round(fps * duration))
     hold_frames = int(round(fps * full_hold))
     generation_frames = total_frames - hold_frames
-    dependency_radius = 10
-    display_radius = 360
-    resolution = 721
-
+    radius = 10
+    display_radius = 180
+    resolution = 361
     terrain = minecraft_terrain_rgba(
         seed, resolution=resolution, dimension='overworld',
         x_extent=(-display_radius - 0.5, display_radius + 0.5),
         z_extent=(-display_radius - 0.5, display_radius + 0.5),
         coordinate_scale=16.0, showcase=False,
     )[..., :3]
-    background_rgb = np.asarray(to_rgb(COLORS['background']))
-    context = 0.12 * terrain + 0.88 * background_rgb
-    output = np.empty((*terrain.shape[:2], 4), dtype=float)
-    output[..., :3] = context
-    output[..., 3] = 1.0
-
-    coordinates = np.linspace(
-        -display_radius - 0.5, display_radius + 0.5, resolution,
-    )
-    pixel_x, pixel_z = np.meshgrid(coordinates, coordinates)
-    radial_distance = np.hypot(pixel_x, pixel_z)
-    maximum_request_radius = float(np.hypot(display_radius, display_radius))
+    initial_world = _world_stage_rgba(terrain, 0.0)
 
     figure = plt.figure(figsize=(12.8, 7.2), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[2.34, 0.96],
-        left=0.052, right=0.985, top=0.90, bottom=0.095, wspace=0.07,
+        1, 2, width_ratios=[2.18, 1.0],
+        left=0.055, right=0.98, top=0.88, bottom=0.10, wspace=0.10,
     )
     axis = figure.add_subplot(grid[0, 0])
     side = figure.add_subplot(grid[0, 1])
@@ -131,150 +133,99 @@ def create_seed_loading_animation(
     side.set_ylim(0, 1)
     side.axis('off')
 
+    world_image = axis.imshow(
+        initial_world, origin='lower', interpolation='nearest',
+        extent=(-display_radius, display_radius, -display_radius, display_radius),
+    )
     axis.set_aspect('equal')
-    axis.set_xlim(-display_radius - 0.5, display_radius + 0.5)
-    axis.set_ylim(-display_radius - 0.5, display_radius + 0.5)
-    axis.set_xticks(range(-display_radius, display_radius + 1, 120))
-    axis.set_yticks(range(-display_radius, display_radius + 1, 120))
+    axis.set_xlim(-display_radius, display_radius)
+    axis.set_ylim(-display_radius, display_radius)
     axis.set_xlabel('Chunk X')
     axis.set_ylabel('Chunk Z')
-    axis.set_title(
-        'Illustrative radial chunk requests across a broad world view',
-        fontsize=10.5, pad=7,
-    )
-    axis.tick_params(colors=COLORS['muted'], labelsize=8)
+    axis.set_title('WHAT EACH GENERATION STAGE ADDS', fontsize=11, pad=8)
+    axis.scatter([0], [0], marker='+', s=90, c=COLORS['text'], linewidths=1.2, zorder=8)
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
-
-    image = axis.imshow(
-        output, origin='lower', interpolation='nearest',
-        extent=(
-            -display_radius - 0.5, display_radius + 0.5,
-            -display_radius - 0.5, display_radius + 0.5,
-        ),
-        zorder=1,
-    )
-    for value in range(-display_radius, display_radius + 1, 60):
-        axis.axvline(value, color='#59677E', linewidth=0.34, alpha=0.20, zorder=3)
-        axis.axhline(value, color='#59677E', linewidth=0.34, alpha=0.20, zorder=3)
-    axis.scatter(
-        [0], [0], marker='+', s=95, c=COLORS['text'],
-        linewidths=1.25, zorder=8,
-    )
-    axis.add_patch(Rectangle(
-        (-10.5, -10.5), 21, 21, fill=False,
-        edgecolor=COLORS['violet'], linewidth=1.35,
-        linestyle='--', alpha=0.95, zorder=7,
-    ))
-    request_front = Circle(
-        (0, 0), 0.1, fill=False, edgecolor=COLORS['cyan'],
-        linewidth=2.0, alpha=0.0, zorder=9,
-    )
-    axis.add_patch(request_front)
-    request_text = axis.text(
-        0.018, 0.982, '', transform=axis.transAxes,
-        ha='left', va='top', color=COLORS['text'], fontsize=8.2,
-        fontweight='bold', family='monospace', zorder=10,
+    axis.tick_params(colors=COLORS['muted'], labelsize=8)
+    stage_text = axis.text(
+        0.02, 0.98, '', transform=axis.transAxes, ha='left', va='top',
+        color=COLORS['text'], fontsize=9.3, fontweight='bold', family='monospace',
+        bbox=dict(boxstyle='round,pad=0.35', facecolor=COLORS['panel'],
+                  edgecolor=COLORS['grid'], alpha=0.94), zorder=9,
     )
 
-    detail_axis = side.inset_axes([0.025, 0.47, 0.95, 0.49])
-    detail_axis.set_xlim(-10.5, 10.5)
-    detail_axis.set_ylim(-10.5, 10.5)
-    detail_axis.set_aspect('equal')
-    detail_axis.set_xticks(range(-10, 11, 2))
-    detail_axis.set_yticks(range(-10, 11, 2))
-    detail_axis.tick_params(colors=COLORS['muted'], labelsize=5.5, pad=1)
-    detail_axis.set_title(
-        'EXACT FULL-CHUNK DEPENDENCY FOOTPRINT  21 x 21',
-        fontsize=7.1, pad=4,
-    )
+    tracker = side.inset_axes([0.08, 0.38, 0.84, 0.56])
+    tracker.set_title('VANILLA-STYLE SPAWN REGION TRACKER', fontsize=8.4, pad=5)
+    tracker.set_aspect('equal')
+    tracker.set_xticks([])
+    tracker.set_yticks([])
+    tracker.set_facecolor('#080808')
     initial_stages, _, initial_hidden = chunk_status_snapshot(
-        0, fps=fps, duration=duration, full_hold=full_hold,
-        radius=dependency_radius,
+        0, fps=fps, duration=duration, full_hold=full_hold, radius=radius,
     )
-    dependency_image = detail_axis.imshow(
-        np.ma.masked_where(initial_hidden, initial_stages),
-        origin='lower', interpolation='nearest',
-        extent=(-10.5, 10.5, -10.5, 10.5),
-        cmap=ListedColormap(STATUS_COLORS), vmin=0, vmax=len(STATUS_COLORS) - 1,
-        zorder=1,
+    tracker_image = tracker.imshow(
+        np.ma.masked_where(initial_hidden | (initial_stages == 0), initial_stages),
+        origin='lower',
+        interpolation='nearest', cmap=ListedColormap(VANILLA_STATUS_COLORS),
+        vmin=0, vmax=len(VANILLA_STATUS_COLORS) - 1,
     )
-    for value in np.arange(-10.5, 11.0, 1.0):
-        detail_axis.axvline(
-            value, color='#07090E', linewidth=0.42, alpha=0.72, zorder=3,
-        )
-        detail_axis.axhline(
-            value, color='#07090E', linewidth=0.42, alpha=0.72, zorder=3,
-        )
-    detail_axis.add_patch(Rectangle(
-        (-0.5, -0.5), 1, 1, fill=False,
-        edgecolor=COLORS['gold'], linewidth=1.8, zorder=8,
+    tracker.add_patch(Rectangle(
+        (-0.5, -0.5), 21, 21, fill=False,
+        edgecolor='#FFEEFF', linewidth=1.0, alpha=0.72,
+    ))
+    tracker.add_patch(Rectangle(
+        (radius - 0.5, radius - 0.5), 1, 1, fill=False,
+        edgecolor=COLORS['gold'], linewidth=1.8,
     ))
 
-    legend_axis = side.inset_axes([0.0, 0.015, 1.0, 0.40])
-    legend_axis.set_xlim(0, 2)
-    legend_axis.set_ylim(0, 7.4)
-    legend_axis.axis('off')
-    legend_axis.text(
-        0.0, 7.18, 'CENTER STATUS AND SOURCE TARGETS', color=COLORS['text'],
-        fontsize=8.6, fontweight='black', va='center',
+    progress_text = side.text(
+        0.50, 0.335, '0%', ha='center', va='center',
+        color=COLORS['text'], fontsize=19, fontweight='black',
     )
+    strip = side.inset_axes([0.04, 0.08, 0.92, 0.18])
+    strip.set_xlim(0, 7)
+    strip.set_ylim(0, 2)
+    strip.axis('off')
+    legend_indices = (1, 3, 4, 5, 8, 9, 12)
     stage_boxes = []
-    for index, (name, color) in enumerate(zip(STATUS_SHORT, STATUS_COLORS)):
-        column = index // 7
-        row = index % 7
-        x = column + 0.04
-        y = 6.55 - row * 0.77
+    for position, index in enumerate(legend_indices):
+        column = position % 4
+        row = position // 4
+        x = column * 1.75
+        y = 1.45 - row * 0.85
         box = Rectangle(
-            (x, y), 0.22, 0.36,
-            facecolor=color, edgecolor='#07090E', linewidth=0.45,
+            (x, y), 0.36, 0.30, facecolor=STATUS_COLORS[index],
+            edgecolor='#07090E', linewidth=0.5,
         )
-        legend_axis.add_patch(box)
-        stage_boxes.append(box)
-        legend_axis.text(
-            x + 0.29, y + 0.18, name, ha='left', va='center',
-            color=COLORS['muted'], fontsize=7.0, fontweight='bold',
-        )
-    legend_axis.text(
-        0.02, 0.10,
-        'Exact terminal target by Chebyshev radius:\n'
-        '0 FULL | 1 FEATURES | 2 LIQUID CARVERS | 3-10 STRUCTURE STARTS',
-        color=COLORS['muted'], fontsize=6.6, va='bottom', linespacing=1.35,
-    )
-    figure.text(
-        0.50, 0.953, 'CHUNK-STATUS DEPENDENCY WAVE',
-        ha='center', va='center', color=COLORS['text'],
-        fontsize=17, fontweight='black',
+        strip.add_patch(box)
+        strip.text(x + 0.45, y + 0.15, STATUS_SHORT[index], va='center',
+                   color=COLORS['muted'], fontsize=6.6, fontweight='bold')
+        stage_boxes.append((index, box))
+
+    figure.suptitle(
+        'BUILDING THE SPAWN REGION', color=COLORS['text'],
+        fontsize=17, fontweight='black', y=0.96,
     )
 
     def update(frame_index):
-        if frame_index >= generation_frames:
-            progress = 1.0
-        else:
-            progress = frame_index / max(generation_frames - 1, 1)
+        progress = (
+            1.0 if frame_index >= generation_frames
+            else frame_index / max(generation_frames - 1, 1)
+        )
         eased = progress * progress * (3.0 - 2.0 * progress)
-        wave_radius = maximum_request_radius * eased
-        reveal = np.clip((wave_radius - radial_distance + 8.0) / 16.0, 0.0, 1.0)
-        output[..., :3] = (
-            context * (1.0 - reveal[..., None])
-            + terrain * reveal[..., None]
-        )
-        image.set_data(output)
-        request_front.set_radius(max(wave_radius, 0.1))
-        request_front.set_alpha(0.90 if progress < 1.0 else 0.0)
-        request_text.set_text(
-            f'REQUEST RADIUS  {min(wave_radius, maximum_request_radius):5.0f} CHUNKS'
-        )
-
+        world_image.set_data(_world_stage_rgba(terrain, eased))
         stages, _, hidden = chunk_status_snapshot(
             frame_index, fps=fps, duration=duration,
-            full_hold=full_hold, radius=dependency_radius,
+            full_hold=full_hold, radius=radius,
         )
-        dependency_image.set_data(np.ma.masked_where(hidden, stages))
-        active_stage = int(stages[dependency_radius, dependency_radius])
-        for index, box in enumerate(stage_boxes):
-            box.set_edgecolor(COLORS['text'] if index == active_stage else '#07090E')
-            box.set_linewidth(1.55 if index == active_stage else 0.45)
+        tracker_image.set_data(np.ma.masked_where(hidden | (stages == 0), stages))
+        center_stage = int(stages[radius, radius])
+        visible_stage = min(center_stage, 12)
+        stage_text.set_text(f'CENTER CHUNK  {STATUS_NAMES[visible_stage]}')
+        progress_text.set_text(f'{round(100.0 * center_stage / 12):d}% PIPELINE')
+        for index, box in stage_boxes:
+            box.set_edgecolor(COLORS['text'] if index == visible_stage else '#07090E')
+            box.set_linewidth(1.5 if index == visible_stage else 0.5)
         return []
 
     animation = FuncAnimation(
@@ -282,7 +233,7 @@ def create_seed_loading_animation(
     )
     animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
     plt.close(figure)
-    optimize_gif(save_path, colors=80)
+    optimize_gif(save_path, colors=96)
     return str(save_path)
 
 

@@ -93,14 +93,21 @@ def _draw_legend(axis):
     )
 
 
-def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
+def nether_structure_candidates(
+    seed=42, region_radius=12, resolution=640, display_half_width=None,
+):
     """Return inclusive candidate-stage Nether structure layers.
 
     The shared 27-chunk grid and its 2/5 fortress, 3/5 bastion source roll are
     exact. The terrain category is retained only as explanatory context.
     """
-    minimum = -region_radius * NETHER_STRUCTURE_SPACING - 5
-    maximum = (region_radius + 1) * NETHER_STRUCTURE_SPACING + 5
+    if display_half_width is None:
+        minimum = -region_radius * NETHER_STRUCTURE_SPACING - 5
+        maximum = (region_radius + 1) * NETHER_STRUCTURE_SPACING + 5
+    else:
+        minimum = -int(display_half_width)
+        maximum = int(display_half_width)
+        region_radius = int(np.ceil(int(display_half_width) / NETHER_STRUCTURE_SPACING)) + 1
     biomes = minecraft_nether_biome_grid(
         seed, resolution=resolution,
         x_extent=(minimum, maximum), z_extent=(minimum, maximum),
@@ -115,7 +122,11 @@ def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
             biomes, shared_item['chunk_x'], shared_item['chunk_z'],
             minimum, maximum,
         )
-        shared.append(shared_item)
+        if (
+            minimum <= shared_item['chunk_x'] <= maximum
+            and minimum <= shared_item['chunk_z'] <= maximum
+        ):
+            shared.append(shared_item)
 
     first_portal_region = int(np.floor(minimum / NETHER_RUINED_PORTAL_SPACING)) - 1
     last_portal_region = int(np.floor(maximum / NETHER_RUINED_PORTAL_SPACING)) + 1
@@ -148,7 +159,7 @@ def create_multi_structure_animation(
     save_path, seed=42, region_radius=46, fps=8, duration=13,
 ):
     shared, portals, _, (minimum, maximum) = nether_structure_candidates(
-        seed, region_radius,
+        seed, region_radius, display_half_width=500,
     )
     total_frames = int(fps * duration)
 
@@ -303,7 +314,7 @@ def create_multi_structure_animation(
         else:
             detail_portal.set_visible(False)
             detail_portal_point.set_offsets(np.empty((0, 2)))
-        detail_half_width = 63
+        detail_half_width = 80
         detail_center_x = np.clip(
             shared_item['chunk_x'], minimum + detail_half_width,
             maximum - detail_half_width,

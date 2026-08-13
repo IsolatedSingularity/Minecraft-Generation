@@ -3,7 +3,7 @@
 import math
 
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Circle, Polygon, Rectangle
 import numpy as np
 
 from .end_generation import central_island_projection, spike_layout
@@ -104,7 +104,7 @@ def draw_end_spikes(
     ax, seed=42, crystals_alive=10, alpha=1.0, zorder=5,
     radius_override=None, tower_edgecolor='#6E4B86',
     tower_linewidth=0.7, cage_linewidth=0.75, cage_extent=2.7,
-    radius_scale=1.0,
+    radius_scale=1.0, crystal_shape='circle',
 ):
     """Draw spike footprints with top-down crystals and cage marks.
 
@@ -140,13 +140,27 @@ def draw_end_spikes(
             edgecolor='none', alpha=(0.24 if alive else 0.06) * alpha,
             zorder=zorder + 1,
         )
-        crystal = Circle(
-            (x, z), radius=1.25,
-            facecolor=CRYSTAL if alive else COLORS['coral'],
-            edgecolor=CRYSTAL_CORE, linewidth=0.55,
-            alpha=(0.98 if alive else 0.14) * alpha,
-            zorder=zorder + 2,
-        )
+        if crystal_shape == 'diamond':
+            crystal = Polygon(
+                np.array([
+                    [x, z + 1.70], [x + 1.30, z],
+                    [x, z - 1.70], [x - 1.30, z],
+                ]),
+                closed=True, facecolor=CRYSTAL if alive else COLORS['coral'],
+                edgecolor=CRYSTAL_CORE, linewidth=0.65,
+                alpha=(0.98 if alive else 0.14) * alpha,
+                zorder=zorder + 2,
+            )
+        elif crystal_shape == 'circle':
+            crystal = Circle(
+                (x, z), radius=1.25,
+                facecolor=CRYSTAL if alive else COLORS['coral'],
+                edgecolor=CRYSTAL_CORE, linewidth=0.55,
+                alpha=(0.98 if alive else 0.14) * alpha,
+                zorder=zorder + 2,
+            )
+        else:
+            raise ValueError(f'unsupported crystal shape: {crystal_shape}')
         ax.add_patch(glow)
         ax.add_patch(crystal)
 

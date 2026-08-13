@@ -170,11 +170,14 @@ class DragonTopologyTests(unittest.TestCase):
         active_last = trajectory_animation_state(193)
         hold_first = trajectory_animation_state(194)
         hold_last = trajectory_animation_state(223)
-        self.assertEqual(active_last, (240, 239, 1.0))
-        self.assertEqual(hold_first, (240, 239, 1.0))
-        self.assertEqual(hold_last, (240, 239, 1.0))
+        self.assertEqual(active_last, (240, 225, 1.0))
+        self.assertEqual(hold_first, (240, 225, 1.0))
+        self.assertEqual(hold_last, (240, 225, 1.0))
         shown = [trajectory_animation_state(index)[0] for index in range(224)]
         self.assertTrue(all(left <= right for left, right in zip(shown, shown[1:])))
+        for frame_index in range(194):
+            route_count, featured_index, _ = trajectory_animation_state(frame_index)
+            self.assertLess(featured_index, route_count)
 
 
 class StructureTests(unittest.TestCase):

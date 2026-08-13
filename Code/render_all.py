@@ -23,6 +23,7 @@ from redstone_quasi_connectivity import (
     create_quasi_connectivity_animation,
     create_quasi_connectivity_diagram,
 )
+from readme_diagrams import create_readme_diagrams
 from seed_loading import create_seed_loading_animation
 from stronghold_distribution import create_stronghold_distribution
 from structure_placement import create_structure_placement_animation
@@ -40,6 +41,8 @@ def main():
     root = Path(__file__).resolve().parents[1]
     plots = root / 'Plots'
     plots.mkdir(exist_ok=True)
+
+    _render('README flow diagrams', lambda: create_readme_diagrams(plots))
 
     _render('End dimension structure', lambda: create_end_dimension_overview(
         plots / 'end_dimension_overview.png'))

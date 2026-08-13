@@ -18,7 +18,6 @@ from matplotlib.patches import (
 )
 import numpy as np
 from PIL import Image, ImageFilter
-from scipy.ndimage import maximum_filter
 
 from core.dragon import (
     DRAGON_EDGES,
@@ -47,6 +46,8 @@ DRAGON_SPRITE_PATH = (
     Path(__file__).resolve().parents[1]
     / 'pngfind.com-ender-dragon-png-6585528.png'
 )
+HUD_PROBABILITY_X = 0.365
+HUD_PROBABILITY_WIDTH = 0.410
 
 
 def _prepare_dragon_sprite():
@@ -186,6 +187,49 @@ def _update_breath_artists(frame, cloud, particles, stream):
         stream.set_segments([])
 
 
+def _update_breath_with_linger(
+    frame, cloud, particles, stream, linger_state,
+    projectile_linger_frames=34,
+):
+    """Keep projectile breath visible as a translucent source-valid cloud.
+
+    A dragon fireball creates a 600-tick area-effect cloud that grows from
+    radius three toward seven. The showcase compresses that lifetime, while
+    perched breath is still removed immediately when its phase ends.
+    """
+    if frame.breath_center is not None:
+        _update_breath_artists(frame, cloud, particles, stream)
+        if frame.breath_kind == 'projectile_impact':
+            linger_state.update({
+                'center': np.asarray(frame.breath_center, dtype=float).copy(),
+                'radius': float(frame.breath_radius),
+                'alpha': float(frame.breath_alpha),
+                'remaining': int(projectile_linger_frames),
+            })
+        return
+    if linger_state.get('remaining', 0) <= 0:
+        _update_breath_artists(frame, cloud, particles, stream)
+        return
+
+    remaining = int(linger_state['remaining'])
+    fraction = remaining / max(int(projectile_linger_frames), 1)
+    elapsed = 1.0 - fraction
+    linger_state['remaining'] = remaining - 1
+    proxy = frame.__class__(
+        position=frame.position,
+        state=frame.state,
+        crystals_alive=frame.crystals_alive,
+        current_node=frame.current_node,
+        target_node=frame.target_node,
+        alive_crystals=frame.alive_crystals,
+        breath_center=linger_state['center'],
+        breath_radius=min(7.0, linger_state['radius'] + 0.9 * elapsed),
+        breath_alpha=linger_state['alpha'] * fraction * 0.72,
+        breath_kind='projectile_impact',
+    )
+    _update_breath_artists(proxy, cloud, particles, stream)
+
+
 DRAGON_MARKER = MarkerPath(
     np.array([
         [1.30, 0.00], [1.08, 0.12], [1.18, 0.31], [0.95, 0.23],
@@ -243,6 +287,7 @@ def _arena_static(
         ax, seed=seed, crystals_alive=10, zorder=4,
         tower_edgecolor='#786A8B', tower_linewidth=1.35,
         cage_linewidth=1.75, cage_extent=3.75, radius_scale=1.28,
+        crystal_shape='diamond',
     )
     draw_end_fountain(ax, active=False, zorder=7)
     ax.set_xlim(-limits, limits)
@@ -377,13 +422,13 @@ def _draw_state_machine(ax):
         fontsize=7.7, fontweight='black', family='DejaVu Sans', zorder=5,
     )
     probability_background = FancyBboxPatch(
-        (0.405, 0.139), 0.405, 0.036,
+        (HUD_PROBABILITY_X, 0.139), HUD_PROBABILITY_WIDTH, 0.036,
         boxstyle='round,pad=0.002,rounding_size=0.010',
         facecolor='#0B0F17', edgecolor='#59677E',
         linewidth=0.60, alpha=1.0, zorder=5,
     )
     probability_fill = FancyBboxPatch(
-        (0.405, 0.139), 0.002, 0.036,
+        (HUD_PROBABILITY_X, 0.139), 0.002, 0.036,
         boxstyle='round,pad=0.002,rounding_size=0.010',
         facecolor='#A75DE1', edgecolor='none', zorder=6,
     )
@@ -405,7 +450,7 @@ def _draw_state_machine(ax):
     )
     crystal_icons = []
     for index in range(10):
-        x = 0.390 + index * 0.058
+        x = 0.425 + index * 0.0525
         glow = ax.scatter(
             [x], [0.070], s=125, marker='D', c='#A86BE0',
             edgecolors='none', alpha=0.24, zorder=5.5,
@@ -510,11 +555,13 @@ def create_dragon_pathfinding_animation(
     arena.add_patch(damage_flash)
 
     history = []
+    breath_linger = {}
 
     def update(frame_index):
         frame = frames[frame_index]
         if frame_index == 0:
             history.clear()
+            breath_linger.clear()
         history.append(frame.position.copy())
         if len(history) > 34:
             history.pop(0)
@@ -532,7 +579,7 @@ def create_dragon_pathfinding_animation(
         sitting = frame.state in {
             'hover', 'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
         }
-        pulse_amplitude = 0.025 if sitting else 0.065
+        pulse_amplitude = 0.010 if sitting else 0.020
         sprite_scale = 1.0 + pulse_amplitude * np.sin(2.0 * np.pi * frame_index / 7.0)
         active.update(frame.position, angle, frame.state, scale=sprite_scale)
         _set_active_graph_edge(
@@ -549,8 +596,8 @@ def create_dragon_pathfinding_animation(
         else:
             fireball_glow.set_visible(False)
             fireball_core.set_visible(False)
-        _update_breath_artists(
-            frame, breath_cloud, breath_particles, breath_stream,
+        _update_breath_with_linger(
+            frame, breath_cloud, breath_particles, breath_stream, breath_linger,
         )
 
         if frame.explosion_index is not None:
@@ -580,7 +627,9 @@ def create_dragon_pathfinding_animation(
             )
 
         probability = perch_probability(frame.crystals_alive)
-        probability_fill.set_width(max(0.004, 0.405 * probability / (1.0 / 3.0)))
+        probability_fill.set_width(max(
+            0.004, HUD_PROBABILITY_WIDTH * probability / (1.0 / 3.0),
+        ))
         probability_text.set_text(f'{probability * 100:4.1f}%')
         probability_formula.set_text(f'1 / (3 + {frame.crystals_alive})')
         crystal_label.set_text(f'CRYSTALS ALIVE  {frame.crystals_alive}/10')
@@ -653,11 +702,13 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
             fontweight='black', pad=7,
         )
         history = []
+        breath_linger = {}
 
         def update(frame_index):
             frame = clip[frame_index]
             if frame_index == 0:
                 history.clear()
+                breath_linger.clear()
             history.append(frame.position.copy())
             if len(history) > 28:
                 history.pop(0)
@@ -674,14 +725,15 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
                 angle = np.degrees(np.arctan2(vector[1], vector[0]))
             active.update(
                 frame.position, angle, frame.state,
-                scale=1.0 + 0.05 * np.sin(2.0 * np.pi * frame_index / 7.0),
+                scale=1.0 + 0.016 * np.sin(2.0 * np.pi * frame_index / 7.0),
             )
             _set_active_graph_edge(
                 active_edge, frame.active_edge,
                 to_rgba(STATE_COLORS[frame.state], 0.86),
             )
-            _update_breath_artists(
+            _update_breath_with_linger(
                 frame, breath_cloud, breath_particles, breath_stream,
+                breath_linger,
             )
             return []
 
@@ -702,9 +754,9 @@ def trajectory_animation_state(
 ):
     """Return synchronized route-count and representative-path state.
 
-    Each active batch accumulates genuine routes while one fixed member of
-    that batch is traversed as a visual representative. The final state is
-    then held exactly for ``final_hold`` seconds.
+    Each active batch accumulates genuine routes while its first, already
+    counted member is traversed as the visual representative. The final state
+    is then held exactly for ``final_hold`` seconds.
     """
     hold_frames = int(round(float(fps) * float(final_hold)))
     active_frames = int(frames) - hold_frames
@@ -713,7 +765,11 @@ def trajectory_animation_state(
     if not 0 <= int(frame_index) < int(frames):
         raise IndexError('frame_index is outside the animation')
     if int(frame_index) >= active_frames:
-        return int(trajectories), int(trajectories) - 1, 1.0
+        last_batch_start = (
+            (int(np.ceil(int(trajectories) / int(batch_size))) - 1)
+            * int(batch_size)
+        )
+        return int(trajectories), last_batch_start, 1.0
 
     batch_count = int(np.ceil(int(trajectories) / int(batch_size)))
     scaled = int(frame_index) * batch_count / active_frames
@@ -729,7 +785,25 @@ def trajectory_animation_state(
         1, int(np.ceil(route_count * local_step / batch_active_frames)),
     )
     traversal = min(local_step / batch_active_frames, 1.0)
-    return min(shown, int(trajectories)), batch_end - 1, traversal
+    return min(shown, int(trajectories)), batch_start, traversal
+
+
+def _point_on_polyline(points, phase):
+    """Return an arc-length position, heading, and visible prefix."""
+    points = np.asarray(points, dtype=float)
+    if len(points) < 2:
+        return points[0], 0.0, points.copy()
+    lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    cumulative = np.concatenate(([0.0], np.cumsum(lengths)))
+    target = float(np.clip(phase, 0.0, 1.0)) * cumulative[-1]
+    segment = min(int(np.searchsorted(cumulative, target, side='right') - 1), len(points) - 2)
+    segment_length = max(lengths[segment], 1e-9)
+    fraction = (target - cumulative[segment]) / segment_length
+    point = points[segment] + fraction * (points[segment + 1] - points[segment])
+    prefix = np.vstack((points[:segment + 1], point))
+    vector = points[segment + 1] - points[segment]
+    angle = np.degrees(np.arctan2(vector[1], vector[0]))
+    return point, angle, prefix
 
 
 def create_trajectory_ensemble_animation(
@@ -763,43 +837,19 @@ def create_trajectory_ensemble_animation(
         histogram, _, _ = np.histogram2d(path[:, 1], path[:, 0], bins=(bins, bins))
         contributions.append(histogram > 0)
     cumulative = np.cumsum(np.asarray(contributions), axis=0)
-
     final_frequency = cumulative[-1]
-    cell_width = float(bins[1] - bins[0])
-    maximum_window = max(5, int(round(10.0 / cell_width)))
-    if maximum_window % 2 == 0:
-        maximum_window += 1
-    local_maxima = final_frequency == maximum_filter(
-        final_frequency, size=maximum_window, mode='nearest',
-    )
-    local_maxima &= final_frequency >= 4
-    hotspot_rows, hotspot_columns = np.nonzero(local_maxima)
-    ranking = np.argsort(final_frequency[hotspot_rows, hotspot_columns])[::-1]
-    selected = []
-    for candidate in ranking:
-        row = hotspot_rows[candidate]
-        column = hotspot_columns[candidate]
-        center_x = (bins[column] + bins[column + 1]) / 2.0
-        center_z = (bins[row] + bins[row + 1]) / 2.0
-        if np.hypot(center_x, center_z) <= 24.0:
-            continue
-        if any(
-            np.hypot(
-                (row - hotspot_rows[other]) * cell_width,
-                (column - hotspot_columns[other]) * cell_width,
-            ) < 14.0
-            for other in selected
-        ):
-            continue
-        selected.append(candidate)
-        if len(selected) == 10:
-            break
-    selected = np.asarray(selected, dtype=int)
-    hotspot_rows = hotspot_rows[selected]
-    hotspot_columns = hotspot_columns[selected]
-    hotspot_values = final_frequency[hotspot_rows, hotspot_columns]
-    hotspot_x = (bins[hotspot_columns] + bins[hotspot_columns + 1]) / 2.0
-    hotspot_z = (bins[hotspot_rows] + bins[hotspot_rows + 1]) / 2.0
+
+    edge_index = {tuple(sorted(edge)): index for index, edge in enumerate(DRAGON_EDGES)}
+    route_edge_contributions = np.zeros((trajectories, len(DRAGON_EDGES)), dtype=int)
+    for route_index, nodes in enumerate(node_paths):
+        for left, right in zip(nodes, nodes[1:]):
+            route_edge_contributions[route_index, edge_index[tuple(sorted((left, right)))]] = 1
+    cumulative_edge_counts = np.cumsum(route_edge_contributions, axis=0)
+    final_edge_counts = cumulative_edge_counts[-1]
+    ranked_edges = np.argsort(final_edge_counts)[::-1]
+    selected_edge_indices = ranked_edges[:10]
+    selected_edges = [DRAGON_EDGES[index] for index in selected_edge_indices]
+    selected_edge_counts = final_edge_counts[selected_edge_indices]
 
     figure = plt.figure(figsize=(14.4, 8.1), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
@@ -836,7 +886,7 @@ def create_trajectory_ensemble_animation(
         [], linewidths=3.1, capstyle='round', joinstyle='round', zorder=10,
     )
     axis.add_collection(local_trail)
-    dragon = DragonSpriteArtist(axis, size_blocks=17.5, zorder=12)
+    dragon = DragonSpriteArtist(axis, size_blocks=19.0, zorder=12)
     count_text = axis.text(
         0.985, 0.025, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
@@ -847,27 +897,27 @@ def create_trajectory_ensemble_animation(
         ),
     )
     bars = frequency_axis.barh(
-        np.arange(len(hotspot_values)), np.zeros(len(hotspot_values)),
+        np.arange(len(selected_edges)), np.zeros(len(selected_edges)),
         color=plt.get_cmap('viridis')(0.0),
         edgecolor=COLORS['text'], linewidth=0.45, alpha=0.92,
     )
     frequency_axis.set_yticks(
-        np.arange(len(hotspot_values)),
-        [f'({x:+.0f}, {z:+.0f})' for x, z in zip(hotspot_x, hotspot_z)],
+        np.arange(len(selected_edges)),
+        [f'NODE {left:02d}  TO  {right:02d}' for left, right in selected_edges],
     )
     frequency_axis.invert_yaxis()
-    maximum_hotspot = max(float(np.max(hotspot_values)), 1.0)
-    minimum_hotspot = float(np.min(hotspot_values))
+    maximum_edge_count = max(float(np.max(selected_edge_counts)), 1.0)
+    minimum_edge_count = float(np.min(selected_edge_counts))
     bar_norm = Normalize(
-        vmin=minimum_hotspot,
-        vmax=max(maximum_hotspot, minimum_hotspot + 1.0),
+        vmin=minimum_edge_count,
+        vmax=max(maximum_edge_count, minimum_edge_count + 1.0),
         clip=True,
     )
-    frequency_axis.set_xlim(0, maximum_hotspot * 1.18)
-    frequency_axis.set_xlabel('Distinct legal routes entering the cell')
-    frequency_axis.set_ylabel('Final hotspot center X, Z (blocks)')
+    frequency_axis.set_xlim(0, 100.0)
+    frequency_axis.set_xlabel('Seeded approaches using the legal edge (%)')
+    frequency_axis.set_ylabel('Decoded path-node edge')
     frequency_axis.set_title(
-        'Final repeatability hotspots (counts accumulating)', fontsize=10.8, pad=8,
+        'Most-used legal navigation edges', fontsize=10.8, pad=8,
     )
     frequency_axis.grid(axis='x', color=COLORS['grid'], alpha=0.35, linewidth=0.55)
     for spine in frequency_axis.spines.values():
@@ -878,13 +928,8 @@ def create_trajectory_ensemble_animation(
             0.0, index, '', ha='left', va='center',
             color=COLORS['text'], fontsize=7.2, family='monospace',
         )
-        for index in range(len(hotspot_values))
+        for index in range(len(selected_edges))
     ]
-    hotspot_markers = axis.scatter(
-        hotspot_x, hotspot_z, s=34, facecolors='none',
-        edgecolors=plt.get_cmap('viridis')(0.98), linewidths=0.8,
-        alpha=0.0, zorder=11,
-    )
     figure.suptitle(
         'TRAJECTORY DISTRIBUTION AND DEGENERACY',
         color=COLORS['text'], fontsize=17, fontweight='black', y=0.97,
@@ -910,12 +955,10 @@ def create_trajectory_ensemble_animation(
 
         featured = paths[featured_index]
         featured_nodes = node_paths[featured_index]
-        point_index = min(len(featured) - 1, round(local_phase * (len(featured) - 1)))
-        point = featured[point_index]
+        point, angle, visible_prefix = _point_on_polyline(featured, local_phase)
         edge_fade = min(local_phase / 0.12, 1.0)
         dragon.set_alpha(0.35 + 0.65 * max(edge_fade, 0.0))
-        trail_start = max(0, point_index - 22)
-        local_points = featured[trail_start:point_index + 1]
+        local_points = visible_prefix[max(0, len(visible_prefix) - 23):]
         if len(local_points) > 1:
             segments = np.stack([local_points[:-1], local_points[1:]], axis=1)
             local_trail.set_segments(segments)
@@ -923,14 +966,11 @@ def create_trajectory_ensemble_animation(
                 to_rgba(plt.get_cmap('viridis')(0.30 + 0.68 * value), 0.20 + 0.78 * value)
                 for value in np.linspace(0.0, 1.0, len(segments))
             ])
-            vector = local_points[-1] - local_points[-2]
-            angle = np.degrees(np.arctan2(vector[1], vector[0]))
         else:
             local_trail.set_segments([])
-            angle = 0.0
         active_frames = frames - int(round(final_hold * fps))
         sprite_scale = (
-            1.0 + 0.06 * np.sin(2.0 * np.pi * frame_index / 7.0)
+            1.0 + 0.018 * np.sin(2.0 * np.pi * frame_index / 7.0)
             if frame_index < active_frames else 1.0
         )
         dragon.update(point, angle, 'landing_approach', scale=sprite_scale)
@@ -940,16 +980,14 @@ def create_trajectory_ensemble_animation(
             to_rgba(COLORS['cyan'], 0.92),
         )
 
-        for bar, label, row, column in zip(
-            bars, bar_value_texts, hotspot_rows, hotspot_columns,
-        ):
-            value = float(current_frequency[row, column])
-            bar.set_width(value)
-            bar.set_facecolor(plt.get_cmap('viridis')(bar_norm(value)))
-            label.set_x(value + maximum_hotspot * 0.015)
-            label.set_text(str(int(value)) if value > 0 else '')
+        current_edge_counts = cumulative_edge_counts[shown - 1, selected_edge_indices]
+        for bar, label, value in zip(bars, bar_value_texts, current_edge_counts):
+            percentage = 100.0 * float(value) / shown
+            bar.set_width(percentage)
+            bar.set_facecolor(plt.get_cmap('viridis')(bar_norm(float(value))))
+            label.set_x(min(percentage + 1.0, 96.0))
+            label.set_text(f'{int(value):3d} routes  {percentage:4.1f}%')
         count_text.set_text(f'{shown:03d} seeded approaches')
-        hotspot_markers.set_alpha(0.30 + 0.70 * shown / trajectories)
         return []
 
     animation = FuncAnimation(
