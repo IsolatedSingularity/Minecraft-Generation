@@ -34,8 +34,10 @@ Real-time simulation of dragon behavior with:
 - Crystal destruction mechanics affecting perch probability
 - Source-shaped central-island projection with exact spike footprints
 - Graph-based navigation expanded exclusively through legal weighted edges
+- Reduced top-down steering with source-derived yaw clamp, turn momentum, acceleration, and velocity retention
+- Colour-treated raster dragon plus audited strafing-fireball and sitting-breath effects
 - Compact phase ovals with an explicit next-holding-path landing roll and polished crystal HUD
-- A 240-route legal-edge ensemble with synchronized batches, stable final hotspots, viridis frequency encoding, and a three-second hold
+- A 1440 x 810, 240-route legal-edge ensemble with synchronized batches, stable final hotspots, viridis frequency encoding, and a three-second hold
 
 ```python
 class EnderDragonAI:
@@ -51,8 +53,9 @@ class EnderDragonAI:
 
 - Two equal map panels with continuous projected outer-island footprints
 - Exact 20 by 20 chunk placement regions and uniform 9 by 9 candidate windows
-- Nearest-cell viridis heatmap of the fixed-seed `1/81` candidate prior masked by the documented 2D island-support gate
-- Simplified ship glyphs used symbolically for qualified End-city starts
+- Exact deterministic rotation, four-sample geometry, minimum, and height-60 gate
+- Viridis heatmap of the documented modeled `WORLD_SURFACE_WG` height field
+- Failed candidates, symbolic qualified ship glyphs, and a four-sample diagnostic inset
 
 **Output**: `Plots/end_structure_generation.png`
 
@@ -78,14 +81,14 @@ The generator shows every in-bounds random-spread candidate across an approximat
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Shows the exact thirteen-status order and source-required terminal dependency rings across a 31 x 31 overview. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. A 7 x 7 detail inset preserves local readability. Timing and terrain remain explicitly modeled context.
+Shows the exact thirteen-status order and source-required terminal dependency rings inside a 101 x 101 terrain overview. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. The explanatory wave reveals outward, and a complete 21 x 21 detail inset preserves every dependency ring. Timing and terrain remain explicitly modeled context.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows every exact candidate across an approximately 685 x 685 chunk view: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The source-informed Nether backdrop is context only and does not suppress candidates. A clamped active-grid detail inset keeps edge regions readable.
+Shows every exact candidate across a 3,169 x 3,169 chunk view: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The active inset preserves exact local grids and later biome-gate labels.
 
 **Output**: `Plots/multi_structure_generation.gif`
 

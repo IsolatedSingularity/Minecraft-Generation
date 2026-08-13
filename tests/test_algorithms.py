@@ -23,6 +23,7 @@ from core.end_generation import (
     end_overflow_ring_boundaries,
     gateway_positions,
     end_city_candidates,
+    end_city_height_candidates,
     end_city_qualification_probability,
     outer_gateway_positions,
     outer_island_seed_field,
@@ -256,22 +257,27 @@ class StructureTests(unittest.TestCase):
 class ChunkStatusTests(unittest.TestCase):
     def test_dependency_wave_reaches_source_target_status_rings(self):
         stages, growth, hidden = chunk_status_snapshot(0)
-        self.assertEqual(stages[15, 15], 0)
-        self.assertEqual(growth[15, 15], 0.0)
-        self.assertFalse(np.any(hidden))
+        center = 50
+        self.assertEqual(stages[center, center], 0)
+        self.assertEqual(growth[center, center], 1.0)
+        self.assertFalse(hidden[center, center])
+        self.assertTrue(hidden[center, center + 1])
+        self.assertTrue(np.all(hidden[:40]))
 
         final_generation = chunk_status_snapshot(79)
         first_hold = chunk_status_snapshot(80)
         for snapshot in (final_generation, first_hold):
             stages, growth, hidden = snapshot
-            self.assertEqual(stages[15, 15], 12)
-            self.assertEqual(stages[15, 16], 8)
-            self.assertEqual(stages[15, 17], 7)
-            self.assertEqual(stages[15, 18], 1)
-            self.assertEqual(stages[15, 25], 1)
-            self.assertEqual(stages[15, 26], 0)
-            self.assertTrue(np.all(growth == 1.0))
-            self.assertFalse(np.any(hidden))
+            self.assertEqual(stages[center, center], 12)
+            self.assertEqual(stages[center, center + 1], 8)
+            self.assertEqual(stages[center, center + 2], 7)
+            self.assertEqual(stages[center, center + 3], 1)
+            self.assertEqual(stages[center, center + 10], 1)
+            self.assertEqual(stages[center, center + 11], 0)
+            self.assertEqual(growth[center, center + 10], 1.0)
+            self.assertEqual(growth[center, center + 11], 0.0)
+            self.assertFalse(hidden[center, center + 10])
+            self.assertTrue(hidden[center, center + 11])
 
 
 class EndGeometryTests(unittest.TestCase):
@@ -321,6 +327,27 @@ class EndGeometryTests(unittest.TestCase):
         self.assertTrue(all(
             math.hypot(item['block_x'], item['block_z']) > 1024.0
             for item in cities
+        ))
+
+        evaluated, _, _ = end_city_height_candidates(
+            42, max_coordinate_blocks=2400, resolution=401,
+        )
+        self.assertGreater(len(evaluated), len(cities))
+        self.assertEqual(
+            {item['rotation'] for item in evaluated},
+            {
+                'NONE', 'CLOCKWISE_90', 'CLOCKWISE_180',
+                'COUNTERCLOCKWISE_90',
+            },
+        )
+        self.assertTrue(all(len(item['sample_heights']) == 4 for item in evaluated))
+        self.assertTrue(all(
+            item['model_min_height'] == min(item['sample_heights'])
+            for item in evaluated
+        ))
+        self.assertTrue(all(
+            item['qualified'] == (item['model_min_height'] >= 60.0)
+            for item in evaluated
         ))
 
         x, z, probability = end_city_qualification_probability(

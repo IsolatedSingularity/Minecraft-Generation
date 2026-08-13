@@ -44,7 +44,7 @@ TARGET_STATUS_BY_DISTANCE = {
 
 
 def chunk_status_snapshot(
-    frame_index, fps=8, duration=12, full_hold=2, radius=15,
+    frame_index, fps=8, duration=12, full_hold=2, radius=50,
 ):
     """Return the source-backed target-status dependency snapshot."""
     total_frames = int(round(float(fps) * float(duration)))
@@ -70,14 +70,16 @@ def chunk_status_snapshot(
         target[distances == distance] = status
 
     phase = progress * (len(STATUS_NAMES) - 1)
+    outward_radius = progress * 10.0
     stages = np.minimum(np.floor(phase).astype(int), target)
+    hidden = (distances > 10.0) | (distances > outward_radius)
     growth = np.where(
-        stages >= target, 1.0, np.clip(phase - stages, 0.0, 1.0),
+        hidden, 0.0, np.clip(outward_radius - distances + 1.0, 0.0, 1.0),
     )
-    hidden = np.zeros(distances.shape, dtype=bool)
     if progress >= 1.0:
         stages = target
-        growth.fill(1.0)
+        hidden = distances > 10.0
+        growth = np.where(hidden, 0.0, 1.0)
     return stages, growth, hidden
 
 
@@ -103,9 +105,9 @@ def create_seed_loading_animation(
     full_hold=2,
 ):
     total_frames = int(round(fps * duration))
-    radius = 15
+    radius = 50
     size = 2 * radius + 1
-    pixels_per_chunk = 10
+    pixels_per_chunk = 5
     terrain = minecraft_terrain_rgba(
         seed, resolution=size * pixels_per_chunk, dimension='overworld',
         x_extent=(-radius - 0.5, radius + 0.5),
@@ -118,8 +120,8 @@ def create_seed_loading_animation(
         figsize=(12.8, 7.2), facecolor=COLORS['background'],
     )
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[2.18, 0.92],
-        left=0.055, right=0.985, top=0.90, bottom=0.095, wspace=0.075,
+        1, 2, width_ratios=[2.32, 0.98],
+        left=0.052, right=0.985, top=0.90, bottom=0.095, wspace=0.07,
     )
     axis = figure.add_subplot(grid[0, 0])
     side = figure.add_subplot(grid[0, 1])
@@ -129,28 +131,29 @@ def create_seed_loading_animation(
     axis.set_aspect('equal')
     axis.set_xlim(-radius - 0.5, radius + 0.5)
     axis.set_ylim(-radius - 0.5, radius + 0.5)
-    axis.set_xticks(range(-radius, radius + 1, 2))
-    axis.set_yticks(range(-radius, radius + 1, 2))
+    axis.set_xticks(range(-radius, radius + 1, 10))
+    axis.set_yticks(range(-radius, radius + 1, 10))
     axis.set_xlabel('Chunk X')
     axis.set_ylabel('Chunk Z')
     axis.tick_params(colors=COLORS['muted'], labelsize=8)
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
 
+    context = 0.16 * terrain + 0.84 * background_rgb
     output = np.empty((*terrain.shape[:2], 4), dtype=float)
-    output[..., :3] = background_rgb
+    output[..., :3] = context
     output[..., 3] = 1.0
     image = axis.imshow(
         output, origin='lower', interpolation='nearest',
         extent=(-radius - 0.5, radius + 0.5, -radius - 0.5, radius + 0.5),
         zorder=1,
     )
-    for value in np.arange(-radius - 0.5, radius + 1.0, 1.0):
+    for value in np.arange(-radius - 0.5, radius + 1.0, 5.0):
         axis.axvline(
-            value, color='#07090E', linewidth=0.36, alpha=0.62, zorder=3,
+            value, color='#59677E', linewidth=0.36, alpha=0.30, zorder=3,
         )
         axis.axhline(
-            value, color='#07090E', linewidth=0.36, alpha=0.62, zorder=3,
+            value, color='#59677E', linewidth=0.36, alpha=0.30, zorder=3,
         )
     axis.scatter(
         [0], [0], marker='+', s=90, c=COLORS['text'],
@@ -161,35 +164,40 @@ def create_seed_loading_animation(
         edgecolor=COLORS['gold'], linewidth=2.1, zorder=8,
     )
     axis.add_patch(target_outline)
-    detail_axis = side.inset_axes([0.04, 0.61, 0.92, 0.34])
-    detail_axis.set_xlim(-3.5, 3.5)
-    detail_axis.set_ylim(-3.5, 3.5)
+    axis.add_patch(Rectangle(
+        (-10.5, -10.5), 21, 21, fill=False,
+        edgecolor=COLORS['violet'], linewidth=1.15,
+        linestyle='--', alpha=0.9, zorder=7,
+    ))
+    detail_axis = side.inset_axes([0.025, 0.47, 0.95, 0.49])
+    detail_axis.set_xlim(-10.5, 10.5)
+    detail_axis.set_ylim(-10.5, 10.5)
     detail_axis.set_aspect('equal')
-    detail_axis.set_xticks(range(-3, 4))
-    detail_axis.set_yticks(range(-3, 4))
-    detail_axis.tick_params(colors=COLORS['muted'], labelsize=5.8, pad=1)
-    detail_axis.set_title('CENTRAL 7x7 DEPENDENCY DETAIL', fontsize=7.5, pad=4)
-    crop_start = (radius - 3) * pixels_per_chunk
-    crop_stop = (radius + 4) * pixels_per_chunk
+    detail_axis.set_xticks(range(-10, 11, 2))
+    detail_axis.set_yticks(range(-10, 11, 2))
+    detail_axis.tick_params(colors=COLORS['muted'], labelsize=5.5, pad=1)
+    detail_axis.set_title('SOURCE DEPENDENCY FOOTPRINT  21 x 21 CHUNKS', fontsize=7.1, pad=4)
+    crop_start = (radius - 10) * pixels_per_chunk
+    crop_stop = (radius + 11) * pixels_per_chunk
     detail_image = detail_axis.imshow(
         output[crop_start:crop_stop, crop_start:crop_stop],
         origin='lower', interpolation='nearest',
-        extent=(-3.5, 3.5, -3.5, 3.5), zorder=1,
+        extent=(-10.5, 10.5, -10.5, 10.5), zorder=1,
     )
-    for value in np.arange(-3.5, 4.0, 1.0):
-        detail_axis.axvline(value, color='#07090E', linewidth=0.58, alpha=0.78, zorder=3)
-        detail_axis.axhline(value, color='#07090E', linewidth=0.58, alpha=0.78, zorder=3)
+    for value in np.arange(-10.5, 11.0, 1.0):
+        detail_axis.axvline(value, color='#07090E', linewidth=0.42, alpha=0.72, zorder=3)
+        detail_axis.axhline(value, color='#07090E', linewidth=0.42, alpha=0.72, zorder=3)
     detail_axis.add_patch(Rectangle(
         (-0.5, -0.5), 1, 1, fill=False,
         edgecolor=COLORS['gold'], linewidth=1.7, zorder=8,
     ))
 
-    legend_axis = side.inset_axes([0.0, 0.03, 1.0, 0.52])
+    legend_axis = side.inset_axes([0.0, 0.015, 1.0, 0.40])
     legend_axis.set_xlim(0, 2)
     legend_axis.set_ylim(0, 7.4)
     legend_axis.axis('off')
     legend_axis.text(
-        0.0, 7.18, 'CENTER-CHUNK STATUS', color=COLORS['text'],
+        0.0, 7.18, 'CENTER STATUS AND SOURCE TARGETS', color=COLORS['text'],
         fontsize=8.6, fontweight='black', va='center',
     )
     stage_boxes = []
@@ -232,7 +240,7 @@ def create_seed_loading_animation(
             frame_index, fps=fps, duration=duration,
             full_hold=full_hold, radius=radius,
         )
-        output[..., :3] = background_rgb
+        output[..., :3] = context
         output[..., 3] = 1.0
         for row in range(size):
             for column in range(size):

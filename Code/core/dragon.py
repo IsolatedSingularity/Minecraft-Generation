@@ -50,6 +50,10 @@ class DragonFrame:
     target_node: int | None
     alive_crystals: tuple[int, ...] | None = None
     fireball_position: np.ndarray | None = None
+    breath_center: np.ndarray | None = None
+    breath_radius: float = 0.0
+    breath_alpha: float = 0.0
+    breath_kind: str | None = None
     explosion_index: int | None = None
     explosion_phase: float = 0.0
 
@@ -206,6 +210,86 @@ def catmull_rom_path(control_points, samples_per_segment=10):
     return np.asarray(output)
 
 
+def _wrap_degrees(value):
+    """Wrap an angle to the same signed interval used by MathHelper."""
+    return (float(value) + 180.0) % 360.0 - 180.0
+
+
+def source_steered_path(
+    control_points, samples_per_target=12, arrival_radius=3.0,
+    maximum_ticks_per_target=220,
+):
+    """Integrate a top-down reduction of the Java dragon steering loop.
+
+    The target sequence can be source path nodes or phase-specific targets.
+    Yaw error clamping, damped turn momentum, forward acceleration, alignment,
+    and velocity retention follow ``EnderDragonEntity.tickMovement``. Vertical
+    acceleration and block collision are intentionally omitted.
+    """
+    targets = np.asarray(control_points, dtype=float)
+    if len(targets) < 2:
+        return targets.copy()
+
+    position = targets[0].copy()
+    initial_delta = targets[1] - targets[0]
+    initial_length = max(float(np.linalg.norm(initial_delta)), 1.0)
+    initial_direction = initial_delta / initial_length
+    yaw = math.degrees(math.atan2(initial_direction[1], initial_direction[0]))
+    velocity = initial_direction * 0.38
+    turn_momentum = 0.0
+    microsteps = [position.copy()]
+
+    for target in targets[1:]:
+        previous_distance = float('inf')
+        for tick in range(int(maximum_ticks_per_target)):
+            delta = target - position
+            distance = float(np.linalg.norm(delta))
+            if distance <= float(arrival_radius) and tick >= 2:
+                break
+
+            desired_yaw = math.degrees(math.atan2(delta[1], delta[0]))
+            yaw_error = np.clip(_wrap_degrees(desired_yaw - yaw), -50.0, 50.0)
+            turn_momentum *= 0.8
+            turn_momentum += float(yaw_error) * 0.70
+            yaw = _wrap_degrees(yaw + turn_momentum * 0.1)
+
+            radians = math.radians(yaw)
+            forward = np.array([math.cos(radians), math.sin(radians)])
+            target_direction = delta / max(distance, 1.0e-9)
+            alignment = max((float(np.dot(forward, target_direction)) + 0.5) / 1.5, 0.0)
+            distance_weight = 2.0 / (distance * distance + 1.0)
+            acceleration = 0.06 * (
+                alignment * distance_weight + (1.0 - distance_weight)
+            )
+            velocity = velocity + forward * acceleration
+            position = position + velocity
+            microsteps.append(position.copy())
+
+            speed = float(np.linalg.norm(velocity))
+            if speed > 1.0e-9:
+                velocity_direction = velocity / speed
+                retention = 0.8 + 0.15 * (
+                    float(np.dot(velocity_direction, forward)) + 1.0
+                ) / 2.0
+                velocity *= retention
+
+            # A passed target may start receding before it enters the small
+            # arrival disk. Move on once it has clearly crossed the target.
+            if tick > 8 and distance > previous_distance + 1.5:
+                break
+            previous_distance = distance
+
+    microsteps = np.asarray(microsteps)
+    output_count = max(
+        2, int(samples_per_target) * max(len(targets) - 1, 1) + 1,
+    )
+    source_index = np.linspace(0.0, len(microsteps) - 1.0, output_count)
+    left = np.floor(source_index).astype(int)
+    right = np.minimum(left + 1, len(microsteps) - 1)
+    fraction = (source_index - left)[:, None]
+    return microsteps[left] * (1.0 - fraction) + microsteps[right] * fraction
+
+
 def path_coordinates(indices, samples_per_edge=10, bend=1.2):
     """Return a continuous spline through a legal sequence of path nodes."""
     if len(indices) == 1:
@@ -262,7 +346,7 @@ def simulate_perch_trajectory(
 
     control_points = [DRAGON_NODES[index] for index in node_path]
     control_points.extend((-direction * 18.0, np.zeros(2)))
-    coordinates = catmull_rom_path(control_points, samples_per_segment=7)
+    coordinates = source_steered_path(control_points, samples_per_target=7)
     return coordinates, node_path
 
 
@@ -304,17 +388,32 @@ def scripted_showcase():
         ))
 
     def append_curve(points, state, samples=9, fireball=False):
-        curve = catmull_rom_path(points, samples_per_segment=samples)
+        curve = source_steered_path(points, samples_per_target=samples)
         player = np.array([31.0, -17.0])
         for index, point in enumerate(curve):
             fireball_position = None
-            if fireball and 0.34 <= index / max(len(curve) - 1, 1) <= 0.82:
-                phase = (index / max(len(curve) - 1, 1) - 0.34) / 0.48
+            breath_center = None
+            breath_radius = 0.0
+            breath_alpha = 0.0
+            breath_kind = None
+            fraction = index / max(len(curve) - 1, 1)
+            if fireball and 0.32 <= fraction < 0.62:
+                phase = (fraction - 0.32) / 0.30
                 fireball_position = (1.0 - phase) * point + phase * player
+            elif fireball and 0.62 <= fraction <= 0.96:
+                phase = (fraction - 0.62) / 0.34
+                breath_center = player.copy()
+                breath_radius = 3.0 + 4.0 * phase
+                breath_alpha = 0.48 * (1.0 - 0.48 * phase)
+                breath_kind = 'projectile_impact'
             frames.append(DragonFrame(
                 np.asarray(point), state, len(alive), None, None,
                 alive_crystals=tuple(sorted(alive)),
                 fireball_position=fireball_position,
+                breath_center=breath_center,
+                breath_radius=breath_radius,
+                breath_alpha=breath_alpha,
+                breath_kind=breath_kind,
             ))
 
     first_holding = shortest_path(0, 15, crystals_alive=len(alive))
@@ -337,8 +436,8 @@ def scripted_showcase():
     # around the spike ring instead of walking it in angular order.
     explosion_order = (7, 2, 9, 4)
     second_holding = shortest_path(18, 3, crystals_alive=len(alive))
-    holding_curve = catmull_rom_path(
-        [DRAGON_NODES[index] for index in second_holding], samples_per_segment=11,
+    holding_curve = source_steered_path(
+        [DRAGON_NODES[index] for index in second_holding], samples_per_target=11,
     )
     event_frames = (8, 18, 28, 38)
     for frame_index, point in enumerate(holding_curve):
@@ -375,13 +474,22 @@ def scripted_showcase():
     )
     sitting_index = 0
     for state, count in sitting_phases:
-        for _ in range(count):
+        for local_index in range(count):
             angle = 2.0 * math.pi * sitting_index / 48.0
             point = np.array([0.9 * math.cos(angle), 0.55 * math.sin(angle)])
             sitting_index += 1
+            flaming = state == 'sitting_flaming'
+            flame_phase = local_index / max(count - 1, 1)
             frames.append(DragonFrame(
                 point, state, len(alive), None, None,
                 alive_crystals=tuple(sorted(alive)),
+                breath_center=(np.array([5.0, 0.0]) if flaming else None),
+                breath_radius=(5.0 if flaming else 0.0),
+                breath_alpha=(
+                    0.36 + 0.10 * math.sin(flame_phase * 5.0 * math.pi)
+                    if flaming else 0.0
+                ),
+                breath_kind=('sitting_flame' if flaming else None),
             ))
 
     takeoff_route = shortest_path(20, 8, crystals_alive=len(alive))

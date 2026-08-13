@@ -198,17 +198,17 @@ for neighbor in adjacency[current]:
     weight = np.linalg.norm(DRAGON_NODES[current] - DRAGON_NODES[neighbor])
 ```
 
-The graph selects meaningful targets. Every graph-bound portion of a seeded route is expanded through legal decoded edges before a Catmull-Rom curve passes through those targets. This prevents disconnected chords while allowing the dragon to cross the inner graph instead of being locked to the outer ring. The interpolation is visual steering, not a claim that Minecraft uses that exact spline formula.
+The graph selects meaningful targets. Every graph-bound portion of a seeded route is expanded through legal decoded edges, then a reduced top-down integrator applies the source movement terms: wrapped yaw error, a $\pm50^\circ$ turn clamp, retained turn momentum, alignment-sensitive acceleration, and velocity damping. This prevents disconnected chords and the old rigid boundary-following motion. It is still a two-dimensional explanatory projection of the three-dimensional entity controller, not a block-exact replay.
 
 #### The animation
 
 ![Dragon path graph and fight state](Plots/dragon_pathfinding_hero.gif)
 
-The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, explosions, and recent trail. Grey lines show legal graph edges. The dragon-shaped marker rotates with its direction of travel.
+The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, breath clouds, explosions, and recent trail. Grey lines show legal graph edges. The cropped, colour-treated raster sprite rotates with its direction of travel and remains small enough to expose the graph beneath it.
 
 The right panel shows all 11 Java 1.16.1 phase types and highlights every one at least once. Solid arrows follow source-confirmed phase changes: Holding can enter Strafe or Landing Approach; Landing Approach enters Landing and then Sitting Scanning; scanning can attack, take off, or select Charging Player; attacking enters Flaming; Flaming returns to scanning or takeoff; and Takeoff, Strafe, and Charging Player return to Holding. Dashed arrows identify exceptional initialization and lethal-damage paths for Hover and Dying. The currently selected phase alone receives a thick white outline.
 
-The polished dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance, and the segmented rail no longer permits its percentage label to clip. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event, while fireball motion appears during the representative strafing pass. The smaller direction-aware sprite uses a wider, emphasized wing plan so it reads as a dragon without obscuring the graph.
+The polished dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance, and the segmented rail no longer permits its percentage label to clip. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event. The strafing example launches one purple dragon fireball and expands its impact cloud from radius 3 toward radius 7; the Sitting Flaming example separately displays its radius-5 breath cloud. These timings and radii follow the audited 1.16.1 phase and entity sources while their top-down particle rendering is illustrative.
 
 #### Phase details
 
@@ -225,7 +225,7 @@ The polished dashboard labels the probability honestly as the next holding-path 
 </tr>
 </table>
 
-These shorter clips retain the same arena, steering model, state colours, and direction-aware dragon plan. They isolate phase changes that can be difficult to study inside the longer fight loop.
+These shorter clips retain the same arena, source-shaped steering, raster sprite, and state colours. A fixed close view keeps the fight geometry legible, while permanent titles replace the changing annotation boxes that previously obscured the action.
 
 ### Trajectory Distribution and Degeneracy
 
@@ -259,7 +259,7 @@ cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The left panel accumulates 240 seeded approaches in 16 fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, while the final spline supplies only continuous top-down steering. During each batch the smaller dragon traverses a representative route at the same rate that the corresponding paths are added. The route raster and recent trail use viridis, with a square-root normalization stated in the panel.
+The 1440 by 810 figure accumulates 240 seeded approaches in 16 fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges and the same source-shaped steering integrator used by the hero supplies continuous motion. During each batch the smaller raster dragon traverses a representative route at the same rate that the corresponding paths are added. The route raster and recent trail use viridis, with a square-root normalization stated in the panel.
 
 The right panel fixes the final separated local-maximum cells so their labels do not jump during the animation, then accumulates their distinct-route counts from exactly the routes shown so far. Hollow markers on the map identify those same cells. Both bar length and viridis colour encode frequency, coordinates are reported in blocks, and the completed result lingers for more than three seconds. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
 
@@ -337,7 +337,7 @@ flowchart LR
     G --> H["Search for a safe outer-island endpoint"]
 ```
 
-[`Code/core/end_generation.py`](Code/core/end_generation.py) uses the exact End-city candidate grid and a clearly labeled two-dimensional island-support gate. The repository does not reproduce the complete three-dimensional End heightmap, so the final city qualification is source-informed rather than block-exact.
+[`Code/core/end_generation.py`](Code/core/end_generation.py) uses the exact End-city candidate grid, derives the source rotation from `chunkX + chunkZ * 10387313`, and evaluates the minimum of the four rotated surface samples used by Java 1.16.1. The repository does not reproduce the complete three-dimensional End chunk generator, so those four values come from a clearly labeled two-dimensional modeled `WORLD_SURFACE_WG` height field rather than a block-exact save.
 
 For gateway $k$, the ideal outer direction is
 
@@ -347,21 +347,20 @@ $$
 
 The plot then snaps that ideal vector to the nearest qualified outer-island source site, standing in for the safe-position search performed by the gateway system.
 
-For a fixed terrain seed, the right panel shows the model-qualified candidate prior
+For candidate origin $(x,z)$ and source-selected offsets $(\Delta x,\Delta z)$, the displayed gate is
 
 $$
-Q(c_x,c_z)=\frac{1}{81}\,
-\mathbf{1}[0\leq j_x,j_z<9]\,
-\mathbf{1}[\text{2D island support}],
+H_{\min}=\min\{H(x,z),H(x+\Delta x,z),H(x,z+\Delta z),H(x+\Delta x,z+\Delta z)\},
+\qquad H_{\min}\geq60.
 $$
 
-where $(j_x,j_z)$ is the chunk offset inside its 20 by 20 placement region. This is the exact uniform candidate prior masked by the repository's fixed-seed two-dimensional support gate. It is not a multi-seed frequency estimate or a replacement for Minecraft's complete three-dimensional height test.
+The offset signs come from one of the four rotations and have five-block magnitude. Candidate placement, rotation, sample geometry, minimum operation, and threshold are source-exact; only the height surface supplying $H$ is modeled.
 
 ![End Structure Generation](Plots/end_structure_generation.png)
 
-The left panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Subtle cyan diamonds retain the exact radius-96 central gateways without competing with the structure field. Enlarged purpur ship glyphs mark island-qualified End-city candidates.
+The left panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Subtle cyan diamonds retain the exact radius-96 central gateways without competing with the structure field. Enlarged purpur ship glyphs mark candidates whose modeled four-sample minimum reaches 60.
 
-The equally sized right panel repeats the left map extent as a nearest-cell viridis heatmap of $Q(c_x,c_z)$, with its probability colourbar on the right. Purple represents zero probability and yellow represents the exact $1/81$ uniform-region prior where the repository's two-dimensional island support gate passes. The ship glyph is deliberately enlarged and simplified as a symbolic End-city marker. It does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
+The equally sized right panel repeats the left map extent as a viridis heatmap of the modeled surface height, with its colourbar on the right and the 60-block contour drawn directly on the field. Grey crosses show failed exact-grid candidates and ship glyphs show modeled passes. The diagnostic inset exposes one candidate's rotation, four sample positions, four modeled heights, and minimum rather than hiding the qualification rule. The glyph is symbolic: it does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
 
 ### Radial World Generation
 
@@ -404,7 +403,7 @@ stages = np.minimum(int(np.floor(12 * progress)), target)
 
 ![Radial World Generation](Plots/seed_loading.gif)
 
-The 31 by 31 overview begins empty and advances only to each chunk's required target status. A 7 by 7 inset keeps the central dependency detail legible, while the right-hand key shows the complete 13-status order. The scheduling speed remains an explanatory model; the source-mapped terminal rings and status taxonomy are the scientific result.
+The 101 by 101 overview provides terrain context at the same broad scale as the stronghold presentation, while a dashed 21 by 21 footprint marks the only chunks involved in this dependency example. Statuses reveal outward from the target instead of propagating inward from the boundary. The equally complete 21 by 21 inset preserves every source-required terminal ring, and the right-hand key shows the complete 13-status order. Reveal speed remains an explanatory model; direction, terminal rings, and status taxonomy are the scientific result.
 
 ### Overworld Structure Generation
 
@@ -492,9 +491,9 @@ structure_type = 'fortress' if type_roll < 2 else 'bastion'
 
 ![Nether Structure Generation](Plots/multi_structure_generation.gif)
 
-The map spans about 685 by 685 chunks. Red lines show the shared fortress-or-bastion regions and purple dotted lines show the independent ruined-portal regions. The moving detail inset retains the active grids at readable scale, including at the terrain boundary. The active trace reports the shared roll, structure type, candidate chunk, terrain context, and current portal candidate.
+The map spans 3,169 by 3,169 chunks, over four times the previous linear extent. Subtle red lines show every fifth shared fortress-or-bastion region boundary and purple dotted lines show every fifth independent ruined-portal boundary, avoiding an unreadable grid at this scale. The moving detail inset retains the exact active grids at readable scale. The active trace reports the shared roll, structure type, candidate chunk, biome proxy, and current portal candidate.
 
-The compact symbols distinguish fortress, bastion, and ruined-portal candidates without hiding the wider field. The right legend separates terrain context from structures. The warped forest is intentionally blue-green rather than purple, while crimson forest retains its deep red palette. Every exact shared-grid candidate is shown; the illustrative terrain field does not suppress bastions or pretend to reproduce the later biome start gate.
+The compact symbols distinguish all 29,772 fortress, bastion, and ruined-portal candidates without hiding the wider field. The backdrop assigns the five source biomes by nearest distance to the Java 1.16.1 multi-noise prototypes using four seeded proxy fields. Lava is separately labeled as terrain, not a biome. Every exact candidate is retained: fortresses and ruined portals accept all five displayed biome classes, while bastions exclude basalt deltas at the later biome gate. Because the Double Perlin samplers are not reproduced, biome shapes and rarity remain an explanatory proxy rather than exact seed output.
 
 ### Stronghold Ring Distribution
 
@@ -566,7 +565,7 @@ Run `render_all.py` from inside `Code/`. The visualization modules use sibling i
 ## Scope and Accuracy
 
 > [!NOTE]
-> Active mathematical visualizations target Java Edition 1.16.1. Java Random, candidate-region arithmetic, stronghold ring geometry, gateway-ring positions, dragon graph topology, and signed-integer overflow use Java-compatible conventions. Biome textures, the chunk scheduling wave, continuous dragon steering, the two-dimensional End-city island gate, and safe outer-gateway destinations are explanatory models unless a section states otherwise. No Bedrock behaviour is represented.
+> Active mathematical visualizations target Java Edition 1.16.1. Java Random, candidate-region arithmetic, stronghold ring geometry, gateway-ring positions, dragon graph topology, End-city sample geometry, and signed-integer overflow use Java-compatible conventions. Biome noise fields, chunk reveal timing, continuous two-dimensional dragon steering, modeled End heights, and safe outer-gateway destinations are explanatory models unless a section states otherwise. No Bedrock behaviour is represented.
 
 > [!IMPORTANT]
 > The biome-heavy README maps intentionally compress rare-biome spacing so every class can be inspected in one figure. Colours, textures, climate relationships, coordinates, and structure compatibility are meaningful. The apparent frequency of rare biomes is not a vanilla rarity claim.

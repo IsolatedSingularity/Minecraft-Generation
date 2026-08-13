@@ -15,8 +15,9 @@ RENDERED_GIFS = {
     'dragon_landing_perch.gif': (900, 500, 20),
     'dragon_takeoff.gif': (900, 500, 20),
     # The 3 s final hold is coalesced into the final optimized GIF frame.
-    'dragon_trajectory_ensemble.gif': (1150, 620, 120),
-    'seed_loading.gif': (1200, 700, 60),
+    'dragon_trajectory_ensemble.gif': (1400, 800, 120),
+    # Unchanged wave cells are coalesced while their timing is retained.
+    'seed_loading.gif': (1200, 700, 20),
     'structure_placement.gif': (1000, 550, 90),
     'multi_structure_generation.gif': (1000, 550, 80),
     'redstone_quasi_connectivity.gif': (900, 550, 45),
@@ -42,9 +43,9 @@ class AssetIntegrityTests(unittest.TestCase):
     def test_retained_new_gifs_decode_and_are_bounded(self):
         maximum_sizes = {
             'dragon_pathfinding_hero.gif': 16 * 1024 * 1024,
-            'dragon_trajectory_ensemble.gif': 13 * 1024 * 1024,
+            'dragon_trajectory_ensemble.gif': 15 * 1024 * 1024,
             'structure_placement.gif': 15 * 1024 * 1024,
-            'multi_structure_generation.gif': 13 * 1024 * 1024,
+            'multi_structure_generation.gif': 17 * 1024 * 1024,
         }
         for name, dimensions in RENDERED_GIFS.items():
             minimum_width, minimum_height, minimum_frames = dimensions

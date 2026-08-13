@@ -13,6 +13,7 @@ from core.constants import (
 )
 from core.minecraft_visuals import (
     NETHER_BIOMES,
+    NETHER_TERRAIN_CLASSES,
     biome_texture_swatch,
     draw_minecraft_terrain,
     minecraft_nether_biome_grid,
@@ -53,10 +54,10 @@ def _draw_legend(axis):
     axis.set_ylim(0, 1)
     axis.axis('off')
     axis.text(
-        0.0, 0.98, 'NETHER BIOME TEXTURES',
+        0.0, 0.98, 'SOURCE-SHAPED BIOME PROXY',
         color=COLORS['text'], fontsize=10, fontweight='black', va='top',
     )
-    for index, (name, biome) in enumerate(NETHER_BIOMES.items()):
+    for index, (name, biome) in enumerate(NETHER_TERRAIN_CLASSES.items()):
         y = 0.88 - index * 0.105
         axis.imshow(
             biome_texture_swatch(name, 24),
@@ -74,16 +75,22 @@ def _draw_legend(axis):
         )
 
     axis.text(
-        0.0, 0.22, 'STRUCTURE PLANS',
+        0.0, 0.30, 'STRUCTURE PLANS',
         color=COLORS['text'], fontsize=10, fontweight='black', va='top',
     )
     for index, name in enumerate(('fortress', 'bastion', 'ruined_portal')):
-        y = 0.145 - index * 0.066
+        y = 0.235 - index * 0.062
         draw_structure_schematic(axis, name, 0.075, y, size=0.036, zorder=5)
         axis.text(
             0.17, y, STRUCTURE_SCHEMATICS[name].label,
             color=COLORS['text'], fontsize=7.6, va='center', ha='left',
         )
+    axis.text(
+        0.0, 0.012,
+        'Candidate stage shown. Later biome gate:\n'
+        'fortress 5/5 | bastion 4/5 (not basalt deltas) | portal 5/5',
+        color=COLORS['muted'], fontsize=6.2, va='bottom', linespacing=1.3,
+    )
 
 
 def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
@@ -138,7 +145,7 @@ def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
 
 
 def create_multi_structure_animation(
-    save_path, seed=42, region_radius=12, fps=8, duration=14,
+    save_path, seed=42, region_radius=58, fps=8, duration=13,
 ):
     shared, portals, _, (minimum, maximum) = nether_structure_candidates(
         seed, region_radius,
@@ -164,32 +171,36 @@ def create_multi_structure_animation(
 
     draw_minecraft_terrain(
         axis, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='nether', resolution=640, alpha=0.92,
+        dimension='nether', resolution=800, alpha=0.92,
         coordinate_scale=16.0, showcase=False,
     )
     grid_extent = region_radius + 2
     for coordinate in range(-grid_extent, grid_extent + 1):
+        if coordinate % 5:
+            continue
         value = coordinate * NETHER_STRUCTURE_SPACING
-        axis.axvline(value, color=COLORS['coral'], linewidth=0.70, alpha=0.27)
-        axis.axhline(value, color=COLORS['coral'], linewidth=0.70, alpha=0.27)
+        axis.axvline(value, color=COLORS['coral'], linewidth=0.34, alpha=0.14)
+        axis.axhline(value, color=COLORS['coral'], linewidth=0.34, alpha=0.14)
     for coordinate in range(-grid_extent, grid_extent + 1):
+        if coordinate % 5:
+            continue
         value = coordinate * NETHER_RUINED_PORTAL_SPACING
-        axis.axvline(value, color=COLORS['violet'], linewidth=0.58, alpha=0.22, linestyle=':')
-        axis.axhline(value, color=COLORS['violet'], linewidth=0.58, alpha=0.22, linestyle=':')
+        axis.axvline(value, color=COLORS['violet'], linewidth=0.32, alpha=0.13, linestyle=':')
+        axis.axhline(value, color=COLORS['violet'], linewidth=0.32, alpha=0.13, linestyle=':')
     axis.scatter([0], [0], marker='+', s=85, c=COLORS['text'], linewidths=1.1, zorder=12)
 
     candidate_collections = {
         'fortress': axis.scatter(
-            [], [], s=20, marker='s', c=STRUCTURE_SCHEMATICS['fortress'].primary,
-            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=7,
+            [], [], s=3.2, marker='s', c=STRUCTURE_SCHEMATICS['fortress'].primary,
+            edgecolors='none', linewidths=0.0, alpha=0.78, zorder=7,
         ),
         'bastion': axis.scatter(
-            [], [], s=22, marker='D', c=STRUCTURE_SCHEMATICS['bastion'].primary,
-            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=7,
+            [], [], s=3.6, marker='D', c=STRUCTURE_SCHEMATICS['bastion'].primary,
+            edgecolors='none', linewidths=0.0, alpha=0.78, zorder=7,
         ),
         'ruined_portal': axis.scatter(
-            [], [], s=24, marker='*', c=STRUCTURE_SCHEMATICS['ruined_portal'].primary,
-            edgecolors=COLORS['text'], linewidths=0.25, alpha=0.90, zorder=8,
+            [], [], s=4.0, marker='*', c=STRUCTURE_SCHEMATICS['ruined_portal'].primary,
+            edgecolors='none', linewidths=0.0, alpha=0.76, zorder=8,
         ),
     }
 
@@ -206,9 +217,10 @@ def create_multi_structure_animation(
     axis.add_patch(active_shared)
     axis.add_patch(active_portal)
     detail = axis.inset_axes([0.715, 0.685, 0.27, 0.29])
+    detail.set_zorder(20)
     draw_minecraft_terrain(
         detail, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='nether', resolution=640, alpha=0.98,
+        dimension='nether', resolution=800, alpha=0.98,
         coordinate_scale=16.0, showcase=False,
     )
     detail.set_facecolor('#140E12')
@@ -312,7 +324,7 @@ def create_multi_structure_animation(
         trace_text.set_text(
             f"SHARED ROLL {shared_item['type_roll']} -> {shared_item['name'].upper()} "
             f"({shared_item['chunk_x']:+04d},{shared_item['chunk_z']:+04d}) "
-            f"TERRAIN CONTEXT {NETHER_BIOMES[shared_item['biome']].label.upper()}   "
+            f"BIOME PROXY {NETHER_BIOMES[shared_item['biome']].label.upper()}   "
             f"{portal_text}   {shared_count + portal_count}/{len(shared) + len(portals)}"
         )
         return []

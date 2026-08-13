@@ -212,6 +212,112 @@ def outer_island_projection(
     )
 
 
+def outer_island_height_model(
+    world_seed, max_coordinate_blocks=3600, resolution=901,
+):
+    """Return the documented 2D proxy used for End-city height auditing.
+
+    Java qualifies an End-city candidate from the minimum of four
+    ``WORLD_SURFACE_WG`` samples after a deterministic rotation. Reproducing
+    that heightmap requires the complete 3D End chunk generator. This proxy
+    converts the source-shaped outer-island influence field into terraced
+    surface heights so the exact four-sample gate can still be displayed and
+    tested without presenting the result as block-exact vanilla terrain.
+    """
+    x, z, projection = outer_island_projection(
+        world_seed,
+        max_coordinate_blocks=int(max_coordinate_blocks),
+        resolution=int(resolution),
+    )
+    influence = projection.filled(0.0)
+    # The model spans the visually useful outer-End surface range. The
+    # discrete influence terraces intentionally remain visible.
+    height = np.where(influence > 0.0, 42.0 + 42.0 * influence, 0.0)
+    return x, z, np.ma.masked_where(influence <= 0.0, height)
+
+
+def _sample_height_nearest(coordinates, height, block_x, block_z):
+    step = float(coordinates[1] - coordinates[0])
+    column = int(np.clip(
+        round((float(block_x) - float(coordinates[0])) / step),
+        0, len(coordinates) - 1,
+    ))
+    row = int(np.clip(
+        round((float(block_z) - float(coordinates[0])) / step),
+        0, len(coordinates) - 1,
+    ))
+    return float(height.filled(0.0)[row, column])
+
+
+def end_city_height_candidates(
+    world_seed, max_coordinate_blocks=3600, resolution=901,
+):
+    """Evaluate deterministic End-city candidates with the exact sample gate.
+
+    Candidate placement, Java rotation selection, sample offsets, and the
+    minimum-height >= 60 decision follow Java 1.16.1. Sample heights come from
+    :func:`outer_island_height_model` and are therefore explicitly modeled.
+    """
+    from .structures import END_CITY, candidate_in_region
+
+    maximum_chunk = int(max_coordinate_blocks) // 16
+    region_limit = math.ceil(maximum_chunk / END_CITY.spacing) + 1
+    coordinates, _, height = outer_island_height_model(
+        world_seed, max_coordinate_blocks=max_coordinate_blocks,
+        resolution=resolution,
+    )
+    rotations = (
+        ('NONE', 5, 5),
+        ('CLOCKWISE_90', -5, 5),
+        ('CLOCKWISE_180', -5, -5),
+        ('COUNTERCLOCKWISE_90', 5, -5),
+    )
+    values = []
+    for region_x in range(-region_limit, region_limit + 1):
+        for region_z in range(-region_limit, region_limit + 1):
+            item = candidate_in_region(
+                world_seed, region_x, region_z, END_CITY,
+            )
+            if not (
+                -maximum_chunk <= item['chunk_x'] <= maximum_chunk
+                and -maximum_chunk <= item['chunk_z'] <= maximum_chunk
+            ):
+                continue
+            if math.hypot(item['block_x'], item['block_z']) <= 1024.0:
+                continue
+            rotation_index = MinecraftLCG(
+                item['chunk_x'] + item['chunk_z'] * 10387313
+            ).next_int(4)
+            rotation, offset_x, offset_z = rotations[rotation_index]
+            origin_x = item['chunk_x'] * 16 + 7
+            origin_z = item['chunk_z'] * 16 + 7
+            sample_positions = (
+                (origin_x, origin_z),
+                (origin_x, origin_z + offset_z),
+                (origin_x + offset_x, origin_z),
+                (origin_x + offset_x, origin_z + offset_z),
+            )
+            sample_heights = tuple(
+                _sample_height_nearest(coordinates, height, x, z)
+                for x, z in sample_positions
+            )
+            minimum_height = min(sample_heights)
+            item.update({
+                'rotation': rotation,
+                'sample_positions': sample_positions,
+                'sample_heights': sample_heights,
+                'model_min_height': minimum_height,
+                'qualified': minimum_height >= 60.0,
+                'height_gate': 'modeled four-sample WORLD_SURFACE_WG proxy',
+            })
+            values.append(item)
+    values.sort(key=lambda item: (
+        math.hypot(item['block_x'], item['block_z']),
+        math.atan2(item['block_z'], item['block_x']),
+    ))
+    return values, coordinates, height
+
+
 def central_island_projection(
     world_seed, extent_blocks=88.0, resolution=241,
 ):
@@ -368,48 +474,18 @@ def outer_gateway_positions(world_seed, radius_blocks=1024, search_limit=2300):
 
 
 def end_city_candidates(world_seed, max_coordinate_blocks=3600):
-    """Return End-city grid candidates supported by the outer-island model.
+    """Return End-city grid candidates passing the modeled height audit.
 
     Candidate chunks use the Java 1.16.1 uniform 20 by 20 grid with an
-    11-chunk separation and salt 10387313.  The subsequent island/height gate
-    is a transparent source-shaped projection because this repository does
-    not reproduce the complete three-dimensional End heightmap.
+    11-chunk separation and salt 10387313. Rotation, four sample positions,
+    their minimum, and the height-60 comparison match the source. Sample
+    values come from the documented 2D height proxy because this repository
+    does not reproduce the complete three-dimensional End heightmap.
     """
-    from .structures import END_CITY, candidate_in_region
-
-    maximum_chunk = int(max_coordinate_blocks) // 16
-    region_limit = math.ceil(maximum_chunk / END_CITY.spacing) + 1
-    sites = outer_island_seed_field(
-        world_seed, max_coordinate_blocks=int(max_coordinate_blocks),
+    values, _, _ = end_city_height_candidates(
+        world_seed, max_coordinate_blocks=max_coordinate_blocks,
     )
-    site_positions = np.column_stack((sites['block_x'], sites['block_z']))
-    tree = cKDTree(site_positions)
-    accepted = []
-    for region_x in range(-region_limit, region_limit + 1):
-        for region_z in range(-region_limit, region_limit + 1):
-            item = candidate_in_region(
-                world_seed, region_x, region_z, END_CITY,
-            )
-            if not (
-                -maximum_chunk <= item['chunk_x'] <= maximum_chunk
-                and -maximum_chunk <= item['chunk_z'] <= maximum_chunk
-            ):
-                continue
-            if math.hypot(item['block_x'], item['block_z']) <= 1024.0:
-                continue
-            distance, site_index = tree.query((item['block_x'], item['block_z']))
-            source_radius = float(sites['visual_radius'][int(site_index)])
-            if float(distance) > min(64.0, source_radius * 0.48):
-                continue
-            item['island_distance'] = float(distance)
-            item['source_radius'] = source_radius
-            item['height_gate'] = 'source-shaped outer-island support'
-            accepted.append(item)
-    accepted.sort(key=lambda item: (
-        math.hypot(item['block_x'], item['block_z']),
-        math.atan2(item['block_z'], item['block_x']),
-    ))
-    return accepted
+    return [item for item in values if item['qualified']]
 
 
 def end_city_qualification_probability(

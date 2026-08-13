@@ -53,8 +53,14 @@ NETHER_BIOMES = {
         BiomeDefinition('warped_forest', 'Warped forest', 'nether', '#176C68', '#35A69A', 'warped'),
         BiomeDefinition('soul_sand_valley', 'Soul sand valley', 'nether', '#5B443D', '#88705D', 'soul_sand'),
         BiomeDefinition('basalt_deltas', 'Basalt deltas', 'nether', '#36323E', '#686573', 'basalt'),
-        BiomeDefinition('lava', 'Lava sea', 'nether', '#F08A32', '#FFD15C', 'lava'),
     )
+}
+NETHER_TERRAIN_CLASSES = {
+    **NETHER_BIOMES,
+    'lava': BiomeDefinition(
+        'lava', 'Lava terrain (not a biome)', 'nether',
+        '#F08A32', '#FFD15C', 'lava',
+    ),
 }
 
 # Compatibility palettes retained for older modules.
@@ -67,7 +73,7 @@ NETHER_BLOCKS = {
     'warped': NETHER_BIOMES['warped_forest'].base_color,
     'soul_sand': NETHER_BIOMES['soul_sand_valley'].base_color,
     'basalt': NETHER_BIOMES['basalt_deltas'].base_color,
-    'lava': NETHER_BIOMES['lava'].base_color,
+    'lava': NETHER_TERRAIN_CLASSES['lava'].base_color,
 }
 
 
@@ -179,20 +185,44 @@ def minecraft_nether_biome_grid(
     seed, resolution=256, x_extent=(-2048.0, 2048.0), z_extent=None,
     coordinate_scale=1.0, showcase=False,
 ):
-    """Return the five Java 1.16 Nether biome families plus lava context."""
+    """Return a source-shaped proxy for the five Java 1.16 Nether biomes.
+
+    Java samples four Double-Perlin fields and chooses the closest of five
+    ``MixedNoisePoint`` prototypes. The classification and exact prototype
+    coordinates are preserved here, while seeded simplex fields stand in for
+    the four Double-Perlin rasters. Lava is terrain, not a sixth biome.
+    """
     if z_extent is None:
         z_extent = x_extent
-    _, _, broad, medium, detail, climate, moisture = _noise_layers(
-        int(seed), int(resolution), x_extent, z_extent, coordinate_scale,
+    x, z = _coordinate_grid(
+        int(resolution), x_extent, z_extent, coordinate_scale,
     )
-    terrain = 0.59 * broad + 0.29 * medium + 0.12 * detail
-    biomes = np.full(terrain.shape, 'nether_wastes', dtype='<U20')
-    biomes[(climate > 0.16) & (moisture > -0.24)] = 'crimson_forest'
-    biomes[(climate < -0.15) & (moisture > -0.04)] = 'warped_forest'
-    biomes[moisture < -0.31] = 'soul_sand_valley'
-    biomes[(terrain > 0.42) & (medium > -0.05)] = 'basalt_deltas'
-    lava = (terrain < -0.55) | ((np.abs(medium) < 0.018) & (broad < -0.08))
-    biomes[lava] = 'lava'
+    fields = np.stack([
+        SimplexNoise2D(int(seed) + offset).sample_grid(
+            x / 2350.0 + offset * 7.0,
+            z / 2350.0 - offset * 11.0,
+        )
+        for offset in range(4)
+    ], axis=-1)
+    names = np.array([
+        'nether_wastes', 'soul_sand_valley', 'crimson_forest',
+        'warped_forest', 'basalt_deltas',
+    ])
+    prototypes = np.array([
+        [0.0, 0.0, 0.0, 0.0, 0.0],
+        [0.0, -0.5, 0.0, 0.0, 0.0],
+        [0.4, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0, 0.0, 0.375],
+        [-0.5, 0.0, 0.0, 0.0, 0.175],
+    ])
+    points = np.concatenate(
+        (fields, np.zeros((*fields.shape[:2], 1))), axis=-1,
+    )
+    distances = np.sum(
+        (points[..., None, :] - prototypes[None, None, :, :]) ** 2,
+        axis=-1,
+    )
+    biomes = names[np.argmin(distances, axis=-1)]
 
     if showcase:
         rows, columns = np.indices(biomes.shape)
@@ -282,14 +312,25 @@ def minecraft_terrain_rgba(
         definitions = NETHER_BIOMES
     else:
         raise ValueError(f'Unsupported dimension: {dimension}')
-    return _terrain_rgba_from_biomes(
+    output = _terrain_rgba_from_biomes(
         biomes, definitions, x, z, detail, medium,
     )
+    if dimension == 'nether':
+        # Lava remains an independent terrain overlay, never a biome label.
+        lava_field = 0.62 * medium + 0.38 * detail
+        lava = (lava_field < -0.58) | (
+            (np.abs(medium) < 0.016) & (detail < -0.22)
+        )
+        lava_definition = NETHER_TERRAIN_CLASSES['lava']
+        output[lava, :3] = to_rgb(lava_definition.base_color)
+        accent = lava & _texture_pattern('lava', x, z, detail, medium)
+        output[accent, :3] = to_rgb(lava_definition.accent_color)
+    return output
 
 
 def biome_texture_swatch(name, size=24):
     """Return a large textured legend swatch for one biome definition."""
-    definitions = {**OVERWORLD_BIOMES, **NETHER_BIOMES}
+    definitions = {**OVERWORLD_BIOMES, **NETHER_TERRAIN_CLASSES}
     definition = definitions[name]
     coordinates = np.linspace(-240.0, 240.0, int(size))
     x, z = np.meshgrid(coordinates, coordinates)

@@ -27,6 +27,9 @@ audit-*.md
 # Private Minecraft 1.16.1 source/data corpus (large and copyrighted)
 Game Reference/
 
+# Private user authorization statement for local Minecraft asset use
+ASSET_PERMISSION.md
+
 Jenova/
 
 Jenova/

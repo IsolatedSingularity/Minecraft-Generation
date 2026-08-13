@@ -17,6 +17,7 @@ from matplotlib.patches import (
     Circle, Ellipse, FancyArrowPatch, FancyBboxPatch, RegularPolygon,
 )
 import numpy as np
+from PIL import Image, ImageFilter
 from scipy.ndimage import maximum_filter
 
 from core.dragon import (
@@ -40,6 +41,146 @@ from core.style import COLORS, STATE_COLORS, apply_style
 
 
 apply_style()
+
+
+DRAGON_SPRITE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / 'pngfind.com-ender-dragon-png-6585528.png'
+)
+
+
+def _prepare_dragon_sprite():
+    """Return a compact, tinted square sprite plus a soft alpha glow."""
+    source = Image.open(DRAGON_SPRITE_PATH).convert('RGBA')
+    alpha_box = source.getchannel('A').getbbox()
+    if alpha_box is None:
+        raise ValueError(f'dragon sprite has no visible pixels: {DRAGON_SPRITE_PATH}')
+    source = source.crop(alpha_box)
+    source.thumbnail((88, 108), Image.Resampling.LANCZOS)
+    canvas = Image.new('RGBA', (120, 120), (0, 0, 0, 0))
+    canvas.alpha_composite(
+        source, ((canvas.width - source.width) // 2, (canvas.height - source.height) // 2),
+    )
+    rgba = np.asarray(canvas).astype(float) / 255.0
+    luminance = np.mean(rgba[..., :3], axis=2, keepdims=True)
+    violet = np.array([0.58, 0.27, 0.82])[None, None, :]
+    cyan = np.array([0.30, 0.78, 0.94])[None, None, :]
+    colour = (
+        0.50 * rgba[..., :3]
+        + 0.34 * violet
+        + 0.16 * cyan * np.clip(luminance * 1.8, 0.0, 1.0)
+    )
+    rgba[..., :3] = np.clip(colour, 0.0, 1.0)
+    tinted = Image.fromarray(np.uint8(np.clip(rgba, 0.0, 1.0) * 255), 'RGBA')
+    glow_alpha = tinted.getchannel('A').filter(
+        ImageFilter.MaxFilter(7)
+    ).filter(ImageFilter.GaussianBlur(2.2))
+    glow = Image.new('RGBA', tinted.size, (142, 77, 204, 0))
+    glow.putalpha(glow_alpha.point(lambda value: int(value * 0.32)))
+    return tinted, glow
+
+
+class DragonSpriteArtist:
+    """Rotating raster sprite with cached state tint and violet glow."""
+
+    def __init__(self, axis, size_blocks=12.0, zorder=12):
+        self.base, self.glow = _prepare_dragon_sprite()
+        self.cache = {}
+        blank = np.zeros((120, 120, 4), dtype=np.uint8)
+        self.half_size = float(size_blocks) / 2.0
+        self.glow_artist = axis.imshow(
+            blank, extent=(-1, 1, -1, 1), origin='upper',
+            interpolation='bilinear', zorder=zorder - 1,
+        )
+        self.artist = axis.imshow(
+            blank, extent=(-1, 1, -1, 1), origin='upper',
+            interpolation='bilinear', zorder=zorder,
+        )
+
+    def update(self, position, angle, state):
+        quantized = int(round(float(angle) / 5.0) * 5) % 360
+        key = (quantized, state)
+        if key not in self.cache:
+            rotation = quantized - 90
+            sprite = self.base.rotate(
+                rotation, resample=Image.Resampling.BICUBIC, expand=False,
+            )
+            glow = self.glow.rotate(
+                rotation, resample=Image.Resampling.BICUBIC, expand=False,
+            )
+            rgba = np.asarray(sprite).astype(float) / 255.0
+            state_rgb = np.asarray(to_rgba(STATE_COLORS[state])[:3])
+            visible = rgba[..., 3:4]
+            rgba[..., :3] = np.clip(
+                rgba[..., :3] * 0.84 + state_rgb[None, None, :] * 0.16 * visible,
+                0.0, 1.0,
+            )
+            self.cache[key] = (
+                np.uint8(rgba * 255), np.asarray(glow),
+            )
+        sprite, glow = self.cache[key]
+        x, z = np.asarray(position, dtype=float)
+        extent = (
+            x - self.half_size, x + self.half_size,
+            z - self.half_size, z + self.half_size,
+        )
+        self.artist.set_data(sprite)
+        self.artist.set_extent(extent)
+        self.glow_artist.set_data(glow)
+        self.glow_artist.set_extent(extent)
+
+    def set_alpha(self, alpha):
+        self.artist.set_alpha(alpha)
+        self.glow_artist.set_alpha(alpha)
+
+
+def _create_breath_artists(axis):
+    cloud = Circle(
+        (0, 0), 0.1, facecolor=to_rgba('#7428A8', 0.0),
+        edgecolor='#D794FF', linewidth=1.2, linestyle='--', zorder=10.5,
+    )
+    axis.add_patch(cloud)
+    particles = axis.scatter(
+        [], [], s=14, c='#C875FF', edgecolors='#F1D7FF',
+        linewidths=0.25, alpha=0.0, zorder=11,
+    )
+    stream = LineCollection([], linewidths=1.25, capstyle='round', zorder=10.8)
+    axis.add_collection(stream)
+    return cloud, particles, stream
+
+
+def _update_breath_artists(frame, cloud, particles, stream):
+    if frame.breath_center is None:
+        cloud.set_alpha(0.0)
+        particles.set_offsets(np.empty((0, 2)))
+        stream.set_segments([])
+        return
+    center = np.asarray(frame.breath_center, dtype=float)
+    radius = float(frame.breath_radius)
+    alpha = float(frame.breath_alpha)
+    cloud.center = center
+    cloud.set_radius(radius)
+    cloud.set_facecolor(to_rgba('#7428A8', alpha * 0.48))
+    cloud.set_edgecolor(to_rgba('#D794FF', min(0.92, alpha + 0.24)))
+    cloud.set_alpha(1.0)
+    angles = np.linspace(0.0, 2.0 * np.pi, 18, endpoint=False)
+    radial = radius * (0.28 + 0.62 * ((np.arange(18) * 7) % 17) / 16.0)
+    offsets = center + np.column_stack((np.cos(angles), np.sin(angles))) * radial[:, None]
+    particles.set_offsets(offsets)
+    particles.set_alpha(min(0.90, alpha + 0.18))
+    if frame.breath_kind == 'sitting_flame':
+        origin = np.asarray(frame.position, dtype=float)
+        perpendicular = np.array([0.0, 1.0])
+        segments = []
+        for offset in np.linspace(-1.8, 1.8, 7):
+            segments.append([origin + perpendicular * offset * 0.25, center + perpendicular * offset])
+        stream.set_segments(segments)
+        stream.set_colors([
+            to_rgba('#A84DE0', 0.16 + 0.08 * index)
+            for index in range(len(segments))
+        ])
+    else:
+        stream.set_segments([])
 
 
 DRAGON_MARKER = MarkerPath(
@@ -208,63 +349,82 @@ def _draw_state_machine(ax):
         nodes[state] = node
 
     hud = FancyBboxPatch(
-        (0.045, 0.018), 0.91, 0.182,
-        boxstyle='round,pad=0.012,rounding_size=0.025',
-        facecolor=to_rgba(COLORS['panel_alt'], 0.96),
-        edgecolor='#7455A3', linewidth=1.25, zorder=4,
+        (0.035, 0.012), 0.93, 0.202,
+        boxstyle='round,pad=0.012,rounding_size=0.022',
+        facecolor=to_rgba('#171D2A', 0.99),
+        edgecolor='#9B6FD1', linewidth=1.45, zorder=4,
     )
     ax.add_patch(hud)
-    ax.plot(
-        [0.055, 0.945], [0.108, 0.108], color=COLORS['grid'],
-        linewidth=0.65, alpha=0.78, zorder=5,
+    ax.add_patch(FancyBboxPatch(
+        (0.051, 0.119), 0.898, 0.078,
+        boxstyle='round,pad=0.006,rounding_size=0.014',
+        facecolor=to_rgba('#20293A', 0.94), edgecolor='#3B475E',
+        linewidth=0.65, zorder=4.5,
+    ))
+    ax.add_patch(FancyBboxPatch(
+        (0.051, 0.030), 0.898, 0.071,
+        boxstyle='round,pad=0.006,rounding_size=0.014',
+        facecolor=to_rgba('#20293A', 0.94), edgecolor='#3B475E',
+        linewidth=0.65, zorder=4.5,
+    ))
+    ax.text(
+        0.071, 0.178, 'NEXT HOLDING-PATH LANDING ROLL',
+        ha='left', va='center', color='#D7DDEA',
+        fontsize=7.3, fontweight='black', family='DejaVu Sans', zorder=5,
     )
     ax.text(
-        0.075, 0.169, 'LANDING ROLL AT HOLDING-PATH END',
-        ha='left', va='center', color=COLORS['muted'],
-        fontsize=6.5, fontweight='bold', family='monospace', zorder=5,
+        0.071, 0.145, 'evaluated once at path completion',
+        ha='left', va='center', color='#8492AA',
+        fontsize=6.1, fontweight='bold', family='DejaVu Sans', zorder=5,
     )
     probability_background = FancyBboxPatch(
-        (0.42, 0.126), 0.47, 0.025,
-        boxstyle='round,pad=0.002,rounding_size=0.012',
-        facecolor=COLORS['grid'], edgecolor=COLORS['muted'],
-        linewidth=0.38, alpha=0.88, zorder=5,
+        (0.385, 0.133), 0.445, 0.032,
+        boxstyle='round,pad=0.002,rounding_size=0.010',
+        facecolor='#0B0F17', edgecolor='#59677E',
+        linewidth=0.60, alpha=1.0, zorder=5,
     )
     probability_fill = FancyBboxPatch(
-        (0.42, 0.126), 0.002, 0.025,
-        boxstyle='round,pad=0.002,rounding_size=0.012',
-        facecolor='#8B5CB5', edgecolor='none', zorder=6,
+        (0.385, 0.133), 0.002, 0.032,
+        boxstyle='round,pad=0.002,rounding_size=0.010',
+        facecolor='#A75DE1', edgecolor='none', zorder=6,
     )
     ax.add_patch(probability_background)
     ax.add_patch(probability_fill)
     probability_text = ax.text(
-        0.925, 0.169, '', ha='right', va='center',
-        color=COLORS['text'], fontsize=9.2, fontweight='black',
-        family='monospace', zorder=6,
+        0.925, 0.159, '', ha='right', va='center',
+        color='#F4ECFF', fontsize=13.0, fontweight='black',
+        family='DejaVu Sans', zorder=6,
     )
     probability_formula = ax.text(
-        0.075, 0.137, '', ha='left', va='center',
-        color='#B9C5D8', fontsize=7.0, family='monospace', zorder=6,
+        0.925, 0.132, '', ha='right', va='center',
+        color='#8F9CB1', fontsize=6.3, family='DejaVu Sans', zorder=6,
     )
     crystal_label = ax.text(
-        0.075, 0.066, 'CRYSTALS ALIVE', ha='left', va='center',
-        color=COLORS['muted'], fontsize=6.6, fontweight='bold',
-        family='monospace', zorder=5,
+        0.071, 0.066, 'ACTIVE END CRYSTALS', ha='left', va='center',
+        color='#D7DDEA', fontsize=7.1, fontweight='black',
+        family='DejaVu Sans', zorder=5,
     )
     crystal_icons = []
     for index in range(10):
-        x = 0.42 + index * 0.051
+        x = 0.405 + index * 0.050
         glow = Circle(
-            (x, 0.066), radius=0.017,
-            facecolor='#A86BE0', edgecolor='none', alpha=0.20, zorder=5.5,
+            (x, 0.066), radius=0.0195,
+            facecolor='#A86BE0', edgecolor='none', alpha=0.24, zorder=5.5,
+        )
+        cage = RegularPolygon(
+            (x, 0.066), numVertices=4, radius=0.0148,
+            orientation=np.pi / 4.0, facecolor=to_rgba('#121824', 0.88),
+            edgecolor='#8390A4', linewidth=0.48, zorder=6,
         )
         icon = RegularPolygon(
-            (x, 0.066), numVertices=4, radius=0.0115,
-            orientation=np.pi / 4.0, facecolor='#B66FED',
-            edgecolor=COLORS['text'], linewidth=0.38, zorder=6,
+            (x, 0.066), numVertices=4, radius=0.0088,
+            orientation=0.0, facecolor='#C875FF',
+            edgecolor='#F4ECFF', linewidth=0.38, zorder=6.2,
         )
         ax.add_patch(glow)
+        ax.add_patch(cage)
         ax.add_patch(icon)
-        crystal_icons.append({'glow': glow, 'core': icon})
+        crystal_icons.append({'glow': glow, 'cage': cage, 'core': icon})
     return (
         nodes, crystal_icons, probability_fill, probability_text,
         probability_formula, crystal_label,
@@ -294,19 +454,17 @@ def create_dragon_pathfinding_animation(
 
     trail = LineCollection([], linewidths=2.8, capstyle='round', zorder=9)
     arena.add_collection(trail)
-    active = arena.scatter(
-        [], [], s=340, marker=DRAGON_MARKER, c=COLORS['blue'],
-        edgecolors=COLORS['text'], linewidths=1.1, zorder=11,
-    )
+    active = DragonSpriteArtist(arena, size_blocks=11.0, zorder=13)
     fireball_glow = arena.scatter(
-        [], [], s=160, marker='o', c=COLORS['orange'],
-        edgecolors='none', alpha=0.22, visible=False, zorder=12,
+        [], [], s=185, marker='o', c='#8B36C6',
+        edgecolors='none', alpha=0.32, visible=False, zorder=13.2,
     )
     fireball_core = arena.scatter(
-        [], [], s=38, marker='o', c=COLORS['gold'],
-        edgecolors=COLORS['text'], linewidths=0.45,
-        visible=False, zorder=13,
+        [], [], s=42, marker='o', c='#D68BFF',
+        edgecolors='#F4ECFF', linewidths=0.55,
+        visible=False, zorder=13.4,
     )
+    breath_cloud, breath_particles, breath_stream = _create_breath_artists(arena)
     explosion = Circle(
         (0, 0), 0.1, fill=False, edgecolor=COLORS['gold'],
         linewidth=2.2, alpha=0.0, zorder=14,
@@ -322,8 +480,7 @@ def create_dragon_pathfinding_animation(
         history.append(frame.position.copy())
         if len(history) > 34:
             history.pop(0)
-        active.set_offsets(frame.position.reshape(1, 2))
-        active.set_facecolor(STATE_COLORS[frame.state])
+        angle = 0.0
         if len(history) > 1:
             points = np.asarray(history)
             segments = np.stack([points[:-1], points[1:]], axis=1)
@@ -334,11 +491,7 @@ def create_dragon_pathfinding_animation(
             trail.set_colors(colors_value)
             vector = points[-1] - points[-2]
             angle = np.degrees(np.arctan2(vector[1], vector[0]))
-            active.set_paths([
-                DRAGON_MARKER.transformed(
-                    plt.matplotlib.transforms.Affine2D().rotate_deg(angle)
-                )
-            ])
+        active.update(frame.position, angle, frame.state)
 
         if frame.fireball_position is not None:
             offset = np.asarray(frame.fireball_position).reshape(1, 2)
@@ -349,6 +502,9 @@ def create_dragon_pathfinding_animation(
         else:
             fireball_glow.set_visible(False)
             fireball_core.set_visible(False)
+        _update_breath_artists(
+            frame, breath_cloud, breath_particles, breath_stream,
+        )
 
         if frame.explosion_index is not None:
             spike = spike_artists[frame.explosion_index]
@@ -370,7 +526,7 @@ def create_dragon_pathfinding_animation(
             )
 
         probability = perch_probability(frame.crystals_alive)
-        probability_fill.set_width(max(0.004, 0.47 * probability / (1.0 / 3.0)))
+        probability_fill.set_width(max(0.004, 0.445 * probability / (1.0 / 3.0)))
         probability_text.set_text(f'{probability * 100:4.1f}%')
         probability_formula.set_text(f'1 / (3 + {frame.crystals_alive})')
         crystal_label.set_text(f'CRYSTALS ALIVE  {frame.crystals_alive}/10')
@@ -386,6 +542,8 @@ def create_dragon_pathfinding_animation(
             icon['core'].set_alpha(0.98 if alive else 0.16)
             icon['glow'].set_facecolor(color)
             icon['glow'].set_alpha(0.28 if alive else 0.04)
+            icon['cage'].set_edgecolor('#A8B2C3' if alive else '#4B5361')
+            icon['cage'].set_alpha(0.95 if alive else 0.32)
         set_crystal_states(spike_artists, alive_indices)
         return []
 
@@ -418,21 +576,20 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
             indices = np.linspace(0, len(clip) - 1, 72).round().astype(int)
             clip = [clip[index] for index in indices]
         figure, arena = plt.subplots(figsize=(9.6, 5.4), facecolor=COLORS['background'])
-        _arena_static(arena, compact=True)
+        _arena_static(arena, compact=True, limits=70)
+        figure.subplots_adjust(left=0.02, right=0.98, top=0.94, bottom=0.02)
         trail = LineCollection([], linewidths=3.2, capstyle='round', zorder=9)
         arena.add_collection(trail)
-        active = arena.scatter(
-            [], [], s=280, marker=DRAGON_MARKER,
-            c=COLORS['blue'], edgecolors=COLORS['text'],
-            linewidths=1.0, zorder=11,
-        )
-        state_text = arena.text(
-            0.035, 0.045, '', transform=arena.transAxes,
-            color=COLORS['text'], fontsize=10, fontweight='bold',
-            bbox=dict(
-                boxstyle='round,pad=0.35', facecolor=COLORS['panel'],
-                edgecolor=COLORS['grid'], alpha=0.92,
-            ),
+        active = DragonSpriteArtist(arena, size_blocks=10.5, zorder=13)
+        breath_cloud, breath_particles, breath_stream = _create_breath_artists(arena)
+        permanent_titles = {
+            'dragon_holding_strafe.gif': 'HOLDING, STRAFING, AND CHARGING',
+            'dragon_landing_perch.gif': 'LANDING APPROACH AND PERCHED PHASES',
+            'dragon_takeoff.gif': 'TAKEOFF, RETURN, AND EXCEPTIONAL END STATE',
+        }
+        arena.set_title(
+            permanent_titles[name], color=COLORS['text'], fontsize=13.5,
+            fontweight='black', pad=7,
         )
         history = []
 
@@ -443,10 +600,7 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
             history.append(frame.position.copy())
             if len(history) > 28:
                 history.pop(0)
-            active.set_offsets(frame.position.reshape(1, 2))
-            active.set_facecolor(STATE_COLORS[frame.state])
-            state_text.set_text(frame.state.replace('_', ' ').upper())
-            state_text.get_bbox_patch().set_edgecolor(STATE_COLORS[frame.state])
+            angle = 0.0
             if len(history) > 1:
                 points = np.asarray(history)
                 trail.set_segments(np.stack([points[:-1], points[1:]], axis=1))
@@ -457,11 +611,10 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
                 ])
                 vector = points[-1] - points[-2]
                 angle = np.degrees(np.arctan2(vector[1], vector[0]))
-                active.set_paths([
-                    DRAGON_MARKER.transformed(
-                        plt.matplotlib.transforms.Affine2D().rotate_deg(angle)
-                    )
-                ])
+            active.update(frame.position, angle, frame.state)
+            _update_breath_artists(
+                frame, breath_cloud, breath_particles, breath_stream,
+            )
             return []
 
         animation = FuncAnimation(
@@ -570,7 +723,7 @@ def create_trajectory_ensemble_animation(
     hotspot_x = (bins[hotspot_columns] + bins[hotspot_columns + 1]) / 2.0
     hotspot_z = (bins[hotspot_rows] + bins[hotspot_rows + 1]) / 2.0
 
-    figure = plt.figure(figsize=(13.4, 7.2), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(14.4, 8.1), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
         1, 2, width_ratios=[1.54, 1.0],
         left=0.055, right=0.985, top=0.90, bottom=0.17, wspace=0.055,
@@ -597,11 +750,7 @@ def create_trajectory_ensemble_animation(
     axis.add_collection(lines)
     local_trail = LineCollection([], linewidths=3.1, capstyle='round', zorder=10)
     axis.add_collection(local_trail)
-    dragon = axis.scatter(
-        [], [], s=340, marker=DRAGON_MARKER,
-        color=plt.get_cmap('viridis')(0.92), edgecolors=COLORS['text'],
-        linewidths=1.05, zorder=12,
-    )
+    dragon = DragonSpriteArtist(axis, size_blocks=10.2, zorder=12)
     count_text = axis.text(
         0.985, 0.025, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
@@ -678,7 +827,6 @@ def create_trajectory_ensemble_animation(
         featured = paths[featured_index]
         point_index = min(len(featured) - 1, round(local_phase * (len(featured) - 1)))
         point = featured[point_index]
-        dragon.set_offsets(point.reshape(1, 2))
         edge_fade = min(local_phase / 0.12, 1.0)
         dragon.set_alpha(0.35 + 0.65 * max(edge_fade, 0.0))
         trail_start = max(0, point_index - 22)
@@ -692,13 +840,10 @@ def create_trajectory_ensemble_animation(
             ])
             vector = local_points[-1] - local_points[-2]
             angle = np.degrees(np.arctan2(vector[1], vector[0]))
-            dragon.set_paths([
-                DRAGON_MARKER.transformed(
-                    plt.matplotlib.transforms.Affine2D().rotate_deg(angle)
-                )
-            ])
         else:
             local_trail.set_segments([])
+            angle = 0.0
+        dragon.update(point, angle, 'landing_approach')
 
         for bar, label, row, column in zip(
             bars, bar_value_texts, hotspot_rows, hotspot_columns,
@@ -716,7 +861,7 @@ def create_trajectory_ensemble_animation(
     animation = FuncAnimation(
         figure, update, frames=frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=92)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
     plt.close(figure)
     optimize_gif(save_path, colors=112)
     return str(save_path)
