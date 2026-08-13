@@ -12,9 +12,9 @@ sys.path.insert(0, str(ROOT / 'Code'))
 
 from core.constants import STRONGHOLD_RINGS
 from core.dragon import (
-    DRAGON_EDGES, DRAGON_NODES, SOURCE_PHASE_TRANSITIONS, STATE_ORDER,
-    perch_probability, scripted_showcase, shortest_path,
-    simulate_perch_trajectory,
+    DRAGON_EDGES, DRAGON_NODES, EXCEPTION_PHASE_TRANSITIONS,
+    SOURCE_PHASE_TRANSITIONS, STATE_ORDER, perch_probability,
+    scripted_showcase, shortest_path, simulate_perch_trajectory,
 )
 from core.end_generation import (
     SimplexNoise2D,
@@ -130,7 +130,7 @@ class DragonTopologyTests(unittest.TestCase):
             index for index, frame in enumerate(frames)
             if frame.explosion_index is not None
         )
-        self.assertGreater(first_explosion, len(frames) * 0.35)
+        self.assertGreater(first_explosion, len(frames) * 0.25)
         order = []
         for frame in frames:
             if (
@@ -142,6 +142,18 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertTrue(any(frame.fireball_position is not None for frame in frames))
         shown_states = {frame.state for frame in frames}
         self.assertEqual(shown_states, set(STATE_ORDER))
+        collapsed_states = [frames[0].state]
+        for frame in frames[1:]:
+            if frame.state != collapsed_states[-1]:
+                collapsed_states.append(frame.state)
+        allowed = set(SOURCE_PHASE_TRANSITIONS)
+        allowed.update((start, end) for start, end, _ in EXCEPTION_PHASE_TRANSITIONS)
+        self.assertTrue(all(
+            (left, right) in allowed
+            for left, right in zip(collapsed_states, collapsed_states[1:])
+        ))
+        self.assertNotIn(('strafing', 'charging_player'), allowed)
+        self.assertTrue(any(frame.damage_pulse > 0.0 for frame in frames))
 
     def test_trajectory_batches_and_exact_final_hold(self):
         active_last = trajectory_animation_state(127)
@@ -214,7 +226,8 @@ class StructureTests(unittest.TestCase):
         end_city = candidate_in_region(42, 0, 0, END_CITY)
         self.assertEqual((village['offset_x'], village['offset_z']), (1, 20))
         self.assertEqual((monument['offset_x'], monument['offset_z']), (8, 16))
-        self.assertEqual((end_city['offset_x'], end_city['offset_z']), (8, 7))
+        self.assertEqual((end_city['offset_x'], end_city['offset_z']), (7, 3))
+        self.assertFalse(END_CITY.uniform)
 
     def test_registered_biomes_are_visible_in_showcase_maps(self):
         overworld = minecraft_biome_grid(
@@ -257,15 +270,15 @@ class StructureTests(unittest.TestCase):
 class ChunkStatusTests(unittest.TestCase):
     def test_dependency_wave_reaches_source_target_status_rings(self):
         stages, growth, hidden = chunk_status_snapshot(0)
-        center = 50
+        center = 10
         self.assertEqual(stages[center, center], 0)
         self.assertEqual(growth[center, center], 1.0)
         self.assertFalse(hidden[center, center])
-        self.assertTrue(hidden[center, center + 1])
-        self.assertTrue(np.all(hidden[:40]))
+        self.assertFalse(hidden[center, center + 1])
+        self.assertFalse(np.any(hidden))
 
-        final_generation = chunk_status_snapshot(79)
-        first_hold = chunk_status_snapshot(80)
+        final_generation = chunk_status_snapshot(49)
+        first_hold = chunk_status_snapshot(50)
         for snapshot in (final_generation, first_hold):
             stages, growth, hidden = snapshot
             self.assertEqual(stages[center, center], 12)
@@ -273,11 +286,8 @@ class ChunkStatusTests(unittest.TestCase):
             self.assertEqual(stages[center, center + 2], 7)
             self.assertEqual(stages[center, center + 3], 1)
             self.assertEqual(stages[center, center + 10], 1)
-            self.assertEqual(stages[center, center + 11], 0)
             self.assertEqual(growth[center, center + 10], 1.0)
-            self.assertEqual(growth[center, center + 11], 0.0)
             self.assertFalse(hidden[center, center + 10])
-            self.assertTrue(hidden[center, center + 11])
 
 
 class EndGeometryTests(unittest.TestCase):
@@ -354,7 +364,8 @@ class EndGeometryTests(unittest.TestCase):
             42, max_coordinate_blocks=1600,
         )
         self.assertEqual(probability.shape, (len(z), len(x)))
-        self.assertAlmostEqual(float(probability.max()), 1.0 / 81.0)
+        self.assertAlmostEqual(float(probability.max()), (17.0 / 81.0) ** 2)
+        self.assertGreater(float(probability.max()), 1.0 / 81.0)
         self.assertTrue(np.all(probability[np.hypot(*np.meshgrid(x, z)) <= 1024.0] == 0.0))
 
     def test_vectorized_simplex_and_island_projection(self):

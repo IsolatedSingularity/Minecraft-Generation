@@ -491,12 +491,13 @@ def end_city_candidates(world_seed, max_coordinate_blocks=3600):
 def end_city_qualification_probability(
     world_seed, max_coordinate_blocks=3600,
 ):
-    """Return the fixed-seed 2D End-city qualification prior by chunk.
+    """Return the modeled End-city qualification prior by chunk.
 
-    Each chunk in the exact uniform 9 by 9 candidate window has prior
-    probability 1/81. The field is then masked by the same source-shaped
-    island-support gate used by :func:`end_city_candidates`. This is not a
-    full vanilla heightmap or an across-seed empirical frequency.
+    Java averages two independent draws per axis in the nine-chunk window.
+    The resulting center-biased one-axis probabilities are combined into the
+    exact random-spread prior, then masked by the source-shaped island-support
+    model used by :func:`end_city_candidates`. This is not a full vanilla
+    heightmap or an across-seed empirical frequency.
     """
     from .structures import END_CITY
 
@@ -529,9 +530,22 @@ def end_city_qualification_probability(
     source_radii = sites['visual_radius'][site_indices].reshape(block_x.shape)
     supported = distances <= np.minimum(64.0, source_radii * 0.48)
 
+    draw_counts = np.bincount(
+        [
+            (left + right) // 2
+            for left in range(window)
+            for right in range(window)
+        ],
+        minlength=window,
+    ).astype(float)
+    axis_probability = draw_counts / float(window * window)
+    candidate_probability = (
+        axis_probability[np.clip(offset_z, 0, window - 1)]
+        * axis_probability[np.clip(offset_x, 0, window - 1)]
+    )
     probability = np.where(
         in_candidate_window & outside_gulf & supported,
-        1.0 / float(window * window),
+        candidate_probability,
         0.0,
     )
     block_coordinates = chunk_coordinates.astype(float) * 16.0

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Circle
 import numpy as np
 
@@ -20,7 +21,7 @@ apply_style()
 
 
 def create_end_structure_generation(save_path, dpi=210, seed=42):
-    """Render equal-size End-city map and binary analytic prior panels."""
+    """Render equal-size End-city support and modeled height-gate panels."""
     limit = 3600.0
     island_x, island_z, island_projection = outer_island_projection(
         seed, max_coordinate_blocks=int(limit), resolution=901,
@@ -79,6 +80,22 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         fontsize=11.5, pad=9,
     )
     style_axis(axis, equal=True, grid=False)
+    axis.legend(
+        handles=[
+            Line2D(
+                [], [], marker='D', linestyle='none', markersize=6.5,
+                markerfacecolor=COLORS['portal'], markeredgecolor=COLORS['text'],
+                label='Modeled outer-gateway destination',
+            ),
+            Line2D(
+                [], [], marker='P', linestyle='none', markersize=7.5,
+                markerfacecolor=COLORS['purpur'], markeredgecolor=COLORS['text'],
+                label='Qualified End-city model start',
+            ),
+        ],
+        loc='upper left', frameon=True, facecolor=COLORS['background'],
+        edgecolor=COLORS['grid'], framealpha=0.94, fontsize=8.2,
+    )
 
     height_image = probability_axis.imshow(
         modeled_height,
@@ -116,54 +133,26 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         'Modeled surface height and exact four-sample city gate',
         fontsize=11.5, pad=9,
     )
-    probability_axis.text(
-        0.018, 0.982, 'ship = min height passes\nx = min height fails',
-        transform=probability_axis.transAxes, ha='left', va='top',
-        color=COLORS['text'], fontsize=6.8, fontweight='bold',
-        bbox=dict(
-            boxstyle='round,pad=0.32', facecolor=COLORS['background'],
-            edgecolor=COLORS['grid'], alpha=0.88,
-        ), zorder=7,
-    )
     style_axis(probability_axis, equal=True, grid=False)
     probability_axis.tick_params(labelsize=8.0)
-
-    detail_item = min(
-        cities,
-        key=lambda item: abs(item['block_x'] - 1850) + abs(item['block_z'] - 1650),
-    )
-    detail = probability_axis.inset_axes([0.665, 0.035, 0.305, 0.255])
-    detail.set_facecolor('#121722')
-    relative = np.asarray(detail_item['sample_positions'], dtype=float)
-    origin = np.array([
-        detail_item['chunk_x'] * 16 + 7,
-        detail_item['chunk_z'] * 16 + 7,
-    ])
-    relative -= origin
-    sample_plot = detail.scatter(
-        relative[:, 0], relative[:, 1],
-        c=detail_item['sample_heights'], cmap='viridis', vmin=42, vmax=84,
-        s=62, marker='s', edgecolors=COLORS['text'], linewidths=0.7, zorder=3,
-    )
-    for (x, z), value in zip(relative, detail_item['sample_heights']):
-        detail.text(
-            x, z, f'{value:.0f}', color=COLORS['text'], fontsize=5.8,
-            fontweight='black', ha='center', va='center', zorder=4,
-        )
-    detail.scatter([0], [0], s=42, marker='*', c=COLORS['gold'], zorder=5)
-    detail.set_xlim(-8, 8)
-    detail.set_ylim(-8, 8)
-    detail.set_aspect('equal')
-    detail.set_xticks((-5, 0, 5))
-    detail.set_yticks((-5, 0, 5))
-    detail.tick_params(colors=COLORS['muted'], labelsize=5.5, pad=1)
-    for spine in detail.spines.values():
-        spine.set_color(COLORS['text'])
-        spine.set_linewidth(0.55)
-    detail.set_title(
-        'FOUR SOURCE SAMPLES\n'
-        f"{detail_item['rotation'].replace('_', ' ')} | min {detail_item['model_min_height']:.0f}: PASS",
-        fontsize=5.5, color=COLORS['text'], pad=2, linespacing=1.0,
+    probability_axis.legend(
+        handles=[
+            Line2D(
+                [], [], color='#F4ECFF', linewidth=1.5,
+                label='Modeled height = 60 contour',
+            ),
+            Line2D(
+                [], [], marker='P', linestyle='none', markersize=7.5,
+                markerfacecolor=COLORS['purpur'], markeredgecolor=COLORS['text'],
+                label='Four-sample minimum passes',
+            ),
+            Line2D(
+                [], [], marker='x', linestyle='none', markersize=6.5,
+                color='#9AA3B3', label='Four-sample minimum fails',
+            ),
+        ],
+        loc='upper left', frameon=True, facecolor=COLORS['background'],
+        edgecolor=COLORS['grid'], framealpha=0.94, fontsize=8.2,
     )
 
     colorbar = figure.colorbar(
@@ -183,7 +172,7 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     )
 
     figure.suptitle(
-        'END STRUCTURE GENERATION   JAVA 1.16.1',
+        'END STRUCTURE GENERATION',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.975,
     )
     figure.savefig(

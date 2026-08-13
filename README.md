@@ -1,5 +1,10 @@
 # Minecraft Generation
 
+[![Tests](https://github.com/IsolatedSingularity/Minecraft-Generation/actions/workflows/tests.yml/badge.svg)](https://github.com/IsolatedSingularity/Minecraft-Generation/actions/workflows/tests.yml)
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Minecraft Java 1.16.1](https://img.shields.io/badge/Minecraft%20Java-1.16.1-62B47A)
+![Scope](https://img.shields.io/badge/scope-source--checked%20models-8B6FD6)
+
 <!-- Do not remove this comment. It is important. -->
 <!-- The seeds remember those who query them. -->
 <!--
@@ -204,23 +209,23 @@ The graph selects meaningful targets. Every graph-bound portion of a seeded rout
 
 ![Dragon path graph and fight state](Plots/dragon_pathfinding_hero.gif)
 
-The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, breath clouds, explosions, and recent trail. Grey lines show legal graph edges. The cropped, colour-treated raster sprite rotates with its direction of travel and remains small enough to expose the graph beneath it.
+The large left panel shares one block-coordinate system for the End island, node graph, spike footprints, cages, fountain, dragon, fireball, breath clouds, explosions, and recent trail. Grey lines show legal graph edges. The enlarged raster sprite rotates with its direction of travel and strongly adopts the colour of its active phase while leaving the graph readable.
 
-The right panel shows all 11 Java 1.16.1 phase types and highlights every one at least once. Solid arrows follow source-confirmed phase changes: Holding can enter Strafe or Landing Approach; Landing Approach enters Landing and then Sitting Scanning; scanning can attack, take off, or select Charging Player; attacking enters Flaming; Flaming returns to scanning or takeoff; and Takeoff, Strafe, and Charging Player return to Holding. Dashed arrows identify exceptional initialization and lethal-damage paths for Hover and Dying. The currently selected phase alone receives a thick white outline.
+The right panel shows all 11 Java 1.16.1 phase types and highlights every one at least once. Solid arrows follow source-confirmed phase changes: Holding can enter Strafe or Landing Approach; Landing Approach enters Landing and then Sitting Scanning; scanning can attack, take off, or select Charging Player; attacking enters Flaming; and Takeoff, Strafe, and Charging Player return to Holding. Dashed arrows identify initialization and damage-triggered paths. In particular, sufficient damage while sitting or hovering forces Takeoff, while lethal airborne damage can enter Dying. The currently selected phase alone receives a thick white outline.
 
-The polished dashboard labels the probability honestly as the next holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance, and the segmented rail no longer permits its percentage label to clip. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction is an external scripted demonstration event. The strafing example launches one purple dragon fireball and expands its impact cloud from radius 3 toward radius 7; the Sitting Flaming example separately displays its radius-5 breath cloud. These timings and radii follow the audited 1.16.1 phase and entity sources while their top-down particle rendering is illustrative.
+The dashboard labels the probability as the next Holding-path landing roll. Its value is $1/(3+n_\mathrm{crystals})$, not a continuous per-frame chance. Faceted crystal indicators mirror the surviving, non-circular destruction order on the island. Crystal destruction remains an external scripted demonstration event. The Strafe example launches a translucent purple dragon fireball whose impact cloud grows from radius 3 toward radius 7. Sitting Flaming separately displays a growing, fading radius-5 breath cloud, followed by a visible damage pulse that triggers the source-valid Takeoff path. The timings and radii follow the audited phase and entity sources; their top-down particle rendering is illustrative.
 
 #### Phase details
 
 <table>
 <tr>
-<th>Holding, Strafing, and Charging</th>
-<th>Landing Approach and Perching</th>
+<th>Holding and Strafing</th>
+<th>Landing, Perched Decisions, and Charging</th>
 <th>Takeoff and Return</th>
 </tr>
 <tr>
-<td><img src="Plots/dragon_holding_strafe.gif" alt="Holding, strafing, and charging dragon path states" /></td>
-<td><img src="Plots/dragon_landing_perch.gif" alt="Landing approach and distinct sitting dragon phases" /></td>
+<td><img src="Plots/dragon_holding_strafe.gif" alt="Holding and strafing dragon path states" /></td>
+<td><img src="Plots/dragon_landing_perch.gif" alt="Landing, perched decisions, and charging dragon path states" /></td>
 <td><img src="Plots/dragon_takeoff.gif" alt="Dragon takeoff path state" /></td>
 </tr>
 </table>
@@ -259,9 +264,9 @@ cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
 ![Accumulated Dragon Approach Trajectories](Plots/dragon_trajectory_ensemble.gif)
 
-The 1440 by 810 figure accumulates 240 seeded approaches in 16 fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges and the same source-shaped steering integrator used by the hero supplies continuous motion. During each batch the smaller raster dragon traverses a representative route at the same rate that the corresponding paths are added. The route raster and recent trail use viridis, with a square-root normalization stated in the panel.
+The figure accumulates 240 seeded approaches in fixed batches. Player targets are distributed deterministically across a 24-to-48-block annulus so the result measures route degeneracy rather than one fixed landing direction. All graph-bound node transitions are legal decoded edges, and the same source-shaped steering integrator used by the hero supplies continuous motion. A higher-density raster keeps the left map crisp, while the enlarged representative dragon and its recent trail adopt the active route colour.
 
-The right panel fixes the final separated local-maximum cells so their labels do not jump during the animation, then accumulates their distinct-route counts from exactly the routes shown so far. Hollow markers on the map identify those same cells. Both bar length and viridis colour encode frequency, coordinates are reported in blocks, and the completed result lingers for more than three seconds. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
+The right panel fixes the final separated local-maximum cells so their labels do not jump during the animation, then accumulates their distinct-route counts from exactly the routes shown so far. Hollow markers on the map identify those same cells. Both bar length and a fixed min-to-max viridis scale encode frequency, so small but meaningful differences remain visible. These are repeatability hotspots in the path ensemble, not a direct model of arrow damage or the complete one-shot combat setup used by speedrunners.
 
 ### End Dimension Structure
 
@@ -325,11 +330,11 @@ $$
 w=20-11=9 \text{ chunks}.
 $$
 
-End cities use the uniform form of the placement rule, so each region draws one X offset and one Z offset from $\{0,\ldots,8\}$ using salt 10387313.
+End cities use the center-biased form of the random-spread rule. For each axis, Java Random draws twice from $\{0,\ldots,8\}$ and integer-averages the results, making central offsets more likely than edge offsets. The placement salt is 10387313.
 
 ```mermaid
 flowchart LR
-    A["20 x 20 chunk region"] --> B["Uniform 9 x 9 candidate window"]
+    A["20 x 20 chunk region"] --> B["Center-biased 9 x 9 candidate window"]
     B --> C["Candidate chunk"]
     C --> D["Outer-island and height gate"]
     D --> E["End-city start"]
@@ -360,7 +365,7 @@ The offset signs come from one of the four rotations and have five-block magnitu
 
 The left panel projects complete visible outer-island footprints from every qualifying local source site, making the dense island field readable without turning each source into an isolated dot. Subtle cyan diamonds retain the exact radius-96 central gateways without competing with the structure field. Enlarged purpur ship glyphs mark candidates whose modeled four-sample minimum reaches 60.
 
-The equally sized right panel repeats the left map extent as a viridis heatmap of the modeled surface height, with its colourbar on the right and the 60-block contour drawn directly on the field. Grey crosses show failed exact-grid candidates and ship glyphs show modeled passes. The diagnostic inset exposes one candidate's rotation, four sample positions, four modeled heights, and minimum rather than hiding the qualification rule. The glyph is symbolic: it does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
+The equally sized right panel repeats the left map extent as a viridis heatmap of the modeled surface height, with its colourbar on the right and the 60-block contour drawn directly on the field. Grey crosses show failed exact-grid candidates and ship glyphs show modeled passes. Visible legends distinguish gateways, outer-island support, qualified starts, and failures without sacrificing a quarter of the map to a diagnostic inset. The glyph is symbolic: it does not claim that every qualified city generates a ship or reproduce the final template assembly of a particular vanilla save.
 
 ### Radial World Generation
 
@@ -403,7 +408,7 @@ stages = np.minimum(int(np.floor(12 * progress)), target)
 
 ![Radial World Generation](Plots/seed_loading.gif)
 
-The 101 by 101 overview provides terrain context at the same broad scale as the stronghold presentation, while a dashed 21 by 21 footprint marks the only chunks involved in this dependency example. Statuses reveal outward from the target instead of propagating inward from the boundary. The equally complete 21 by 21 inset preserves every source-required terminal ring, and the right-hand key shows the complete 13-status order. Reveal speed remains an explanatory model; direction, terminal rings, and status taxonomy are the scientific result.
+The broad overview shows an illustrative radial request front across 721 by 721 chunks, comparable in scope to the other structure maps. A dashed 21 by 21 footprint marks the exact dependency example around the target. The complete inset advances through the 13-status order and caps each Chebyshev ring at its source-required terminal status. Request direction and timing are explanatory; the terminal rings and status taxonomy are the scientific result.
 
 ### Overworld Structure Generation
 
@@ -457,7 +462,7 @@ The visualization includes villages, desert pyramids, jungle pyramids, swamp hut
 
 ![Overworld Structure Generation](Plots/structure_placement.gif)
 
-The map is measured in chunks and spans about 912 by 912 chunks. Faint 32-chunk lines provide a common reference, while the cyan outline shows the currently active structure region and the dashed fill shows its usable candidate window. A fixed 192 by 192 chunk inset preserves local detail. The text trace reports the structure, region, chunk, terrain context, and whether its offset distribution is uniform or center-biased.
+The map is measured in chunks and retains every in-bounds candidate for the displayed structure families. Faint 32-chunk lines provide a common reference, while the cyan outline shows the currently active structure region and the dashed fill shows its usable candidate window. A fixed detail inset preserves local structure plans without covering either axis label.
 
 Candidates use compact, structure-specific symbols so all in-bounds points remain visible at the wider scale. The right side identifies every symbol and every textured terrain class. The backdrop is source-informed coordinate-consistent context, not a biome-compatibility filter or a claim of exact vanilla biome rarity.
 
@@ -491,9 +496,9 @@ structure_type = 'fortress' if type_roll < 2 else 'bastion'
 
 ![Nether Structure Generation](Plots/multi_structure_generation.gif)
 
-The map spans 3,169 by 3,169 chunks, over four times the previous linear extent. Subtle red lines show every fifth shared fortress-or-bastion region boundary and purple dotted lines show every fifth independent ruined-portal boundary, avoiding an unreadable grid at this scale. The moving detail inset retains the exact active grids at readable scale. The active trace reports the shared roll, structure type, candidate chunk, biome proxy, and current portal candidate.
+The main map is framed tightly enough for candidate symbols and biome context to remain readable. Subtle red lines show every fifth shared fortress-or-bastion region boundary and purple dotted lines show every fifth independent ruined-portal boundary, avoiding an unreadable grid at this scale. The wider detail inset retains the exact active grids and local structure plans without covering the horizontal axis label.
 
-The compact symbols distinguish all 29,772 fortress, bastion, and ruined-portal candidates without hiding the wider field. The backdrop assigns the five source biomes by nearest distance to the Java 1.16.1 multi-noise prototypes using four seeded proxy fields. Lava is separately labeled as terrain, not a biome. Every exact candidate is retained: fortresses and ruined portals accept all five displayed biome classes, while bastions exclude basalt deltas at the later biome gate. Because the Double Perlin samplers are not reproduced, biome shapes and rarity remain an explanatory proxy rather than exact seed output.
+Compact symbols distinguish every displayed fortress, bastion, and ruined-portal candidate without hiding the wider field. The backdrop assigns the five source biomes by nearest distance to the Java 1.16.1 multi-noise prototypes using four seeded proxy fields. Lava is separately labeled as terrain, not a biome. Every exact candidate within the frame is retained: fortresses and ruined portals accept all five displayed biome classes, while bastions exclude basalt deltas at the later biome gate. Because the Double Perlin samplers are not reproduced, biome shapes and rarity remain an explanatory proxy rather than exact seed output.
 
 ### Stronghold Ring Distribution
 
@@ -580,7 +585,7 @@ Run `render_all.py` from inside `Code/`. The visualization modules use sibling i
 3. [Fabric Yarn 1.16.1 `ChunkStatus`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/chunk/ChunkStatus.html): source-mapped chunk status order.
 4. [Fabric Yarn 1.16.1 `StructureConfig`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/chunk/StructureConfig.html): spacing, separation, and salt configuration.
 5. [Fabric Yarn 1.16.1 `StructureFeature`](https://maven.fabricmc.net/docs/yarn-1.16.1%2Bbuild.10/net/minecraft/world/gen/feature/StructureFeature.html): structure families and candidate-stage context.
-6. [Fabric Yarn `EndCityFeature`](https://maven.fabricmc.net/docs/yarn-1.17.1%2Bbuild.10/net/minecraft/world/gen/feature/EndCityFeature.html): uniform placement and terrain-height checks retained from the 1.16 generation family.
+6. [Fabric Yarn `EndCityFeature`](https://maven.fabricmc.net/docs/yarn-1.17.1%2Bbuild.10/net/minecraft/world/gen/feature/EndCityFeature.html): End-city terrain-height qualification retained from the 1.16 generation family.
 7. [Mojang MC-159283](https://bugs-legacy.mojang.com/browse/MC-159283): distant End terrain loss caused by integer overflow.
 8. [Deltanic's End overflow derivation](https://gist.github.com/Deltanic/b98d005c9025f10a67de9e966fa57ebb): transition sequence linked from the Mojang issue.
 9. [Alan Zucconi, Minecraft World Generation](https://www.alanzucconi.com/2022/06/05/minecraft-world-generation/): accessible procedural-generation background.
@@ -591,8 +596,6 @@ Run `render_all.py` from inside `Code/`. The visualization modules use sibling i
 ## Legacy Simulations
 
 The original dragon animation is retained as a record of the project's earlier reduced-order model. It uses an abstract arena and a larger dashboard rather than the current source-informed central-island projection. Its unconstrained curves helped motivate the smoother steering restored in the new hero, but its graph, effects, and geometry are not used as evidence for current numerical claims.
-
-The legacy file is approximately 51 MB, while the active README hero is optimized for repeated viewing and reused at both of its documentation locations.
 
 ![Original Dragon Pathfinding Hero](Plots/dragon_pathfinding.gif)
 

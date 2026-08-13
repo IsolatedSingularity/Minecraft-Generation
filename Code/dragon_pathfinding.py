@@ -11,10 +11,10 @@ import sys
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.collections import LineCollection
-from matplotlib.colors import PowerNorm, to_rgba
+from matplotlib.colors import Normalize, PowerNorm, to_rgba
 from matplotlib.path import Path as MarkerPath
 from matplotlib.patches import (
-    Circle, Ellipse, FancyArrowPatch, FancyBboxPatch, RegularPolygon,
+    Circle, Ellipse, FancyArrowPatch, FancyBboxPatch,
 )
 import numpy as np
 from PIL import Image, ImageFilter
@@ -97,7 +97,7 @@ class DragonSpriteArtist:
             interpolation='bilinear', zorder=zorder,
         )
 
-    def update(self, position, angle, state):
+    def update(self, position, angle, state, scale=1.0):
         quantized = int(round(float(angle) / 5.0) * 5) % 360
         key = (quantized, state)
         if key not in self.cache:
@@ -112,17 +112,20 @@ class DragonSpriteArtist:
             state_rgb = np.asarray(to_rgba(STATE_COLORS[state])[:3])
             visible = rgba[..., 3:4]
             rgba[..., :3] = np.clip(
-                rgba[..., :3] * 0.84 + state_rgb[None, None, :] * 0.16 * visible,
+                rgba[..., :3] * 0.52 + state_rgb[None, None, :] * 0.48 * visible,
                 0.0, 1.0,
             )
+            glow_rgba = np.asarray(glow).copy()
+            glow_rgba[..., :3] = np.uint8(state_rgb * 255.0)
             self.cache[key] = (
-                np.uint8(rgba * 255), np.asarray(glow),
+                np.uint8(rgba * 255), glow_rgba,
             )
         sprite, glow = self.cache[key]
         x, z = np.asarray(position, dtype=float)
+        half_size = self.half_size * float(scale)
         extent = (
-            x - self.half_size, x + self.half_size,
-            z - self.half_size, z + self.half_size,
+            x - half_size, x + half_size,
+            z - half_size, z + half_size,
         )
         self.artist.set_data(sprite)
         self.artist.set_extent(extent)
@@ -255,16 +258,16 @@ def _draw_state_machine(ax):
 
     positions = {
         'holding': (0.50, 0.95),
-        'strafing': (0.17, 0.85),
-        'charging_player': (0.83, 0.85),
-        'landing_approach': (0.50, 0.81),
-        'landing': (0.50, 0.69),
-        'sitting_scanning': (0.27, 0.58),
-        'sitting_attacking': (0.27, 0.47),
-        'sitting_flaming': (0.27, 0.36),
-        'takeoff': (0.68, 0.47),
-        'hover': (0.74, 0.60),
-        'dying': (0.74, 0.34),
+        'strafing': (0.17, 0.86),
+        'charging_player': (0.83, 0.86),
+        'landing_approach': (0.50, 0.82),
+        'landing': (0.50, 0.71),
+        'sitting_scanning': (0.26, 0.59),
+        'sitting_attacking': (0.26, 0.48),
+        'sitting_flaming': (0.26, 0.37),
+        'takeoff': (0.68, 0.48),
+        'hover': (0.75, 0.61),
+        'dying': (0.75, 0.36),
     }
     curvature = {
         ('holding', 'strafing'): 0.10,
@@ -283,26 +286,6 @@ def _draw_state_machine(ax):
         ('hover', 'holding'): 0.30,
         ('holding', 'dying'): -0.36,
     }
-    transitions = [
-        (start, end, curvature[(start, end)], False)
-        for start, end in SOURCE_PHASE_TRANSITIONS
-    ] + [
-        (start, end, curvature[(start, end)], True)
-        for start, end, _ in EXCEPTION_PHASE_TRANSITIONS
-    ]
-    for start, end, curvature, exceptional in transitions:
-        connection = FancyArrowPatch(
-            positions[start], positions[end], arrowstyle='-|>',
-            mutation_scale=10.5,
-            color='#566785' if exceptional else '#7455A3',
-            linewidth=1.0 if exceptional else 1.35,
-            linestyle='--' if exceptional else '-',
-            connectionstyle=f'arc3,rad={curvature}',
-            alpha=0.48 if exceptional else 0.80,
-            shrinkA=12, shrinkB=12, zorder=2,
-        )
-        ax.add_patch(connection)
-
     labels = {
         'holding': 'HOLDING',
         'strafing': 'STRAFE',
@@ -318,8 +301,8 @@ def _draw_state_machine(ax):
     }
     nodes = {}
     exceptional_states = {'dying', 'hover'}
-    node_width = 0.215
-    node_height = 0.066
+    node_width = 0.205
+    node_height = 0.061
     for state in STATE_ORDER:
         position = positions[state]
         shadow = Ellipse(
@@ -348,82 +331,105 @@ def _draw_state_machine(ax):
         )
         nodes[state] = node
 
+    transitions = [
+        (start, end, curvature[(start, end)], False)
+        for start, end in SOURCE_PHASE_TRANSITIONS
+    ] + [
+        (start, end, curvature[(start, end)], True)
+        for start, end, _ in EXCEPTION_PHASE_TRANSITIONS
+    ]
+    for start, end, curve, exceptional in transitions:
+        connection = FancyArrowPatch(
+            posA=positions[start], posB=positions[end],
+            patchA=nodes[start], patchB=nodes[end], arrowstyle='-|>',
+            mutation_scale=10.5,
+            color='#566785' if exceptional else '#7455A3',
+            linewidth=1.0 if exceptional else 1.35,
+            linestyle='--' if exceptional else '-',
+            connectionstyle=f'arc3,rad={curve}',
+            alpha=0.48 if exceptional else 0.80,
+            shrinkA=1.5, shrinkB=1.5, zorder=2,
+        )
+        ax.add_patch(connection)
+
+    ax.text(
+        0.50, 0.265,
+        'SOLID: PHASE LOGIC | DASHED: BOOTSTRAP / DAMAGE | AIRBORNE LETHAL DAMAGE -> DYING',
+        ha='center', va='center', color='#97A5BA', fontsize=6.8,
+        fontweight='bold', family='DejaVu Sans', linespacing=1.25, zorder=5,
+    )
+
     hud = FancyBboxPatch(
-        (0.035, 0.012), 0.93, 0.202,
+        (0.035, 0.012), 0.93, 0.216,
         boxstyle='round,pad=0.012,rounding_size=0.022',
         facecolor=to_rgba('#171D2A', 0.99),
         edgecolor='#9B6FD1', linewidth=1.45, zorder=4,
     )
     ax.add_patch(hud)
     ax.add_patch(FancyBboxPatch(
-        (0.051, 0.119), 0.898, 0.078,
+        (0.051, 0.126), 0.898, 0.084,
         boxstyle='round,pad=0.006,rounding_size=0.014',
         facecolor=to_rgba('#20293A', 0.94), edgecolor='#3B475E',
         linewidth=0.65, zorder=4.5,
     ))
     ax.add_patch(FancyBboxPatch(
-        (0.051, 0.030), 0.898, 0.071,
+        (0.051, 0.031), 0.898, 0.078,
         boxstyle='round,pad=0.006,rounding_size=0.014',
         facecolor=to_rgba('#20293A', 0.94), edgecolor='#3B475E',
         linewidth=0.65, zorder=4.5,
     ))
     ax.text(
-        0.071, 0.178, 'NEXT HOLDING-PATH LANDING ROLL',
+        0.071, 0.187, 'NEXT HOLDING-PATH LANDING ROLL',
         ha='left', va='center', color='#D7DDEA',
-        fontsize=7.3, fontweight='black', family='DejaVu Sans', zorder=5,
+        fontsize=7.7, fontweight='black', family='DejaVu Sans', zorder=5,
     )
     ax.text(
-        0.071, 0.145, 'evaluated once at path completion',
+        0.071, 0.151, 'evaluated once at path completion',
         ha='left', va='center', color='#8492AA',
-        fontsize=6.1, fontweight='bold', family='DejaVu Sans', zorder=5,
+        fontsize=6.7, fontweight='bold', family='DejaVu Sans', zorder=5,
     )
     probability_background = FancyBboxPatch(
-        (0.385, 0.133), 0.445, 0.032,
+        (0.405, 0.139), 0.405, 0.036,
         boxstyle='round,pad=0.002,rounding_size=0.010',
         facecolor='#0B0F17', edgecolor='#59677E',
         linewidth=0.60, alpha=1.0, zorder=5,
     )
     probability_fill = FancyBboxPatch(
-        (0.385, 0.133), 0.002, 0.032,
+        (0.405, 0.139), 0.002, 0.036,
         boxstyle='round,pad=0.002,rounding_size=0.010',
         facecolor='#A75DE1', edgecolor='none', zorder=6,
     )
     ax.add_patch(probability_background)
     ax.add_patch(probability_fill)
     probability_text = ax.text(
-        0.925, 0.159, '', ha='right', va='center',
-        color='#F4ECFF', fontsize=13.0, fontweight='black',
+        0.932, 0.170, '', ha='right', va='center',
+        color='#F4ECFF', fontsize=13.4, fontweight='black',
         family='DejaVu Sans', zorder=6,
     )
     probability_formula = ax.text(
-        0.925, 0.132, '', ha='right', va='center',
-        color='#8F9CB1', fontsize=6.3, family='DejaVu Sans', zorder=6,
+        0.932, 0.140, '', ha='right', va='center',
+        color='#8F9CB1', fontsize=7.0, family='DejaVu Sans', zorder=6,
     )
     crystal_label = ax.text(
-        0.071, 0.066, 'ACTIVE END CRYSTALS', ha='left', va='center',
-        color='#D7DDEA', fontsize=7.1, fontweight='black',
+        0.071, 0.070, 'ACTIVE END CRYSTALS', ha='left', va='center',
+        color='#D7DDEA', fontsize=7.6, fontweight='black',
         family='DejaVu Sans', zorder=5,
     )
     crystal_icons = []
     for index in range(10):
-        x = 0.405 + index * 0.050
-        glow = Circle(
-            (x, 0.066), radius=0.0195,
-            facecolor='#A86BE0', edgecolor='none', alpha=0.24, zorder=5.5,
+        x = 0.390 + index * 0.058
+        glow = ax.scatter(
+            [x], [0.070], s=125, marker='D', c='#A86BE0',
+            edgecolors='none', alpha=0.24, zorder=5.5,
         )
-        cage = RegularPolygon(
-            (x, 0.066), numVertices=4, radius=0.0148,
-            orientation=np.pi / 4.0, facecolor=to_rgba('#121824', 0.88),
-            edgecolor='#8390A4', linewidth=0.48, zorder=6,
+        cage = ax.scatter(
+            [x], [0.070], s=76, marker='D', c='#121824',
+            edgecolors='#8390A4', linewidths=0.55, alpha=0.95, zorder=6,
         )
-        icon = RegularPolygon(
-            (x, 0.066), numVertices=4, radius=0.0088,
-            orientation=0.0, facecolor='#C875FF',
-            edgecolor='#F4ECFF', linewidth=0.38, zorder=6.2,
+        icon = ax.scatter(
+            [x], [0.070], s=28, marker='D', c='#C875FF',
+            edgecolors='#F4ECFF', linewidths=0.42, zorder=6.2,
         )
-        ax.add_patch(glow)
-        ax.add_patch(cage)
-        ax.add_patch(icon)
         crystal_icons.append({'glow': glow, 'cage': cage, 'core': icon})
     return (
         nodes, crystal_icons, probability_fill, probability_text,
@@ -432,17 +438,17 @@ def _draw_state_machine(ax):
 
 
 def create_dragon_pathfinding_animation(
-    save_path, fps=10, dpi=100, colors=96,
+    save_path, fps=12, dpi=100, colors=96,
 ):
     """Create the shorter README hero animation."""
     frames = scripted_showcase()
-    if len(frames) > 270:
-        indices = np.linspace(0, len(frames) - 1, 270).round().astype(int)
+    if len(frames) > 320:
+        indices = np.linspace(0, len(frames) - 1, 320).round().astype(int)
         frames = [frames[index] for index in indices]
     figure = plt.figure(figsize=(12.8, 7.2), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[1.76, 0.94],
-        left=0.018, right=0.988, top=0.982, bottom=0.018, wspace=0.0,
+        1, 2, width_ratios=[1.62, 1.08],
+        left=0.018, right=0.988, top=0.982, bottom=0.018, wspace=0.005,
     )
     arena = figure.add_subplot(grid[0, 0])
     machine = figure.add_subplot(grid[0, 1])
@@ -454,7 +460,7 @@ def create_dragon_pathfinding_animation(
 
     trail = LineCollection([], linewidths=2.8, capstyle='round', zorder=9)
     arena.add_collection(trail)
-    active = DragonSpriteArtist(arena, size_blocks=11.0, zorder=13)
+    active = DragonSpriteArtist(arena, size_blocks=15.8, zorder=13)
     fireball_glow = arena.scatter(
         [], [], s=185, marker='o', c='#8B36C6',
         edgecolors='none', alpha=0.32, visible=False, zorder=13.2,
@@ -470,6 +476,11 @@ def create_dragon_pathfinding_animation(
         linewidth=2.2, alpha=0.0, zorder=14,
     )
     arena.add_patch(explosion)
+    damage_flash = Circle(
+        (0, 0), 0.1, fill=False, edgecolor=COLORS['coral'],
+        linewidth=2.5, alpha=0.0, zorder=14.2,
+    )
+    arena.add_patch(damage_flash)
 
     history = []
 
@@ -491,7 +502,12 @@ def create_dragon_pathfinding_animation(
             trail.set_colors(colors_value)
             vector = points[-1] - points[-2]
             angle = np.degrees(np.arctan2(vector[1], vector[0]))
-        active.update(frame.position, angle, frame.state)
+        sitting = frame.state in {
+            'hover', 'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
+        }
+        pulse_amplitude = 0.025 if sitting else 0.065
+        sprite_scale = 1.0 + pulse_amplitude * np.sin(2.0 * np.pi * frame_index / 7.0)
+        active.update(frame.position, angle, frame.state, scale=sprite_scale)
 
         if frame.fireball_position is not None:
             offset = np.asarray(frame.fireball_position).reshape(1, 2)
@@ -514,6 +530,13 @@ def create_dragon_pathfinding_animation(
         else:
             explosion.set_alpha(0.0)
 
+        if frame.damage_pulse > 0.0:
+            damage_flash.center = tuple(frame.position)
+            damage_flash.set_radius(2.5 + 8.0 * frame.damage_pulse)
+            damage_flash.set_alpha(0.92 * (1.0 - frame.damage_pulse) + 0.10)
+        else:
+            damage_flash.set_alpha(0.0)
+
         for state, node in state_nodes.items():
             is_active = state == frame.state
             inactive_alpha = 0.24 if state in {'dying', 'hover'} else 0.56
@@ -526,7 +549,7 @@ def create_dragon_pathfinding_animation(
             )
 
         probability = perch_probability(frame.crystals_alive)
-        probability_fill.set_width(max(0.004, 0.445 * probability / (1.0 / 3.0)))
+        probability_fill.set_width(max(0.004, 0.405 * probability / (1.0 / 3.0)))
         probability_text.set_text(f'{probability * 100:4.1f}%')
         probability_formula.set_text(f'1 / (3 + {frame.crystals_alive})')
         crystal_label.set_text(f'CRYSTALS ALIVE  {frame.crystals_alive}/10')
@@ -580,11 +603,11 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
         figure.subplots_adjust(left=0.02, right=0.98, top=0.94, bottom=0.02)
         trail = LineCollection([], linewidths=3.2, capstyle='round', zorder=9)
         arena.add_collection(trail)
-        active = DragonSpriteArtist(arena, size_blocks=10.5, zorder=13)
+        active = DragonSpriteArtist(arena, size_blocks=15.0, zorder=13)
         breath_cloud, breath_particles, breath_stream = _create_breath_artists(arena)
         permanent_titles = {
-            'dragon_holding_strafe.gif': 'HOLDING, STRAFING, AND CHARGING',
-            'dragon_landing_perch.gif': 'LANDING APPROACH AND PERCHED PHASES',
+            'dragon_holding_strafe.gif': 'HOLDING AND STRAFING',
+            'dragon_landing_perch.gif': 'LANDING, PERCHED DECISIONS, AND CHARGING',
             'dragon_takeoff.gif': 'TAKEOFF, RETURN, AND EXCEPTIONAL END STATE',
         }
         arena.set_title(
@@ -611,7 +634,10 @@ def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
                 ])
                 vector = points[-1] - points[-2]
                 angle = np.degrees(np.arctan2(vector[1], vector[0]))
-            active.update(frame.position, angle, frame.state)
+            active.update(
+                frame.position, angle, frame.state,
+                scale=1.0 + 0.05 * np.sin(2.0 * np.pi * frame_index / 7.0),
+            )
             _update_breath_artists(
                 frame, breath_cloud, breath_particles, breath_stream,
             )
@@ -687,7 +713,7 @@ def create_trajectory_ensemble_animation(
         )[0]
         for index in range(trajectories)
     ]
-    bins = np.linspace(-76, 76, 77)
+    bins = np.linspace(-76, 76, 121)
     contributions = []
     for path in paths:
         histogram, _, _ = np.histogram2d(path[:, 1], path[:, 0], bins=(bins, bins))
@@ -695,7 +721,13 @@ def create_trajectory_ensemble_animation(
     cumulative = np.cumsum(np.asarray(contributions), axis=0)
 
     final_frequency = cumulative[-1]
-    local_maxima = final_frequency == maximum_filter(final_frequency, size=5, mode='nearest')
+    cell_width = float(bins[1] - bins[0])
+    maximum_window = max(5, int(round(10.0 / cell_width)))
+    if maximum_window % 2 == 0:
+        maximum_window += 1
+    local_maxima = final_frequency == maximum_filter(
+        final_frequency, size=maximum_window, mode='nearest',
+    )
     local_maxima &= final_frequency >= 4
     hotspot_rows, hotspot_columns = np.nonzero(local_maxima)
     ranking = np.argsort(final_frequency[hotspot_rows, hotspot_columns])[::-1]
@@ -708,8 +740,10 @@ def create_trajectory_ensemble_animation(
         if np.hypot(center_x, center_z) <= 24.0:
             continue
         if any(
-            (row - hotspot_rows[other]) ** 2
-            + (column - hotspot_columns[other]) ** 2 < 49
+            np.hypot(
+                (row - hotspot_rows[other]) * cell_width,
+                (column - hotspot_columns[other]) * cell_width,
+            ) < 14.0
             for other in selected
         ):
             continue
@@ -726,7 +760,7 @@ def create_trajectory_ensemble_animation(
     figure = plt.figure(figsize=(14.4, 8.1), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
         1, 2, width_ratios=[1.54, 1.0],
-        left=0.055, right=0.985, top=0.90, bottom=0.17, wspace=0.055,
+        left=0.055, right=0.985, top=0.90, bottom=0.115, wspace=0.055,
     )
     axis = figure.add_subplot(grid[0, 0])
     frequency_axis = figure.add_subplot(grid[0, 1])
@@ -750,7 +784,7 @@ def create_trajectory_ensemble_animation(
     axis.add_collection(lines)
     local_trail = LineCollection([], linewidths=3.1, capstyle='round', zorder=10)
     axis.add_collection(local_trail)
-    dragon = DragonSpriteArtist(axis, size_blocks=10.2, zorder=12)
+    dragon = DragonSpriteArtist(axis, size_blocks=15.0, zorder=12)
     count_text = axis.text(
         0.985, 0.025, '', transform=axis.transAxes,
         ha='right', va='bottom', color=COLORS['muted'],
@@ -771,6 +805,12 @@ def create_trajectory_ensemble_animation(
     )
     frequency_axis.invert_yaxis()
     maximum_hotspot = max(float(np.max(hotspot_values)), 1.0)
+    minimum_hotspot = float(np.min(hotspot_values))
+    bar_norm = Normalize(
+        vmin=minimum_hotspot,
+        vmax=max(maximum_hotspot, minimum_hotspot + 1.0),
+        clip=True,
+    )
     frequency_axis.set_xlim(0, maximum_hotspot * 1.18)
     frequency_axis.set_xlabel('Distinct legal routes entering the cell')
     frequency_axis.set_ylabel('Final hotspot center X, Z (blocks)')
@@ -793,14 +833,6 @@ def create_trajectory_ensemble_animation(
         edgecolors=plt.get_cmap('viridis')(0.98), linewidths=0.8,
         alpha=0.0, zorder=11,
     )
-    figure.text(
-        0.645, 0.055,
-        'Final cells are fixed for comparison; each legal route contributes once per cell.\n'
-        f'Active dragon represents the current {batch_size}-route batch; final hold = {final_hold:.1f} s.',
-        color=COLORS['muted'],
-        fontsize=7.4, ha='left', va='top', linespacing=1.35,
-    )
-
     figure.suptitle(
         'TRAJECTORY DISTRIBUTION AND DEGENERACY',
         color=COLORS['text'], fontsize=17, fontweight='black', y=0.97,
@@ -843,15 +875,19 @@ def create_trajectory_ensemble_animation(
         else:
             local_trail.set_segments([])
             angle = 0.0
-        dragon.update(point, angle, 'landing_approach')
+        active_frames = frames - int(round(final_hold * fps))
+        sprite_scale = (
+            1.0 + 0.06 * np.sin(2.0 * np.pi * frame_index / 7.0)
+            if frame_index < active_frames else 1.0
+        )
+        dragon.update(point, angle, 'landing_approach', scale=sprite_scale)
 
         for bar, label, row, column in zip(
             bars, bar_value_texts, hotspot_rows, hotspot_columns,
         ):
             value = float(current_frequency[row, column])
             bar.set_width(value)
-            color_value = value / maximum_hotspot
-            bar.set_facecolor(plt.get_cmap('viridis')(color_value))
+            bar.set_facecolor(plt.get_cmap('viridis')(bar_norm(value)))
             label.set_x(value + maximum_hotspot * 0.015)
             label.set_text(str(int(value)) if value > 0 else '')
         count_text.set_text(f'{shown:03d} seeded approaches')
@@ -861,9 +897,9 @@ def create_trajectory_ensemble_animation(
     animation = FuncAnimation(
         figure, update, frames=frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=105)
     plt.close(figure)
-    optimize_gif(save_path, colors=112)
+    optimize_gif(save_path, colors=96)
     return str(save_path)
 
 

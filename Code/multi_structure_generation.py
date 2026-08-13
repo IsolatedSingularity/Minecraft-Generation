@@ -145,7 +145,7 @@ def nether_structure_candidates(seed=42, region_radius=12, resolution=640):
 
 
 def create_multi_structure_animation(
-    save_path, seed=42, region_radius=58, fps=8, duration=13,
+    save_path, seed=42, region_radius=46, fps=8, duration=13,
 ):
     shared, portals, _, (minimum, maximum) = nether_structure_candidates(
         seed, region_radius,
@@ -249,18 +249,9 @@ def create_multi_structure_animation(
     detail.add_patch(detail_portal)
     detail_portal.set_visible(False)
     detail.set_title('ACTIVE GRID DETAIL', fontsize=6.8, pad=3)
-    trace_text = figure.text(
-        0.405, 0.052, '', ha='center', va='center',
-        color=COLORS['text'], fontsize=8.9, fontweight='bold',
-        family='monospace',
-        bbox=dict(
-            boxstyle='round,pad=0.42', facecolor=COLORS['panel'],
-            edgecolor=COLORS['violet'], alpha=0.95,
-        ),
-    )
     _draw_legend(legend_axis)
     figure.suptitle(
-        'NETHER STRUCTURE GENERATION   JAVA 1.16.1',
+        'NETHER STRUCTURE GENERATION',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.96,
     )
 
@@ -309,23 +300,25 @@ def create_multi_structure_animation(
             detail_portal_point.set_offsets([[
                 portal_item['chunk_x'], portal_item['chunk_z'],
             ]])
-            portal_text = (
-                f"PORTAL ({portal_item['chunk_x']:+04d},{portal_item['chunk_z']:+04d}) "
-                f"{NETHER_BIOMES[portal_item['biome']].label.upper()}"
-            )
         else:
-            portal_text = 'PORTAL PENDING'
             detail_portal.set_visible(False)
             detail_portal_point.set_offsets(np.empty((0, 2)))
-        detail_center_x = np.clip(shared_item['chunk_x'], minimum + 42, maximum - 42)
-        detail_center_z = np.clip(shared_item['chunk_z'], minimum + 42, maximum - 42)
-        detail.set_xlim(detail_center_x - 42, detail_center_x + 42)
-        detail.set_ylim(detail_center_z - 42, detail_center_z + 42)
-        trace_text.set_text(
-            f"SHARED ROLL {shared_item['type_roll']} -> {shared_item['name'].upper()} "
-            f"({shared_item['chunk_x']:+04d},{shared_item['chunk_z']:+04d}) "
-            f"BIOME PROXY {NETHER_BIOMES[shared_item['biome']].label.upper()}   "
-            f"{portal_text}   {shared_count + portal_count}/{len(shared) + len(portals)}"
+        detail_half_width = 63
+        detail_center_x = np.clip(
+            shared_item['chunk_x'], minimum + detail_half_width,
+            maximum - detail_half_width,
+        )
+        detail_center_z = np.clip(
+            shared_item['chunk_z'], minimum + detail_half_width,
+            maximum - detail_half_width,
+        )
+        detail.set_xlim(
+            detail_center_x - detail_half_width,
+            detail_center_x + detail_half_width,
+        )
+        detail.set_ylim(
+            detail_center_z - detail_half_width,
+            detail_center_z + detail_half_width,
         )
         return []
 

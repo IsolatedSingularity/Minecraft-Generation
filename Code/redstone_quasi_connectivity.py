@@ -296,7 +296,7 @@ def create_quasi_connectivity_diagram(save_path, dpi=200):
             panel_label=f'({chr(97 + index)})', heading=heading,
         )
     figure.suptitle(
-        'Quasi-connectivity in Java 1.16.1',
+        'Quasi-connectivity',
         color=COLORS['text'], fontsize=15, fontweight='bold', y=0.985,
     )
     figure.subplots_adjust(left=0.025, right=0.985, top=0.92, bottom=0.025, wspace=0.025)

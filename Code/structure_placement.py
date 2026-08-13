@@ -277,17 +277,9 @@ def create_structure_placement_animation(
             alpha=0.9, zorder=9,
         )
     detail.set_title('CENTRAL 192 x 192 CHUNK DETAIL', fontsize=6.8, pad=3)
-    trace_text = figure.text(
-        0.405, 0.055, '', ha='center', va='center',
-        color=COLORS['text'], fontsize=8.6, fontweight='bold', family='monospace',
-        bbox=dict(
-            boxstyle='round,pad=0.42', facecolor=COLORS['panel'],
-            edgecolor=COLORS['cyan'], alpha=0.95,
-        ),
-    )
     _draw_legends(legend_axis)
     figure.suptitle(
-        'OVERWORLD STRUCTURE CANDIDATE PLACEMENT   JAVA 1.16.1',
+        'OVERWORLD STRUCTURE CANDIDATE PLACEMENT',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.965,
     )
 
@@ -322,14 +314,6 @@ def create_structure_placement_animation(
         current_window.set_alpha(0.14)
         active_outline.center = (item['chunk_x'], item['chunk_z'])
         active_outline.set_alpha(0.92)
-        distribution = 'UNIFORM' if item['uniform'] else 'CENTER-BIASED'
-        trace_text.set_text(
-            f"{STRUCTURE_SCHEMATICS[item['name']].label.upper()}   "
-            f"REGION ({item['region_x']:+03d},{item['region_z']:+03d})   "
-            f"CHUNK ({item['chunk_x']:+04d},{item['chunk_z']:+04d})   "
-            f"TERRAIN CONTEXT {OVERWORLD_BIOMES[item['biome']].label.upper()}   "
-            f"{distribution}   {shown}/{len(candidates)}"
-        )
         return []
 
     animation = FuncAnimation(

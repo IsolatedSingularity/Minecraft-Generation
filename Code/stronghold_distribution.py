@@ -213,7 +213,7 @@ def create_stronghold_distribution(save_path, dpi=200, seed=42):
     _panel_label(count_axis, '(c)')
 
     figure.suptitle(
-        'STRONGHOLD CANDIDATE RINGS   JAVA 1.16.1',
+        'STRONGHOLD CANDIDATE RINGS',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.972,
     )
     figure.text(

@@ -30,13 +30,13 @@ SOURCE_PHASE_TRANSITIONS = (
     ('sitting_scanning', 'charging_player'),
     ('sitting_attacking', 'sitting_flaming'),
     ('sitting_flaming', 'sitting_scanning'),
-    ('sitting_flaming', 'takeoff'),
     ('takeoff', 'holding'),
     ('charging_player', 'holding'),
 )
 
 EXCEPTION_PHASE_TRANSITIONS = (
     ('hover', 'holding', 'fight bootstrap'),
+    ('sitting_flaming', 'takeoff', 'sufficient sitting damage'),
     ('holding', 'dying', 'representative lethal airborne damage'),
 )
 
@@ -56,6 +56,7 @@ class DragonFrame:
     breath_kind: str | None = None
     explosion_index: int | None = None
     explosion_phase: float = 0.0
+    damage_pulse: float = 0.0
 
 
 def build_dragon_nodes():
@@ -217,7 +218,7 @@ def _wrap_degrees(value):
 
 def source_steered_path(
     control_points, samples_per_target=12, arrival_radius=3.0,
-    maximum_ticks_per_target=220,
+    maximum_ticks_per_target=220, turn_mode='airborne',
 ):
     """Integrate a top-down reduction of the Java dragon steering loop.
 
@@ -249,8 +250,15 @@ def source_steered_path(
 
             desired_yaw = math.degrees(math.atan2(delta[1], delta[0]))
             yaw_error = np.clip(_wrap_degrees(desired_yaw - yaw), -50.0, 50.0)
+            horizontal_speed = float(np.linalg.norm(velocity))
+            speed_term = horizontal_speed + 1.0
+            capped_speed = min(speed_term, 40.0)
+            if turn_mode == 'landing':
+                turn_scale = capped_speed / speed_term
+            else:
+                turn_scale = 0.70 / capped_speed / speed_term
             turn_momentum *= 0.8
-            turn_momentum += float(yaw_error) * 0.70
+            turn_momentum += float(yaw_error) * turn_scale
             yaw = _wrap_degrees(yaw + turn_momentum * 0.1)
 
             radians = math.radians(yaw)
@@ -381,14 +389,17 @@ def scripted_showcase():
     # PhaseManager initializes an entity in HOVER; EnderDragonFight then
     # bootstraps the live fight into HOLDING_PATTERN. Keep the exceptional
     # phase visible without pretending it belongs to the repeating fight loop.
-    for _ in range(12):
+    for _ in range(10):
         frames.append(DragonFrame(
             np.zeros(2), 'hover', len(alive), None, None,
             alive_crystals=tuple(sorted(alive)),
         ))
 
     def append_curve(points, state, samples=9, fireball=False):
-        curve = source_steered_path(points, samples_per_target=samples)
+        curve = source_steered_path(
+            points, samples_per_target=samples,
+            turn_mode='landing' if state == 'landing' else 'airborne',
+        )
         player = np.array([31.0, -17.0])
         for index, point in enumerate(curve):
             fireball_position = None
@@ -406,6 +417,11 @@ def scripted_showcase():
                 breath_radius = 3.0 + 4.0 * phase
                 breath_alpha = 0.48 * (1.0 - 0.48 * phase)
                 breath_kind = 'projectile_impact'
+            elif state == 'landing':
+                breath_center = np.asarray(point) + np.array([2.8, 0.0])
+                breath_radius = 1.2 + 1.4 * fraction
+                breath_alpha = 0.18 + 0.12 * (1.0 - fraction)
+                breath_kind = 'landing_particles'
             frames.append(DragonFrame(
                 np.asarray(point), state, len(alive), None, None,
                 alive_crystals=tuple(sorted(alive)),
@@ -426,10 +442,12 @@ def scripted_showcase():
          np.array([31.0, -17.0]), DRAGON_NODES[6]],
         'strafing', samples=11, fireball=True,
     )
+
+    # Strafe returns to Holding before any later phase decision.
+    strafe_return = shortest_path(6, 18, crystals_alive=len(alive))
     append_curve(
-        [DRAGON_NODES[6], np.array([-30.0, 14.0]),
-         np.array([31.0, -17.0]), DRAGON_NODES[18]],
-        'charging_player', samples=9,
+        [DRAGON_NODES[index] for index in strafe_return],
+        'holding', samples=9,
     )
 
     # Crystal losses start after the flight has been established and jump
@@ -467,30 +485,77 @@ def scripted_showcase():
         'landing', samples=12,
     )
 
-    sitting_phases = (
-        ('sitting_scanning', 12),
-        ('sitting_attacking', 10),
-        ('sitting_flaming', 26),
-    )
     sitting_index = 0
-    for state, count in sitting_phases:
+
+    def append_sitting(state, count):
+        nonlocal sitting_index
         for local_index in range(count):
             angle = 2.0 * math.pi * sitting_index / 48.0
             point = np.array([0.9 * math.cos(angle), 0.55 * math.sin(angle)])
             sitting_index += 1
             flaming = state == 'sitting_flaming'
             flame_phase = local_index / max(count - 1, 1)
+            ignition = min(1.0, flame_phase / 0.28) if flaming else 0.0
             frames.append(DragonFrame(
                 point, state, len(alive), None, None,
                 alive_crystals=tuple(sorted(alive)),
                 breath_center=(np.array([5.0, 0.0]) if flaming else None),
-                breath_radius=(5.0 if flaming else 0.0),
+                breath_radius=(5.0 * ignition if flaming else 0.0),
                 breath_alpha=(
-                    0.36 + 0.10 * math.sin(flame_phase * 5.0 * math.pi)
+                    (0.48 - 0.16 * flame_phase)
+                    * (0.35 + 0.65 * ignition)
                     if flaming else 0.0
                 ),
                 breath_kind=('sitting_flame' if flaming else None),
             ))
+
+    # A distant player can be selected directly from Sitting Scanning. The
+    # source sets Takeoff and then Charging Player in the same server tick, so
+    # Charging is the visible phase here.
+    append_sitting('sitting_scanning', 14)
+    player = np.array([31.0, -17.0])
+    append_curve(
+        [np.zeros(2), np.array([12.0, -6.0]), player],
+        'charging_player', samples=11,
+    )
+    charge_node = nearest_node(player, crystals_alive=len(alive))
+    charge_return = shortest_path(charge_node, 8, crystals_alive=len(alive))
+    append_curve(
+        [player, DRAGON_NODES[charge_node]]
+        + [DRAGON_NODES[index] for index in charge_return[1:]],
+        'holding', samples=9,
+    )
+
+    # Return for a second, abbreviated but transition-valid perched sequence.
+    player_direction = player / max(float(np.linalg.norm(player)), 1.0)
+    second_landing_node = nearest_node(
+        -player_direction * 40.0, crystals_alive=len(alive),
+    )
+    second_landing = shortest_path(8, second_landing_node, crystals_alive=len(alive))
+    append_curve(
+        [DRAGON_NODES[index] for index in second_landing],
+        'landing_approach', samples=8,
+    )
+    append_curve(
+        [DRAGON_NODES[second_landing[-1]], np.array([11.0, -6.0]), np.zeros(2)],
+        'landing', samples=10,
+    )
+    append_sitting('sitting_scanning', 12)
+    append_sitting('sitting_attacking', 10)
+    append_sitting('sitting_flaming', 28)
+
+    # Sufficient damage while sitting or hovering forces Takeoff. A brief
+    # coral pulse makes that external trigger explicit in the animation.
+    for pulse_index in range(5):
+        frames.append(DragonFrame(
+            np.zeros(2), 'sitting_flaming', len(alive), None, None,
+            alive_crystals=tuple(sorted(alive)),
+            breath_center=np.array([5.0, 0.0]),
+            breath_radius=5.0,
+            breath_alpha=0.24,
+            breath_kind='sitting_flame',
+            damage_pulse=(pulse_index + 1) / 5.0,
+        ))
 
     takeoff_route = shortest_path(20, 8, crystals_alive=len(alive))
     append_curve(

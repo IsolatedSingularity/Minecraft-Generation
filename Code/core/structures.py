@@ -134,7 +134,7 @@ NETHER_RUINED_PORTAL = StructureConfig(
 )
 END_CITY = StructureConfig(
     'end_city', END_CITY_SPACING, END_CITY_SEPARATION,
-    END_CITY_SALT, uniform=True,
+    END_CITY_SALT,
 )
 
 

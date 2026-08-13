@@ -35,9 +35,9 @@ Real-time simulation of dragon behavior with:
 - Source-shaped central-island projection with exact spike footprints
 - Graph-based navigation expanded exclusively through legal weighted edges
 - Reduced top-down steering with source-derived yaw clamp, turn momentum, acceleration, and velocity retention
-- Colour-treated raster dragon plus audited strafing-fireball and sitting-breath effects
+- Enlarged, phase-coloured raster dragon plus audited fireball, growing breath, and damage-triggered Takeoff effects
 - Compact phase ovals with an explicit next-holding-path landing roll and polished crystal HUD
-- A 1440 x 810, 240-route legal-edge ensemble with synchronized batches, stable final hotspots, viridis frequency encoding, and a three-second hold
+- A crisp 240-route legal-edge ensemble with synchronized batches, stable final hotspots, and fixed min-to-max viridis frequency encoding
 
 ```python
 class EnderDragonAI:
@@ -52,10 +52,10 @@ class EnderDragonAI:
 **Fixed-Seed End-City Qualification Visualization**
 
 - Two equal map panels with continuous projected outer-island footprints
-- Exact 20 by 20 chunk placement regions and uniform 9 by 9 candidate windows
+- Exact 20 by 20 chunk placement regions and center-biased 9 by 9 candidate windows
 - Exact deterministic rotation, four-sample geometry, minimum, and height-60 gate
 - Viridis heatmap of the documented modeled `WORLD_SURFACE_WG` height field
-- Failed candidates, symbolic qualified ship glyphs, and a four-sample diagnostic inset
+- Failed candidates, symbolic qualified ship glyphs, and visible map legends
 
 **Output**: `Plots/end_structure_generation.png`
 
@@ -69,26 +69,26 @@ The large panel evaluates the exact signed 32-bit End overflow mask from -6,000,
 #### structure_placement.py
 **Java 1.16.1 Overworld Candidate Animation**
 
-The generator shows every in-bounds random-spread candidate across an approximately 912 x 912 chunk view:
+The generator shows every in-bounds random-spread candidate across a broad chunk view:
 
 - Eleven structure families with their own spacing, separation, salt, and offset distribution
 - Exact Java-compatible candidate rolls and direct pillager-outpost gates
 - Source-informed terrain used only as context, never as a fabricated biome filter
-- Fixed 192 x 192 chunk detail inset plus active region and candidate window
+- Fixed detail inset plus active region and candidate window
 
 **Output**: Plots/structure_placement.gif
 
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Shows the exact thirteen-status order and source-required terminal dependency rings inside a 101 x 101 terrain overview. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. The explanatory wave reveals outward, and a complete 21 x 21 detail inset preserves every dependency ring. Timing and terrain remain explicitly modeled context.
+Shows an illustrative radial request front across a broad world view beside the exact thirteen-status order and source-required 21 x 21 terminal dependency footprint. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Timing and terrain remain explicitly modeled context.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows every exact candidate across a 3,169 x 3,169 chunk view: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The active inset preserves exact local grids and later biome-gate labels.
+Shows every exact candidate inside the displayed frame: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The wider active inset preserves exact local grids and later biome-gate labels.
 
 **Output**: `Plots/multi_structure_generation.gif`
 
