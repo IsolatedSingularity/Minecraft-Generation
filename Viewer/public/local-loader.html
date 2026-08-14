@@ -18,8 +18,14 @@
     .quick button { padding: 4px 7px; color: #bdc6bf; font-size: 11px; }
     button:disabled { opacity: .5; }
     #status { font: 12px ui-monospace, monospace; color: #b7c9ff; white-space: pre-wrap; }
-    main { min-height: 0; }
+    main { position: relative; min-height: 0; }
     iframe { width: 100%; height: 100%; border: 0; display: block; }
+    main:not(.assets-ready) iframe { visibility: hidden; }
+    .asset-gate { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 24px; background: #121416; text-align: center; }
+    .asset-gate div { max-width: 620px; }
+    .asset-gate strong { display: block; margin-bottom: 8px; font-size: 20px; }
+    .asset-gate p { margin: 0; color: #aeb6b1; line-height: 1.55; }
+    main.assets-ready .asset-gate { display: none; }
     .hint { font-size: 12px; color: #aaa; }
   </style>
 </head>
@@ -55,7 +61,15 @@
   </div>
   <div id="status">Waiting for embedded viewer…</div>
 </header>
-<main><iframe id="viewer" title="Mouse-draggable Minecraft structure renderer" src="./?manual"></iframe></main>
+<main id="viewer-shell">
+  <div class="asset-gate">
+    <div>
+      <strong>Load Minecraft Java 1.16.1 assets first</strong>
+      <p>Choose the 1.16.1 client JAR above, then select <b>Load sources</b>. Browser security prevents this public page from reading game files automatically; the selected file stays in this tab and is never uploaded.</p>
+    </div>
+  </div>
+  <iframe id="viewer" title="Mouse-draggable Minecraft structure renderer" src="./?manual"></iframe>
+</main>
 <script type="module">
   const frame = document.querySelector('#viewer')
   const base = document.querySelector('#base')
@@ -65,6 +79,7 @@
   const structures = document.querySelector('#structures')
   const show = document.querySelector('#show')
   const status = document.querySelector('#status')
+  const viewerShell = document.querySelector('#viewer-shell')
 
   let nextId = 0
   const pending = new Map()
@@ -116,7 +131,10 @@
     setStatus(`${names.length} structures indexed; ${found.length} match${found.length === names.length ? '' : ' filter'}.`)
   }
 
-  base.addEventListener('change', () => { load.disabled = !(ready && base.files.length) })
+  base.addEventListener('change', () => {
+    viewerShell.classList.remove('assets-ready')
+    load.disabled = !(ready && base.files.length)
+  })
   filter.addEventListener('input', renderNames)
   filter.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !show.disabled) show.click()
@@ -133,6 +151,7 @@
       load.disabled = true
       filter.disabled = true
       show.disabled = true
+      viewerShell.classList.remove('assets-ready')
       setStatus('Reading local files…')
       const baseBuf = await fileBytes(base.files[0])
       const packEntries = []
@@ -146,6 +165,7 @@
       await send('loadPacks', { base: baseBuf, packs: packEntries }, transfer)
       const r = await send('listStructures')
       names = (r.names || []).slice().sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
+      viewerShell.classList.add('assets-ready')
       filter.disabled = false
       renderNames()
     } catch (err) {

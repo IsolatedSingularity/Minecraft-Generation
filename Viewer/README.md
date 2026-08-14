@@ -66,6 +66,8 @@ npm run dev -- --host 127.0.0.1
 - Switch between Overworld, Nether, and End.
 - Toggle biome tiles, terrain shading, the chunk grid, viability filtering, and
   individual structure families.
+- Structure overlays start disabled so the initial map is uncluttered; use
+  **select** or enable only the families you want.
 - Hover the map to inspect the exact biome ID and open the biome legend to see
   Cubiomes' full palette, including distinct dark and deep ocean colors.
 - Enter exact X/Z coordinates and select **Go**.
@@ -78,6 +80,8 @@ npm run dev -- --host 127.0.0.1
   pan.
 - Search for a template or use a structure-family button, then choose **Show
   structure**.
+- The public viewer keeps the 3D catalog covered until the selected 1.16.1
+  client JAR has finished loading, preventing model-less empty renders.
 - For procedural fortress, stronghold, village, mansion, and End City entries,
   use the viewer's **Level** and **Re-roll** controls to grow and regenerate the
   multi-piece assembly. The bundled fortress and stronghold piece rules are the

@@ -21,7 +21,7 @@ import { biomeName, biomesForDimension, DIMENSIONS, STRUCTURES } from "./biomes.
 const WORLD_LIMIT = 33_554_432
 const TILE_SIZE = 256
 const RESOLUTIONS = [256, 64, 16, 4, 1]
-const DEFAULT_TYPES = new Set(["village", "ruined_portal", "fortress", "bastion", "stronghold"])
+const DEFAULT_TYPES = new Set()
 
 const elements = Object.fromEntries([
   "seed-form", "seed", "dimension", "biomes-toggle", "terrain-toggle", "grid-toggle",
@@ -70,7 +70,9 @@ function parseHash() {
     x: Number(values.get("x")) || 0,
     z: Number(values.get("z")) || 0,
     resolution: RESOLUTIONS.includes(Number(values.get("r"))) ? Number(values.get("r")) : 16,
-    selected: selected ? new Set(selected.split(",")) : DEFAULT_TYPES
+    selected: values.has("layers")
+      ? new Set(selected.split(",").filter(Boolean))
+      : new Set(DEFAULT_TYPES)
   }
 }
 
@@ -322,6 +324,12 @@ async function updateStructures() {
 
 function refreshWorld() {
   structureCache.clear()
+  terrainSource.setKey([
+    seed,
+    elements.dimension.value,
+    elements["biomes-toggle"].checked ? 1 : 0,
+    elements["terrain-toggle"].checked ? 1 : 0
+  ].join(":"))
   terrainSource.refresh()
   updateStructures()
   updateGrid()
