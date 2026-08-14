@@ -364,3 +364,49 @@ Isn't it?
 ```
 
 </details>
+
+<details open>
+<summary><strong>Interactive Java 1.16.1 Viewers</strong></summary>
+
+## Interactive Java 1.16.1 Viewers
+
+The repository now includes two local, mouse-interactive browser tools. GitHub
+README files cannot execute JavaScript directly, so these previews link to the
+one-command local launcher and accuracy notes in
+[`Viewer/README.md`](Viewer/README.md).
+
+<table>
+<tr>
+<td width="50%">
+
+### Seed Atlas
+
+[![Interactive Java 1.16.1 seed map](Viewer/previews/seed-map.png)](Viewer/README.md#seed-atlas)
+
+Pan and zoom across seed-accurate Cubiomes biome fields, enable lightweight
+terrain shading, change dimensions, and overlay major structure candidates.
+
+</td>
+<td width="50%">
+
+### 3D Structure Viewer
+
+[![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](Viewer/README.md#3d-structures)
+
+Load the local 1.16.1 client JAR, search hundreds of canonical templates, and
+drag to orbit textured structures without sending game files anywhere.
+
+</td>
+</tr>
+</table>
+
+From the repository root:
+
+```powershell
+.\Viewer\start.ps1
+```
+
+Then open `http://127.0.0.1:5173/seed-map.html` or
+`http://127.0.0.1:5173/local-loader.html`.
+
+</details>

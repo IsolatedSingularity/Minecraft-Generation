@@ -1,0 +1,2011 @@
+import { reactive, readonly, shallowRef, watch } from "vue"
+import * as THREE from "three"
+import { loadLibrary } from "../lib.js"
+import { usePacks } from "./usePacks.js"
+import { useScene } from "./useScene.js"
+import { useSlicers } from "./useSlicers.js"
+import { useLock } from "./useLock.js"
+import { yieldTask } from "../yield.js"
+import { exportScene } from "../export.js"
+import { makeSignTexts, plainText } from "../signs.js"
+import { JIGSAW, parseState } from "../transforms.js"
+import { isInspectable, readTrialSpawnerConfig } from "../loot.js"
+import { getFont, measure, drawText } from "../mcfont.js"
+import { drawFakeMap, prepareFakeMapArea, randomiseFakeMapWorld } from "../mapgen.js"
+import { useWorld } from "./useWorld.js"
+import { useBooks } from "./useBooks.js"
+import { minimal } from "../minimal.js"
+import { loadStateCache, saveStateCache } from "../stateCache.js"
+import { SOFT_BLOCKS, HARD_BLOCKS, bellRingDir } from "../streamShared.js"
+
+// stateful singleton (live scene root, handles, watchers): hot updates must
+// full-reload, never re-execute alongside the old instance
+if (import.meta.hot) import.meta.hot.decline()
+
+const packs = usePacks()
+const sceneApi = useScene()
+const { lock } = useLock()
+
+// structure_void deliberately not air here: unlike the game we render it as
+// its particle icon (when technical blocks are on) so it can be seen
+const AIR = /(^|:)(air|cave_air|void_air)$/
+
+const LEGACY_RENAMES = {
+  grass: "short_grass",
+  grass_path: "dirt_path",
+  chain: "iron_chain",
+  sign: "oak_sign",
+  wall_sign: "oak_wall_sign"
+}
+let legacyNames = new Map()
+
+async function resolveLegacyNames(structure, lib, assets) {
+  legacyNames = new Map()
+  for (const entry of structure.palette) {
+    const raw = entry?.Name
+    if (!raw || legacyNames.has(raw)) continue
+    const stripped = raw.replace("minecraft:", "")
+    const renamed = LEGACY_RENAMES[stripped]
+    if (!renamed) continue
+    legacyNames.set(raw, await lib.readFile(`assets/minecraft/blockstates/${stripped}.json`, assets) ? raw : renamed)
+  }
+}
+
+const SB = /(^|:)structure_block$/
+function stripStructureBlocks(structure) {
+  function isTech(b) {
+    const n = structure.palette[b.state]?.Name || ""
+    return JIGSAW.test(n) || SB.test(n)
+  }
+  if (!structure.blocks.some(isTech)) return structure
+  const palette = structure.palette.slice()
+  const idx = new Map()
+  function stateFor(e) {
+    const key = e.Name + "|" + JSON.stringify(e.Properties ?? null)
+    let i = idx.get(key)
+    if (i === undefined) {
+      i = palette.findIndex(pe => pe.Name === e.Name && sameProps(pe.Properties, e.Properties))
+      if (i < 0) { i = palette.length; palette.push(e) }
+      idx.set(key, i)
+    }
+    return i
+  }
+  const blocks = []
+  for (const b of structure.blocks) {
+    if (!isTech(b)) { blocks.push(b); continue }
+    if (JIGSAW.test(structure.palette[b.state].Name)) {
+      const fs = parseState(typeof b.nbt?.final_state === "string" ? b.nbt.final_state : "")
+      if (!AIR.test(fs.Name)) blocks.push({ pos: b.pos, state: stateFor(fs) })
+    }
+  }
+  return { ...structure, palette, blocks }
+}
+
+// walls went from boolean north/south/east/west to none/low/tall in 1.16
+function fixLegacyProps(name, props) {
+  if (!props) return props
+  if (name.endsWith("_wall")) {
+    const p = { ...props }
+    for (const d of ["north", "south", "east", "west"]) {
+      if (p[d] === "true") p[d] = "low"
+      else if (p[d] === "false") p[d] = "none"
+    }
+    return p
+  }
+  return props
+}
+
+async function remapLoaderStates(structure, lib, assets) {
+  const loaders = lib.ModelLoader?.list() ?? []
+  if (!loaders.length) return
+  const byPos = new Map()
+  for (const b of structure.blocks) byPos.set(b.pos.join(","), b)
+  const matched = new Map() // stateIdx -> resolved models or null
+  async function matchedModels(stateIdx) {
+    if (matched.has(stateIdx)) return matched.get(stateIdx)
+    let result = null
+    const e = structure.palette[stateIdx]
+    if (e?.Name && !e.__fluidKey) {
+      try {
+        const models = await lib.parseBlockstate(assets, e.Name, { data: e.Properties ?? {}, ignoreAtlases: true })
+        const datas = []
+        for (const m of models) datas.push(await lib.resolveModelData(assets, m))
+        if (datas.some(d => loaders.some(l => l.match?.(d)))) result = datas
+      } catch {}
+    }
+    matched.set(stateIdx, result)
+    return result
+  }
+  const byKey = new Map()
+  structure.palette.forEach((e, i) => { if (e?.__loaderKey) byKey.set(e.__loaderKey, i) })
+  for (const b of structure.blocks) {
+    const datas = await matchedModels(b.state)
+    if (!datas) continue
+    const e = structure.palette[b.state]
+    const [bx, by, bz] = b.pos
+    const neighbors = {}
+    for (const [dir, dx, dy, dz] of [["north", 0, 0, -1], ["south", 0, 0, 1], ["west", -1, 0, 0], ["east", 1, 0, 0], ["up", 0, 1, 0], ["down", 0, -1, 0]]) {
+      const nb = byPos.get((bx + dx) + "," + (by + dy) + "," + (bz + dz))
+      const ne = nb && structure.palette[nb.state]
+      if (ne?.Name) neighbors[dir] = { id: ne.Name, ...(ne.Properties ?? {}) }
+    }
+    const block = { id: e.Name, properties: e.Properties ?? {}, neighbors, nbt: b.nbt ?? null }
+    const variant = datas.map(d => lib.ModelLoader.variantKey(d, block) ?? "").join("/")
+    const key = `${b.state}|${variant}|${JSON.stringify(b.nbt ?? null)}`
+    let idx = byKey.get(key)
+    if (idx === undefined) {
+      idx = structure.palette.length
+      const entry = { Name: e.Name }
+      if (e.Properties) entry.Properties = e.Properties
+      entry.__block = block
+      entry.__loaderKey = key
+      structure.palette.push(entry)
+      byKey.set(key, idx)
+    }
+    b.state = idx
+  }
+}
+
+export const NOON = 6000
+
+const state = reactive({
+  lighting: "world",
+  fullbright: false,
+  daytime: NOON,
+  dimension: "overworld",
+  hideStructureBlocks: localStorage.getItem("hideStructureBlocks") !== "false",
+  technical: minimal ? true : localStorage.getItem("technicalBlocks") !== "false",
+  hasStructureBlocks: false,
+  manual: false,
+  building: false,
+  status: "",
+  progress: null, // { phase: "build" | "optimise", done, total } while working
+  info: null,
+  warn: null // { seconds } while a slow-build confirmation is showing
+})
+
+const WARN_MS = 10000
+const PERF_KEY = "buildPerf2" // v2: rates are per non-air block
+
+function loadPerf() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PERF_KEY))
+    return typeof p?.b === "number" && typeof p?.o === "number" ? p : null
+  } catch { return null }
+}
+
+function savePerf(b, o) {
+  const prev = loadPerf()
+  const mix = (a, x) => a == null ? x : a * 0.5 + x * 0.5
+  try { localStorage.setItem(PERF_KEY, JSON.stringify({ b: mix(prev?.b, b), o: mix(prev?.o, o) })) } catch {}
+}
+
+// ?force skips every size and duration warning dialog
+const FORCE = typeof location !== "undefined" && new URLSearchParams(location.search).has("force")
+
+let warnResolve = null
+function askWarn(ms) {
+  if (FORCE) return Promise.resolve(true)
+  state.warn = { seconds: Math.max(Math.round(ms / 1000), 1) }
+  return new Promise(r => { warnResolve = r })
+}
+
+const RESTORE_BLOCKS = 24000
+let restoreGate = false, restoreGateAsked = false
+function setRestoreGate(on) {
+  restoreGate = on
+  if (on) restoreGateAsked = false
+}
+async function restoreGateCheck(blocks, selection = false, approx = false) {
+  if (FORCE || !restoreGate || restoreGateAsked || blocks <= RESTORE_BLOCKS) return true
+  restoreGateAsked = true
+  state.warn = { blocks, selection, approx }
+  return new Promise(r => { warnResolve = r })
+}
+
+function answerWarn(ok) {
+  state.warn = null
+  warnResolve?.(ok)
+  warnResolve = null
+}
+
+// seeded into template userData so the library shares one live uniform: daytime changes re-light with no rebuild
+const daytimeUniform = { value: NOON }
+let clockTimer = null
+watch(() => state.daytime, v => {
+  daytimeUniform.value = v
+  if (sceneHandle?.group.userData.daytime) sceneHandle.group.userData.daytime.value = v
+  clearTimeout(clockTimer)
+  clockTimer = setTimeout(updateClocks, 150)
+})
+
+let savedDaytime = NOON
+watch(() => state.fullbright, on => {
+  if (on) {
+    savedDaytime = state.daytime
+    state.daytime = NOON
+  } else {
+    state.daytime = savedDaytime
+  }
+})
+
+const OPENABLE = /(^|:)([a-z_]+_)?(door|trapdoor|fence_gate)$/
+const isDoorName = name => /(^|:)([a-z_]+_)?door$/.test(name) && !/trapdoor$/.test(name)
+const isOpenable = e => !!(e?.Properties && "open" in e.Properties && OPENABLE.test(e.Name || ""))
+function sameProps(a, b) {
+  const ka = Object.keys(a || {})
+  if (ka.length !== Object.keys(b || {}).length) return false
+  return ka.every(k => a[k] === b[k])
+}
+
+const current = shallowRef(null)
+let source = null // the structure as loaded/combined; current may be a display strip of it
+let root = null
+let sceneHandle = null
+let inputIdxOf = null // structure block index -> createScene input index, -1 for door/loader/air
+let nonSolidPalette = new Set() // handle palette indices with all-plane models
+if (typeof window !== "undefined") window.__vroot = () => root
+let animator = null
+let templates = null
+let nonSolid = new Set()
+let sceneLight = null
+let entityMarkers = [] // root-local coords
+let markerTextures = []
+let pendingMarkers = []
+let doorByCell = new Map()
+let blockMap = null, blockMapFor = null
+
+// the full build kept hidden during slice display, so slicers can swap back without a rebuild
+let fullBundle = null
+let rootSliced = false
+
+function stateWithOpen(structure, stateIdx, open) {
+  const e = structure.palette[stateIdx], props = { ...e.Properties, open }
+  let idx = structure.palette.findIndex(pe => pe.Name === e.Name && sameProps(pe.Properties, props))
+  if (idx < 0) {
+    idx = structure.palette.length
+    structure.palette.push({ Name: e.Name, Properties: props })
+  }
+  return idx
+}
+
+function cellIndex() {
+  const structure = current.value
+  if (blockMapFor !== structure) {
+    blockMap = new Map()
+    structure.blocks.forEach((b, i) => blockMap.set(b.pos[0] + "," + b.pos[1] + "," + b.pos[2], i))
+    blockMapFor = structure
+  }
+  return blockMap
+}
+
+// geometry is centred on i*16: round, not floor, else every block straddles two cells
+const cellOf = (wx, wy, wz) => [Math.round((wx - root.position.x) / 16), Math.round((wy - root.position.y) / 16), Math.round((wz - root.position.z) / 16)]
+
+function blockAt(wx, wy, wz) {
+  const structure = current.value
+  if (!structure || !root) return null
+  const [bx, by, bz] = cellOf(wx, wy, wz)
+  const i = cellIndex().get(bx + "," + by + "," + bz)
+  return i == null ? null : structure.palette[structure.blocks[i].state]
+}
+
+// rotation-only state variants share one unrotated template, the rotation folded
+// into each instance matrix; hidden instances collapse to zero scale
+let doorSlots = new Map() // canonKey -> { count, meshes: InstancedMesh[] }
+let stateRender = new Map() // stateIdx -> { key, rot: Matrix4 }
+let canonDoorTmpl = new Map() // canonKey -> template Group
+
+const _dm = new THREE.Matrix4()
+const _dzero = new THREE.Matrix4().makeScale(0, 0, 0)
+
+
+function setDoorInstance(stateIdx, slot, pos, visible) {
+  const r = stateRender.get(stateIdx)
+  const s = r && doorSlots.get(r.key)
+  if (!s) return
+  for (const m of s.meshes) {
+    const idx = m.ids ? m.ids[slot] : m.offset + slot
+    if (visible) m.im.setMatrixAt(idx, _dm.makeTranslation(pos[0] * 16, pos[1] * 16, pos[2] * 16).multiply(r.rot).multiply(m.base))
+    else m.im.setMatrixAt(idx, _dzero)
+    if (m.im.instanceMatrix) m.im.instanceMatrix.needsUpdate = true
+  }
+}
+
+// cube templates carry one geometry group per face even when every face shares
+// a material, and three.js draws once per group; rebucketing the index by
+// material turns 6 draws into 1 (invisible dummy faces drop out entirely)
+function mergeInstanceSource(geometry, material) {
+  const mats = [].concat(material)
+  if (!geometry.index || !geometry.groups?.length || mats.length < 2) return { geometry, material }
+  const keep = new Map()
+  for (const g of geometry.groups) {
+    const m = mats[g.materialIndex] ?? mats[0]
+    if (!m || m.visible === false) continue
+    let list = keep.get(m)
+    if (!list) keep.set(m, list = [])
+    list.push(g)
+  }
+  if (!keep.size) return null
+  const src = geometry.index.array
+  let total = 0
+  for (const list of keep.values()) for (const g of list) total += Math.min(g.count, src.length - g.start)
+  const index = new src.constructor(total)
+  const geo = new THREE.BufferGeometry()
+  for (const name in geometry.attributes) geo.setAttribute(name, geometry.attributes[name])
+  let offset = 0
+  const materials = []
+  for (const [m, list] of keep) {
+    const start = offset
+    for (const g of list) {
+      const count = Math.min(g.count, src.length - g.start)
+      index.set(src.subarray(g.start, g.start + count), offset)
+      offset += count
+    }
+    if (keep.size > 1) geo.addGroup(start, offset - start, materials.length)
+    materials.push(m)
+  }
+  geo.setIndex(new THREE.BufferAttribute(index, 1))
+  return { geometry: geo, material: materials.length > 1 ? materials : materials[0] }
+}
+
+function collapseGroupDraws(obj) {
+  obj.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh) return
+    const merged = mergeInstanceSource(o.geometry, o.material)
+    if (merged) {
+      o.geometry = merged.geometry
+      o.material = merged.material
+    }
+  })
+  return obj
+}
+
+const doorGeoHashes = new WeakMap()
+function doorGeoHash(geo) {
+  let h = doorGeoHashes.get(geo)
+  if (h !== undefined) return h
+  h = 0x811c9dc5
+  for (const name of ["position", "normal", "uv"]) {
+    const arr = geo.attributes[name]?.array
+    if (!arr) continue
+    const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)
+    for (let i = 0; i < bytes.length; i++) h = (h ^ bytes[i]) * 0x01000193 >>> 0
+  }
+  const idx = geo.index?.array
+  if (idx) for (let i = 0; i < idx.length; i++) h = (h ^ idx[i]) * 0x01000193 >>> 0
+  doorGeoHashes.set(geo, h)
+  return h
+}
+
+function attachDoors(entries) {
+  const structure = current.value
+  doorByCell = new Map()
+  doorSlots = new Map()
+  if (!entries.length) return
+  function slotFor(stateIdx) {
+    const key = stateRender.get(stateIdx).key
+    let s = doorSlots.get(key)
+    if (!s) doorSlots.set(key, s = { count: 0, meshes: [] })
+    return s.count++
+  }
+  for (const e of entries) {
+    e.openSlot = slotFor(e.openIdx)
+    e.closedSlot = slotFor(e.closedIdx)
+  }
+
+  // wood variants share model geometry and differ only by texture, so their
+  // textures pack into one atlas addressed by a per-instance uv rect, and
+  // every state with the same shape lands in one instanced draw
+  const atlasable = new Map(), legacy = new Map()
+  for (const [key, s] of doorSlots) {
+    const tmpl = canonDoorTmpl.get(key)
+    if (!tmpl) continue
+    tmpl.updateMatrixWorld(true)
+    const list = []
+    let ok = true
+    tmpl.traverse(o => {
+      if (!o.isMesh) return
+      const mats = [].concat(o.material)
+      const textured = mats.filter(m => m.uniforms?.map?.value)
+      const tex = textured[0]?.uniforms.map.value
+      if (!tex?.image?.width || !textured.every(m => m.uniforms.map.value === tex)) ok = false
+      list.push({ geometry: o.geometry, material: o.material, mats, tex, base: o.matrixWorld.clone() })
+    })
+    ;(ok && list.length ? atlasable : legacy).set(key, list)
+  }
+
+  for (const [key, list] of legacy) {
+    const s = doorSlots.get(key)
+    for (const m of list) {
+      const merged = mergeInstanceSource(m.geometry, m.material)
+      if (!merged) continue
+      const im = new THREE.InstancedMesh(merged.geometry, merged.material, s.count)
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      // geometry bounds would frustum-cull the spread instances wrongly
+      im.frustumCulled = false
+      for (let i = 0; i < s.count; i++) im.setMatrixAt(i, _dzero)
+      root.add(im)
+      s.meshes.push({ im, base: m.base, offset: 0 })
+    }
+  }
+
+  if (atlasable.size) {
+    const texList = [], texIndex = new Map()
+    for (const list of atlasable.values()) for (const m of list) {
+      if (!texIndex.has(m.tex)) { texIndex.set(m.tex, texList.length); texList.push(m.tex) }
+    }
+    const cols = Math.ceil(Math.sqrt(texList.length))
+    const tileW = Math.max(...texList.map(t => t.image.width))
+    const tileH = Math.max(...texList.map(t => t.image.height))
+    const atlas = document.createElement("canvas")
+    atlas.width = cols * tileW
+    atlas.height = Math.ceil(texList.length / cols) * tileH
+    const ctx = atlas.getContext("2d")
+    const rects = texList.map((t, i) => {
+      const x = (i % cols) * tileW, y = ((i / cols) | 0) * tileH
+      ctx.drawImage(t.image, x, y)
+      return [x / atlas.width, 1 - (y + t.image.height) / atlas.height, t.image.width / atlas.width, t.image.height / atlas.height]
+    })
+    const atlasTex = new THREE.CanvasTexture(atlas)
+    atlasTex.colorSpace = THREE.NoColorSpace
+    atlasTex.magFilter = atlasTex.minFilter = THREE.NearestFilter
+    atlasTex.generateMipmaps = false
+    markerTextures.push(atlasTex)
+    // every atlasable door goes into one BatchedMesh: per-slot geometry copies
+    // with the atlas rect baked into the uvs, so no per-instance attribute or
+    // shader patch is needed and all doors render as a single draw
+    const variantCache = new Map()
+    const parts = [], mixed = []
+    let instances = 0, vertCount = 0, indexCount = 0
+    for (const [key, list] of atlasable) {
+      const s = doorSlots.get(key)
+      for (const m of list) {
+        const merged = mergeInstanceSource(m.geometry, m.material)
+        if (!merged) continue
+        if (Array.isArray(merged.material)) { mixed.push({ s, base: m.base, merged }); continue }
+        const rect = rects[texIndex.get(m.tex)]
+        const vk = doorGeoHash(merged.geometry) + "|" + rect.join(",")
+        let geo = variantCache.get(vk)
+        if (!geo) {
+          geo = new THREE.BufferGeometry()
+          for (const [name, attr] of Object.entries(merged.geometry.attributes)) geo.setAttribute(name, attr)
+          if (merged.geometry.index) geo.setIndex(merged.geometry.index)
+          const src = merged.geometry.attributes.uv
+          const uv = new Float32Array(src.count * 2)
+          for (let i = 0; i < src.count; i++) {
+            uv[i * 2] = src.getX(i) * rect[2] + rect[0]
+            uv[i * 2 + 1] = src.getY(i) * rect[3] + rect[1]
+          }
+          geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2))
+          variantCache.set(vk, geo)
+        }
+        parts.push({ s, base: m.base, geometry: geo, count: s.count, srcMat: merged.material })
+        instances += s.count
+        vertCount += geo.attributes.position.count * s.count
+        indexCount += (geo.index ? geo.index.count : geo.attributes.position.count) * s.count
+      }
+    }
+    if (parts.length) {
+      const src = parts[0].srcMat
+      const material = src.clone()
+      // three's clone deep-copies uniform textures (a duplicate light volume
+      // uploaded per build); share the source entries and swap only the map
+      if (material.uniforms) material.uniforms = { ...src.uniforms, map: { value: atlasTex } }
+      else material.map = atlasTex
+      const bm = new THREE.BatchedMesh(instances, vertCount, indexCount, material)
+      bm.frustumCulled = false
+      bm.perObjectFrustumCulled = false
+      bm.sortObjects = false
+      const batchSlots = []
+      for (const p of parts) {
+        const ids = []
+        for (let i = 0; i < p.count; i++) {
+          const id = bm.addGeometry(p.geometry)
+          ids.push(id)
+          bm.setMatrixAt(id, _dzero)
+          batchSlots.push({ id, geometry: p.geometry })
+        }
+        p.s.meshes.push({ im: bm, ids, base: p.base })
+      }
+      bm.userData.batchSlots = batchSlots
+      root.add(bm)
+    }
+    for (const f of mixed) {
+      const im = new THREE.InstancedMesh(f.merged.geometry, f.merged.material, f.s.count)
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      im.frustumCulled = false
+      for (let i = 0; i < f.s.count; i++) im.setMatrixAt(i, _dzero)
+      root.add(im)
+      f.s.meshes.push({ im, base: f.base, offset: 0 })
+    }
+  }
+  for (const e of entries) {
+    const open = structure.palette[e.b.state].Properties.open === "true"
+    setDoorInstance(e.openIdx, e.openSlot, e.b.pos, open)
+    setDoorInstance(e.closedIdx, e.closedSlot, e.b.pos, !open)
+    doorByCell.set(e.b.pos.join(","), { b: e.b, openIdx: e.openIdx, closedIdx: e.closedIdx, openSlot: e.openSlot, closedSlot: e.closedSlot, pair: null })
+  }
+  for (const reg of doorByCell.values()) {
+    if (!isDoorName(structure.palette[reg.b.state].Name)) continue
+    const [x, y, z] = reg.b.pos
+    reg.pair = doorByCell.get(x + "," + (y + 1) + "," + z) || doorByCell.get(x + "," + (y - 1) + "," + z) || null
+  }
+}
+
+// yaw snaps to the nearest cardinal like the game's Direction.fromYRot
+const ENTITY_BOX = 14
+
+// egg-less mobs borrow a lookalike's egg
+const EGG_ALIASES = { giant: "zombie", evoker_fangs: "evoker", llama_spit: "llama", wither_skull: "wither", shulker_bullet: "shulker" }
+
+const STAND_INS = { item: "stick" }
+
+async function entityMarkerCanvas(lib, assets, name, item) {
+  const c = document.createElement("canvas")
+  c.width = 64
+  c.height = 64
+  let drawn = false
+  if (item?.id) {
+    try {
+      await lib.renderItem({ id: item.id, components: item.components ?? {}, assets, width: 64, height: 64, canvas: c })
+      drawn = true
+    } catch {}
+  }
+  if (!drawn && name === "mannequin") {
+    try {
+      const buf = await lib.readFile("assets/minecraft/textures/entity/player/wide/steve.png", assets)
+      if (buf) {
+        const bmp = await createImageBitmap(new Blob([buf]))
+        const ctx = c.getContext("2d")
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(bmp, 8, 8, 8, 8, 0, 0, 64, 64)
+        ctx.drawImage(bmp, 40, 8, 8, 8, 0, 0, 64, 64)
+        drawn = true
+      }
+    } catch {}
+  }
+  const fallbacks = STAND_INS[name] ? [STAND_INS[name]] : [name + "_spawn_egg", (EGG_ALIASES[name] ?? name) + "_spawn_egg", name]
+  if (!drawn) for (const item of fallbacks) {
+    try {
+      if (!await lib.readFile(`assets/minecraft/items/${item}.json`, assets)) continue
+      await lib.renderItem({ id: item, assets, width: 64, height: 64, canvas: c })
+      drawn = true
+      break
+    } catch {}
+  }
+  if (!drawn) {
+    try {
+      const font = await getFont()
+      const ctx = c.getContext("2d")
+      const s = 6
+      const x = Math.round((64 - measure(font, "?") * s) / 2)
+      const y = Math.round((64 - font.ch * s) / 2)
+      drawText(ctx, font, "?", x + s, y + s, { scale: s, color: "#3f3f3f" })
+      drawText(ctx, font, "?", x, y, { scale: s, color: "#ffffff" })
+    } catch { return null }
+  }
+  return c
+}
+
+async function attachEntityTag(nbt, wx, topY, wz) {
+  const label = plainText(nbt?.CustomName ?? "")
+  if (!label) return
+  try {
+    const font = await getFont()
+    const S = 4, pad = S * 2
+    const c = document.createElement("canvas")
+    c.width = Math.ceil(measure(font, label) * S) + pad * 2
+    c.height = font.ch * S + pad * 2
+    const ctx = c.getContext("2d")
+    ctx.fillStyle = "#00000059"
+    ctx.fillRect(0, 0, c.width, c.height)
+    drawText(ctx, font, label, pad, pad, { scale: S })
+    const H = 5, w = H * c.width / c.height
+    pendingMarkers.push({ canvas: c, x: wx, y: topY + 3 + H / 2, z: wz, w, h: H, blend: true })
+  } catch {}
+}
+
+const FRAME = /(^|:)(glow_)?item_frame$/
+const FACING6 = ["down", "up", "north", "south", "west", "east"]
+const FRAME_ROT = { south: [0, Math.PI], west: [0, Math.PI / 2], east: [0, -Math.PI / 2], up: [-Math.PI / 2, Math.PI], down: [Math.PI / 2, Math.PI] }
+const LIVE_ITEM = /(^|:)(compass|clock)$/
+
+
+function mapIdOf(it) {
+  const n = Number(it?.components?.["minecraft:map_id"] ?? it?.tag?.map)
+  return Number.isFinite(n) ? n : null
+}
+
+const COMPASS_2D = { south: 0, west: 1, north: 2, east: 3 }
+function compassValue(facing, rot) {
+  const corr = facing === "up" ? 90 : facing === "down" ? -90 : 0
+  const yDeg = 180 + (COMPASS_2D[facing] ?? -1) * 90 + rot * 45 + corr
+  return ((0.5 - yDeg / 360) % 1 + 1) % 1
+}
+
+function clockValue(daytime) {
+  const u = (((daytime - 6000) / 24000) % 1 + 1) % 1
+  let lo = 0, hi = 1
+  for (let i = 0; i < 24; i++) {
+    const s = (lo + hi) / 2
+    const x = 3 * s * (1 - s) * (1 - s) * 0.362 + 3 * s * s * (1 - s) * 0.638 + s * s * s
+    if (x < u) lo = s; else hi = s
+  }
+  const s = (lo + hi) / 2
+  return 3 * s * (1 - s) * (1 - s) * 0.241 + 3 * s * s * (1 - s) * 0.759 + s * s * s
+}
+
+let clockFrames = []
+let frameCtx = null
+let buildDim = "overworld"
+const lightingOpt = light => state.lighting === "world" ? { dimension: buildDim, light, daytime: state.daytime } : state.lighting
+async function updateClocks() {
+  if (!frameCtx || !clockFrames.length) return
+  const { lib, assets } = frameCtx
+  const v = clockValue(state.daytime)
+  for (const cf of clockFrames) {
+    if (!cf.holder) continue
+    const disp = cf.disp ?? { type: "fallback", display: "fixed" }
+    try {
+      const tmp = new THREE.Group()
+      tmp.userData.daytime = daytimeUniform
+      for (const m of await lib.parseItemDefinition(assets, cf.item, { data: { ...cf.components, "minecraft:time": v }, display: disp, ignoreAtlases: true })) {
+        const resolved = await lib.resolveModelData(assets, m)
+        await lib.loadModel(tmp, assets, resolved, { display: disp, lighting: lightingOpt(sceneLight), animate: false, ...(cf.glow ? { emission: 15 } : null) })
+      }
+      collapseGroupDraws(tmp)
+      cf.holder.clear()
+      for (const c of Array.from(tmp.children)) cf.holder.add(c)
+    } catch {}
+  }
+}
+
+const MAP_SAMPLE = {
+  north: (bx, by, bz, cx, cy) => [bx * 128 + 127 - cx, by * 128 + 127 - cy],
+  south: (bx, by, bz, cx, cy) => [bx * 128 + cx, by * 128 + 127 - cy],
+  east: (bx, by, bz, cx, cy) => [bz * 128 + 127 - cx, by * 128 + 127 - cy],
+  west: (bx, by, bz, cx, cy) => [bz * 128 + cx, by * 128 + 127 - cy],
+  up: (bx, by, bz, cx, cy) => [bx * 128 + cx, bz * 128 + cy],
+  down: (bx, by, bz, cx, cy) => [bx * 128 + cx, bz * 128 + 127 - cy]
+}
+
+let mapArtCache = new Map()
+
+async function mapArtFor(bx, by, bz, facing, id) {
+  const key = (id == null ? "p:" + bx + "," + by + "," + bz : id) + "|" + facing
+  let canvas = mapArtCache.get(key)
+  if (canvas) return canvas
+  canvas = document.createElement("canvas")
+  canvas.width = canvas.height = 128
+  await drawFakeMap(canvas, (cx, cy) => MAP_SAMPLE[facing](bx, by, bz, cx, cy), id)
+  mapArtCache.set(key, canvas)
+  return canvas
+}
+
+async function precomputeMapArt(structure, lib, assets) {
+  mapArtCache = new Map()
+  randomiseFakeMapWorld()
+  frameCtx = { lib, assets }
+  const jobs = []
+  const mb = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }
+  for (const e of structure.entities ?? []) {
+    if (typeof e.nbt?.id !== "string" || !FRAME.test(e.nbt.id)) continue
+    if (!/(^|:)filled_map$/.test(e.nbt.Item?.id ?? "")) continue
+    const facing = FACING6[Number(e.nbt.Facing ?? 3)] ?? "south"
+    const sample = MAP_SAMPLE[facing]
+    if (!sample) continue
+    const id = mapIdOf(e.nbt.Item)
+    if (id != null && useWorld().hasMap(id)) continue
+    const bx = Math.floor(e.pos[0]), by = Math.floor(e.pos[1]), bz = Math.floor(e.pos[2])
+    jobs.push({ bx, by, bz, facing, id })
+    for (const [cx, cy] of [[0, 0], [127, 127]]) {
+      const [u, v] = sample(bx, by, bz, cx, cy)
+      mb.x0 = Math.min(mb.x0, u); mb.x1 = Math.max(mb.x1, u)
+      mb.y0 = Math.min(mb.y0, v); mb.y1 = Math.max(mb.y1, v)
+    }
+  }
+  if (!jobs.length) return
+  if (!useWorld().state.active && mb.x1 - mb.x0 <= 4096 && mb.y1 - mb.y0 <= 4096) prepareFakeMapArea(mb.x0, mb.y0, mb.x1, mb.y1)
+  let done = 0
+  for (const j of jobs) {
+    await mapArtFor(j.bx, j.by, j.bz, j.facing, j.id)
+    done++
+    if (jobs.length > 1) {
+      state.status = `generating maps… ${Math.round(done / jobs.length * 100)}%`
+      state.progress = { phase: "maps", done, total: jobs.length }
+    }
+    if (done % 4 === 0) await yieldTask()
+  }
+  state.progress = null
+}
+
+async function attachEntities(structure, lib, assets) {
+  const groupCache = new Map()
+  const texCache = new Map()
+  const sprites = []
+  entityMarkers = []
+  pendingMarkers = []
+  clockFrames = []
+  for (const e of structure.entities ?? []) {
+    const id = e.nbt?.id
+    if (typeof id !== "string") continue
+    const [ns, name] = id.includes(":") ? id.split(":") : ["minecraft", id]
+    const frame = FRAME.test(id)
+    const glow = frame && id.includes("glow")
+    const yaw = Number(e.nbt.Rotation?.[0] ?? 0)
+    let facing = ["south", "west", "north", "east"][((Math.floor(yaw / 90 + 0.5) % 4) + 4) % 4]
+    if (frame) facing = FACING6[Number(e.nbt.Facing ?? 3)] ?? facing
+    const data = { facing }
+    for (const [k, v] of Object.entries(e.nbt)) if (typeof v === "string" && k !== "id") data[k] = v
+    const frameItem = frame ? e.nbt.Item?.id : null
+    const frameMap = typeof frameItem === "string" && /(^|:)filled_map$/.test(frameItem)
+    if (frameMap) data.map = "true"
+    const invisible = frame && Number(e.nbt.Invisible ?? 0) === 1
+    const key = id + "|" + JSON.stringify(data) + (frame ? `|${frameItem ?? ""}|${e.nbt.ItemRotation ?? 0}|${invisible ? 1 : 0}` : "")
+    let template = groupCache.get(key)
+    if (template === undefined) {
+      template = null
+      try {
+        let blockId = null
+        if (await lib.readFile(`assets/${ns}/blockstates/${name}.json`, assets)) blockId = id
+        else {
+          const coloured = `${typeof data.color === "string" ? data.color : "white"}_${name}`
+          if (await lib.readFile(`assets/${ns}/blockstates/${coloured}.json`, assets)) blockId = `${ns}:${coloured}`
+        }
+        if (blockId) {
+          const g = new THREE.Group()
+          g.userData.daytime = daytimeUniform
+          if (!frame) {
+            for (const model of await lib.parseBlockstate(assets, blockId, { data, ignoreAtlases: true })) {
+              const data = await lib.resolveModelData(assets, model)
+              await lib.loadModel(g, assets, data, { display: {}, lighting: lightingOpt(sceneLight), animate: false })
+            }
+          }
+          if (frame && typeof frameItem === "string" && !frameMap && LIVE_ITEM.test(frameItem)) {
+            try {
+              const disp = { type: "fallback", display: "fixed" }
+              const itemGroup = new THREE.Group()
+              itemGroup.userData.daytime = daytimeUniform
+              const itemData = { ...(e.nbt.Item.components ?? {}) }
+              if (/(^|:)compass$/.test(frameItem)) itemData["minecraft:compass"] = compassValue(facing, Number(e.nbt.ItemRotation ?? 0))
+              if (/(^|:)clock$/.test(frameItem)) itemData["minecraft:time"] = clockValue(state.daytime)
+              for (const m of await lib.parseItemDefinition(assets, frameItem, { data: itemData, display: disp, ignoreAtlases: true })) {
+                const resolved = await lib.resolveModelData(assets, m)
+                await lib.loadModel(itemGroup, assets, resolved, { display: disp, lighting: lightingOpt(sceneLight), animate: false, ...(glow ? { emission: 15 } : null) })
+              }
+              if (itemGroup.children.length) {
+                itemGroup.name = "frameItem"
+                itemGroup.position.z = invisible ? 8 : 7
+                itemGroup.scale.setScalar(0.5)
+                itemGroup.rotation.z = Number(e.nbt.ItemRotation ?? 0) * Math.PI / 4
+                g.add(itemGroup)
+              }
+            } catch {}
+          }
+          if (frame && FRAME_ROT[facing]) g.rotation.set(FRAME_ROT[facing][0], FRAME_ROT[facing][1], 0)
+          if (g.children.length || frame) template = collapseGroupDraws(g)
+        }
+      } catch {}
+      groupCache.set(key, template)
+    }
+    const wx = frame ? Math.floor(e.pos[0]) * 16 : e.pos[0] * 16 - 8
+    const wy = frame ? Math.floor(e.pos[1]) * 16 : e.pos[1] * 16
+    const wz = frame ? Math.floor(e.pos[2]) * 16 : e.pos[2] * 16 - 8
+    if (template) {
+      const g = groupCache.get(key).clone()
+      g.position.set(wx, wy, wz)
+      let box
+      if (frame) {
+        const half = frameMap ? 8 : 6
+        box = new THREE.Box3(new THREE.Vector3(-half, -half, invisible ? 7.8 : 7), new THREE.Vector3(half, half, 8))
+        g.updateMatrix()
+        box.applyMatrix4(g.matrix)
+      } else {
+        box = new THREE.Box3().setFromObject(g)
+      }
+      root.add(g)
+
+      if (frame && typeof frameItem === "string" && /(^|:)clock$/.test(frameItem)) {
+        clockFrames.push({ holder: g.getObjectByName("frameItem"), item: frameItem, components: e.nbt.Item.components ?? {}, glow })
+      }
+      const noBox = box.isEmpty()
+      entityMarkers.push(noBox
+        ? { stack: [e], x: wx, y: wy - 8, z: wz }
+        : { stack: [e], x: wx, y: box.min.y, z: wz, h: box.max.y - box.min.y, box })
+      await attachEntityTag(e.nbt, wx, noBox ? wy + 8 : box.max.y, wz)
+      continue
+    }
+    const item = name === "item" ? e.nbt.Item : null
+    sprites.push({ e, name, item, key: item?.id ? `${item.id}|${JSON.stringify(item.components ?? {})}` : name, wx, wy, wz })
+  }
+
+  const clusters = []
+  const touches = (a, b) => Math.abs(a.wx - b.wx) < ENTITY_BOX && Math.abs(a.wy - b.wy) < ENTITY_BOX && Math.abs(a.wz - b.wz) < ENTITY_BOX
+  for (const s of sprites) {
+    const hits = clusters.filter(c => c.some(o => touches(o, s)))
+    if (!hits.length) {
+      clusters.push([s])
+      continue
+    }
+    hits[0].push(s)
+    for (const other of hits.slice(1)) {
+      hits[0].push(...other)
+      clusters.splice(clusters.indexOf(other), 1)
+    }
+  }
+  for (const c of clusters) {
+    for (const s of c) if (!texCache.has(s.key)) texCache.set(s.key, await entityMarkerCanvas(lib, assets, s.name, s.item))
+    const cx = c.reduce((a, s) => a + s.wx, 0) / c.length
+    const cy = c.reduce((a, s) => a + s.wy, 0) / c.length
+    const cz = c.reduce((a, s) => a + s.wz, 0) / c.length
+    let canvas = texCache.get(c[0].key)
+    let px = 64
+    if (canvas && c.length > 1) {
+      const off = 4 // one icon pixel at the 64px render scale
+      px = 64 + (c.length - 1) * off
+      canvas = document.createElement("canvas")
+      canvas.width = canvas.height = px
+      const ctx = canvas.getContext("2d")
+      ctx.imageSmoothingEnabled = false
+      for (let i = c.length - 1; i >= 0; i--) {
+        const t = texCache.get(c[i].key)
+        if (t) ctx.drawImage(t, (c.length - 1 - i) * off, (c.length - 1 - i) * off, 64, 64)
+      }
+    }
+    let blend = false
+    if (!canvas) {
+      canvas = document.createElement("canvas")
+      canvas.width = canvas.height = 64
+      const ctx = canvas.getContext("2d")
+      ctx.fillStyle = "rgba(255, 255, 255, 0.4)"
+      ctx.fillRect(0, 0, 64, 64)
+      blend = true
+    }
+    const scale = 10 * px / 64
+    pendingMarkers.push({ canvas, x: cx, y: cy - 8 + ENTITY_BOX / 2, z: cz, w: scale, h: scale, blend })
+    entityMarkers.push({ stack: c.map(s => s.e), x: cx, y: cy - 8, z: cz })
+    for (const s of c) await attachEntityTag(s.e.nbt, s.wx, s.wy - 8 + ENTITY_BOX, s.wz)
+  }
+}
+
+async function attachSpawnerEggs(structure, lib, assets) {
+  const texCache = new Map()
+  for (const b of structure.blocks) {
+    if (!/(^|[:_])spawner$/.test(structure.palette[b.state]?.Name ?? "")) continue
+    let id = b.nbt?.SpawnData?.entity?.id ?? b.nbt?.SpawnPotentials?.[0]?.data?.entity?.id
+    if (!id) {
+      const cfg = await readTrialSpawnerConfig(b.nbt?.normal_config)
+      id = cfg?.spawn_potentials?.[0]?.data?.entity?.id
+    }
+    if (typeof id !== "string") continue
+    const name = id.includes(":") ? id.split(":")[1] : id
+    if (!texCache.has(name)) texCache.set(name, await entityMarkerCanvas(lib, assets, name))
+    const canvas = texCache.get(name)
+    if (!canvas) continue
+    pendingMarkers.push({ canvas, x: b.pos[0] * 16, y: b.pos[1] * 16, z: b.pos[2] * 16, w: 9, h: 9, blend: false })
+  }
+}
+
+// all markers share one atlas and one camera-facing instanced quad per blend
+// mode; icons alpha-test so their empty pixels keep depth-writing correctly,
+// name tags blend for the translucent backing
+function attachMarkerSprites() {
+  const _mm = new THREE.Matrix4()
+  for (const blend of [false, true]) {
+    const list = pendingMarkers.filter(m => m.blend === blend)
+    if (!list.length) continue
+    const area = list.reduce((a, m) => a + m.canvas.width * m.canvas.height, 0)
+    const maxW = Math.max(Math.ceil(Math.sqrt(area)), ...list.map(m => m.canvas.width))
+    let px = 0, py = 0, rowH = 0, aw = 0
+    for (const m of Array.from(list).sort((a, b) => b.canvas.height - a.canvas.height)) {
+      if (px + m.canvas.width > maxW) { px = 0; py += rowH; rowH = 0 }
+      m.tx = px
+      m.ty = py
+      px += m.canvas.width
+      rowH = Math.max(rowH, m.canvas.height)
+      aw = Math.max(aw, px)
+    }
+    const atlas = document.createElement("canvas")
+    atlas.width = aw
+    atlas.height = py + rowH
+    const ctx = atlas.getContext("2d")
+    const tex = new THREE.CanvasTexture(atlas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.magFilter = THREE.NearestFilter
+    markerTextures.push(tex)
+    const geo = new THREE.PlaneGeometry(1, 1)
+    const uvRect = new Float32Array(list.length * 4)
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: tex } },
+      vertexShader: `
+        attribute vec4 uvRect;
+        varying vec2 vUv;
+        void main() {
+          vUv = uvRect.xy + uv * uvRect.zw;
+          vec4 mv = modelViewMatrix * vec4(instanceMatrix[3].xyz, 1.0);
+          mv.xy += position.xy * vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        varying vec2 vUv;
+        void main() {
+          vec4 c = texture2D(map, vUv);
+          ${blend ? "" : "if (c.a < 0.5) discard;"}
+          gl_FragColor = c;
+          #include <colorspace_fragment>
+        }
+      `,
+      transparent: blend
+    })
+    const im = new THREE.InstancedMesh(geo, mat, list.length)
+    im.frustumCulled = false
+    list.forEach((m, i) => {
+      ctx.drawImage(m.canvas, m.tx, m.ty)
+      uvRect.set([m.tx / atlas.width, 1 - (m.ty + m.canvas.height) / atlas.height, m.canvas.width / atlas.width, m.canvas.height / atlas.height], i * 4)
+      im.setMatrixAt(i, _mm.makeScale(m.w, m.h, 1).setPosition(m.x, m.y, m.z))
+    })
+    geo.setAttribute("uvRect", new THREE.InstancedBufferAttribute(uvRect, 4))
+    root.add(im)
+  }
+  pendingMarkers = []
+}
+
+const SHELF_DISPLAY = { type: "fallback", display: "on_shelf" }
+const SHELF_YAW = { south: 0, west: -Math.PI / 2, north: Math.PI, east: Math.PI / 2 }
+
+async function attachShelves(structure, lib, assets) {
+  const cache = new Map()
+  for (const b of structure.blocks) {
+    const entry = structure.palette[b.state]
+    if (!/(^|_)shelf$/.test((entry?.Name ?? "").replace(/^minecraft:/, ""))) continue
+    const items = b.nbt?.Items
+    if (!Array.isArray(items) || !items.length) continue
+    const alignBottom = Number(b.nbt.align_items_to_bottom ?? 0) === 1
+    const facing = entry.Properties?.facing ?? "north"
+    const g = new THREE.Group()
+    for (const it of items) {
+      if (typeof it?.id !== "string" || !LIVE_ITEM.test(it.id)) continue
+      const compass = /(^|:)compass$/.test(it.id)
+      const clock = /(^|:)clock$/.test(it.id)
+      const key = it.id + "|" + JSON.stringify(it.components ?? null) + (compass ? "|" + facing : "")
+      let template = cache.get(key)
+      if (template === undefined) {
+        template = null
+        try {
+          const inner = new THREE.Group()
+          inner.userData.daytime = daytimeUniform
+          const itemData = { ...(it.components ?? {}) }
+          if (compass) itemData["minecraft:compass"] = compassValue(facing, 0)
+          if (clock) itemData["minecraft:time"] = clockValue(state.daytime)
+          for (const m of await lib.parseItemDefinition(assets, it.id, { data: itemData, display: SHELF_DISPLAY, ignoreAtlases: true })) {
+            const resolved = await lib.resolveModelData(assets, m)
+            await lib.loadModel(inner, assets, resolved, { display: SHELF_DISPLAY, lighting: lightingOpt(sceneLight), animate: false })
+          }
+          if (inner.children.length) template = { inner: collapseGroupDraws(inner), box: new THREE.Box3().setFromObject(inner) }
+        } catch {}
+        cache.set(key, template)
+      }
+      if (!template) continue
+      const slot = Math.min(2, Math.max(0, Number(it.Slot ?? 0)))
+      const inner = template.inner.clone()
+      inner.position.y = -template.box.min.y - (alignBottom ? 0 : (template.box.max.y - template.box.min.y) / 2)
+      const holder = new THREE.Group()
+      holder.add(inner)
+      holder.position.set((slot - 1) * 5, alignBottom ? -4 : 0, -4)
+      holder.scale.setScalar(0.25)
+      g.add(holder)
+      if (clock) clockFrames.push({ holder: inner, item: it.id, components: it.components ?? {}, disp: SHELF_DISPLAY })
+    }
+    if (!g.children.length) continue
+    g.userData.daytime = daytimeUniform
+    g.rotation.y = SHELF_YAW[entry.Properties?.facing] ?? Math.PI
+    g.position.set(b.pos[0] * 16, b.pos[1] * 16, b.pos[2] * 16)
+    root.add(g)
+  }
+}
+
+function boxForEntity(m) {
+  if (m.box) return _aimBox.copy(m.box).translate(root.position)
+  _aimBox.min.set(m.x - ENTITY_BOX / 2, m.y, m.z - ENTITY_BOX / 2)
+  _aimBox.max.set(m.x + ENTITY_BOX / 2, m.y + (m.h ?? ENTITY_BOX), m.z + ENTITY_BOX / 2)
+  _aimBox.translate(root.position)
+  return _aimBox
+}
+
+// entities can share a marker (overlapping ones cluster into one), so the box
+// for a structure entity comes from whichever marker carries it
+function boxForEntityData(e) {
+  const id = e.nbt?.id
+  const same = x => x === e || (x.nbt?.id === id && x.pos?.every((v, i) => v === e.pos[i]))
+  const m = entityMarkers.find(m => m.stack?.some(same))
+  return m ? boxForEntity(m) : null
+}
+
+const _markerV = new THREE.Vector3()
+function markerUnderRay(ray, maxDist) {
+  let best = null, bestD = maxDist
+  for (const m of entityMarkers) {
+    const p = ray.intersectBox(boxForEntity(m), _markerV)
+    if (!p) continue
+    const d = p.distanceTo(ray.origin)
+    if (d < bestD) {
+      bestD = d
+      best = m
+    }
+  }
+  return best
+}
+
+function toggleDoor(reg) {
+  const structure = current.value
+  const open = structure.palette[reg.b.state].Properties.open !== "true"
+  const regs = reg.pair ? [reg, reg.pair] : [reg]
+  for (const r of regs) {
+    r.b.state = open ? r.openIdx : r.closedIdx
+    setDoorInstance(r.openIdx, r.openSlot, r.b.pos, open)
+    setDoorInstance(r.closedIdx, r.closedSlot, r.b.pos, !open)
+  }
+  return regs.map(r => r.b)
+}
+
+function rayBoxT(ox, oy, oz, dx, dy, dz, x0, y0, z0, x1, y1, z1) {
+  let tmin = 0, tmax = Infinity
+  for (const [o, d, a, b] of [[ox, dx, x0, x1], [oy, dy, y0, y1], [oz, dz, z0, z1]]) {
+    if (Math.abs(d) < 1e-9) {
+      if (o < a || o > b) return null
+    } else {
+      let t1 = (a - o) / d, t2 = (b - o) / d
+      if (t1 > t2) [t1, t2] = [t2, t1]
+      tmin = Math.max(tmin, t1)
+      tmax = Math.min(tmax, t2)
+      if (tmin > tmax) return null
+    }
+  }
+  return tmin
+}
+
+// block-centred local coords; merged meshes carry per-element boxes in
+// userData.collision, so a stair keeps its stepped boxes
+let collBoxCache = new Map()
+let aimBoxCache = new Map()
+const _cb = new THREE.Box3()
+function templateBoxes(tmpl, arr, skipFluid = false) {
+  const skip = o => {
+    for (let p = o; p && p !== tmpl; p = p.parent) {
+      if (p.userData?.dynamic === "enchanting_book") return true
+      if (skipFluid && p.userData?.model?.fluid) return true
+    }
+    return false
+  }
+  tmpl.updateMatrixWorld(true)
+  tmpl.traverse(o => {
+    const coll = o.userData.collision
+    if (coll) {
+      if (skip(o)) return
+      for (const c of coll) {
+        _cb.min.set(c[0], c[1], c[2])
+        _cb.max.set(c[3], c[4], c[5])
+        _cb.applyMatrix4(o.matrixWorld)
+        if (!_cb.isEmpty()) arr.push([_cb.min.x, _cb.min.y, _cb.min.z, _cb.max.x, _cb.max.y, _cb.max.z])
+      }
+      return
+    }
+    if (!o.isMesh || o.parent?.userData.collision) return
+    if (skip(o)) return
+    _cb.setFromObject(o)
+    if (!_cb.isEmpty()) arr.push([_cb.min.x, _cb.min.y, _cb.min.z, _cb.max.x, _cb.max.y, _cb.max.z])
+  })
+  return arr
+}
+function templateFor(i, stateIdx) {
+  if (sceneHandle && inputIdxOf) {
+    const ii = i != null ? inputIdxOf[i] : -1
+    if (ii >= 0) {
+      const ti = sceneHandle.blockTemplate[ii]
+      if (ti !== 0xFFFFFFFF) {
+        const t = sceneHandle.templates[ti]
+        return { key: "t" + ti, tmpl: t.group, soft: nonSolidPalette.has(t.palette) }
+      }
+    }
+  }
+  const tmpl = templates?.get(stateIdx)
+  return tmpl ? { key: "s" + stateIdx, tmpl, soft: nonSolid.has(stateIdx) } : null
+}
+
+function collisionBoxesFor(i, stateIdx) {
+  const t = templateFor(i, stateIdx)
+  if (!t) return []
+  let arr = collBoxCache.get(t.key)
+  if (arr) return arr
+  arr = []
+  if (!t.soft) templateBoxes(t.tmpl, arr, true)
+  collBoxCache.set(t.key, arr)
+  return arr
+}
+
+function aimBoxesFor(i, stateIdx) {
+  const t = templateFor(i, stateIdx)
+  if (!t) return []
+  const coll = collisionBoxesFor(i, stateIdx)
+  if (coll.length || !t.soft) return coll
+  let arr = aimBoxCache.get(t.key)
+  if (arr) return arr
+  arr = []
+  templateBoxes(t.tmpl, arr)
+  aimBoxCache.set(t.key, arr)
+  return arr
+}
+
+// open fence gates have no collision in game: you walk through the cell
+const GATE = /_fence_gate$/
+const gateOpen = e => !!(e?.Name && GATE.test(e.Name) && e.Properties?.open === "true")
+// fluids collide as fluids in walk mode, never as solid boxes
+const FLUID_BLOCK = /(^|:)(water|flowing_water|lava|flowing_lava|bubble_column)$/
+const isFluidBlock = e => !!(e?.Name && FLUID_BLOCK.test(e.Name))
+
+
+// returns { door }, { container }, { entity } or a plain { block }; blocked by
+// real collision boxes, not whole cells, so it passes gaps like the game
+const _aimBox = new THREE.Box3()
+function rayHit(ox, oy, oz, dx, dy, dz, REACH = 80) {
+  const structure = current.value
+  if (!structure || !root) return null
+  const idx = cellIndex()
+  const rx = root.position.x, ry = root.position.y, rz = root.position.z
+  function shapeT(bx, by, bz, e) {
+    const s = shapeFor(e)
+    const cx = bx * 16 + rx - 8, cy = by * 16 + ry - 8, cz = bz * 16 + rz - 8
+    const t = rayBoxT(ox, oy, oz, dx, dy, dz, cx + s[0], cy + s[1], cz + s[2], cx + s[3], cy + s[4], cz + s[5])
+    return t != null && t <= REACH
+  }
+  let entT = Infinity, entM = null
+  for (const m of entityMarkers) {
+    const b = boxForEntity(m)
+    const t = rayBoxT(ox, oy, oz, dx, dy, dz, b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z)
+    if (t != null && t <= REACH && t < entT) {
+      entT = t
+      entM = m
+    }
+  }
+  let last = ""
+  for (let t = 0; t <= REACH; t += 2) {
+    const [bx, by, bz] = cellOf(ox + dx * t, oy + dy * t, oz + dz * t)
+    const key = bx + "," + by + "," + bz
+    if (key === last) continue
+    last = key
+    const reg = doorByCell.get(key)
+    if (reg) {
+      if (shapeT(bx, by, bz, structure.palette[reg.b.state])) return entT < t ? { entity: entM } : { door: reg }
+      continue
+    }
+    const i = idx.get(key)
+    if (i == null) continue
+    const b = structure.blocks[i]
+    const bName = structure.palette[b.state]?.Name ?? ""
+    if (!state.technical && /(^|:)(barrier|light|structure_void)$/.test(bName)) continue
+    const e = structure.palette[b.state]
+    if ((isInspectable(bName) || b.nbt?.LootTable || /(^|[:_])spawner$/.test(bName)) && shapeT(bx, by, bz, e)) {
+      return entT < t ? { entity: entM } : { container: b }
+    }
+    const cx = bx * 16 + rx, cy = by * 16 + ry, cz = bz * 16 + rz
+    for (const s of aimBoxesFor(i, b.state)) {
+      const th = rayBoxT(ox, oy, oz, dx, dy, dz, s[0] + cx, s[1] + cy, s[2] + cz, s[3] + cx, s[4] + cy, s[5] + cz)
+      if (th != null && th <= REACH) return entT < th ? { entity: entM } : { block: b }
+    }
+  }
+  return entM ? { entity: entM } : null
+}
+
+function tryRingBell(h, ox, oy, oz, dx, dy, dz) {
+  if (!h?.block || !root) return false
+  const e = current.value?.palette[h.block.state]
+  if (!/(^|:)bell$/.test(e?.Name ?? "")) return false
+  const bx = h.block.pos[0] * 16 + root.position.x - 8
+  const by = h.block.pos[1] * 16 + root.position.y - 8
+  const bz = h.block.pos[2] * 16 + root.position.z - 8
+  const dir = bellRingDir(ox, oy, oz, dx, dy, dz, bx, by, bz, e.Properties ?? {})
+  if (!dir) return false
+  useBooks().ring(h.block.pos, dir)
+  return true
+}
+
+function ringBell(ox, oy, oz, dx, dy, dz) {
+  return tryRingBell(rayHit(ox, oy, oz, dx, dy, dz, 4000), ox, oy, oz, dx, dy, dz)
+}
+
+// { toggled: blocks }, { entity }, a container block, or false
+function interact(ox, oy, oz, dx, dy, dz) {
+  const h = rayHit(ox, oy, oz, dx, dy, dz)
+  if (h?.door) return { toggled: toggleDoor(h.door) }
+  if (h?.entity) return { entity: h.entity }
+  if (h?.block) tryRingBell(h, ox, oy, oz, dx, dy, dz)
+  return h?.container ?? false
+}
+
+// vanilla interaction shapes, fixed so pack remodels can't change them; the 3px
+// panel sits on the face OPPOSITE the shape direction (DoorBlock boxZ(16,13,16))
+const PANEL = {
+  north: [0, 0, 13, 16, 16, 16],
+  south: [0, 0, 0, 16, 16, 3],
+  east: [0, 0, 0, 3, 16, 16],
+  west: [13, 0, 0, 16, 16, 16],
+  up: [0, 0, 0, 16, 3, 16],
+  down: [0, 13, 0, 16, 16, 16]
+}
+const CW = { north: "east", east: "south", south: "west", west: "north" }
+const CCW = { north: "west", west: "south", south: "east", east: "north" }
+
+function shapeFor(e) {
+  const name = (e?.Name || "").replace(/^minecraft:/, "")
+  const p = e?.Properties ?? {}
+  if (/fence_gate$/.test(name)) {
+    const tall = p.in_wall === "true" ? 13 : 16
+    return p.facing === "north" || p.facing === "south" ? [0, 0, 6, 16, tall, 10] : [6, 0, 0, 10, tall, 16]
+  }
+  if (/trapdoor$/.test(name)) {
+    if (p.open === "true") return PANEL[p.facing] ?? PANEL.north
+    return p.half === "top" ? PANEL.down : PANEL.up
+  }
+  if (/door$/.test(name)) {
+    const dir = p.open === "true" ? (p.hinge === "right" ? CCW[p.facing] : CW[p.facing]) : p.facing
+    return PANEL[dir] ?? PANEL.north
+  }
+  if (/chest$/.test(name)) return [1, 0, 1, 15, 14, 15]
+  if (name === "decorated_pot") return [1, 0, 1, 15, 16, 15]
+  if (/campfire$/.test(name)) return [0, 0, 0, 16, 7, 16]
+  if (name === "brewing_stand") return [1, 0, 1, 15, 14, 15]
+  if (/(^|_)shelf$/.test(name)) {
+    const f = p.facing ?? "north"
+    return f === "north" ? [0, 0, 11, 16, 16, 16]
+      : f === "south" ? [0, 0, 0, 16, 16, 5]
+      : f === "west" ? [11, 0, 0, 16, 16, 16]
+      : [0, 0, 0, 5, 16, 16]
+  }
+  return [0, 0, 0, 16, 16, 16]
+}
+
+function boxForBlock(b) {
+  if (!b || !root) return null
+  const s = shapeFor(current.value?.palette[b.state])
+  const ox = b.pos[0] * 16 + root.position.x - 8
+  const oy = b.pos[1] * 16 + root.position.y - 8
+  const oz = b.pos[2] * 16 + root.position.z - 8
+  _aimBox.min.set(ox + s[0], oy + s[1], oz + s[2])
+  _aimBox.max.set(ox + s[3], oy + s[4], oz + s[5])
+  return _aimBox
+}
+
+function aimDoor(ox, oy, oz, dx, dy, dz) {
+  const h = rayHit(ox, oy, oz, dx, dy, dz)
+  if (!h) return null
+  if (h.entity) return boxForEntity(h.entity)
+  return boxForBlock(h.door ? h.door.b : h.container)
+}
+
+function blockEntryAt(wx, wy, wz) {
+  const structure = current.value
+  if (!structure || !root) return null
+  const [bx, by, bz] = cellOf(wx, wy, wz)
+  const i = cellIndex().get(bx + "," + by + "," + bz)
+  if (i != null) return structure.blocks[i]
+  const bits = structure.__buried
+  if (bits) {
+    const [sx, sy, sz] = structure.size
+    if (bx >= 0 && by >= 0 && bz >= 0 && bx < sx && by < sy && bz < sz) {
+      const bi = (bz * sy + by) * sx + bx
+      if (bits[bi >> 3] & (1 << (bi & 7))) return { buried: true, pos: [bx, by, bz] }
+    }
+  }
+  return null
+}
+
+function blockBoxes(b) {
+  const structure = current.value
+  const out = []
+  if (!structure || !root) return out
+  if (b.buried) {
+    const p = root.position
+    const ox = p.x + b.pos[0] * 16, oy = p.y + b.pos[1] * 16, oz = p.z + b.pos[2] * 16
+    out.push({ nx: ox - 8, ny: oy - 8, nz: oz - 8, px: ox + 8, py: oy + 8, pz: oz + 8 })
+    return out
+  }
+  const entry = structure.palette[b.state]
+  if (gateOpen(entry) || isFluidBlock(entry)) return out
+  const i = cellIndex().get(b.pos.join(","))
+  const p = root.position
+  const ox = p.x + b.pos[0] * 16, oy = p.y + b.pos[1] * 16, oz = p.z + b.pos[2] * 16
+  for (const l of collisionBoxesFor(i, b.state)) out.push({ nx: l[0] + ox, ny: l[1] + oy, nz: l[2] + oz, px: l[3] + ox, py: l[4] + oy, pz: l[5] + oz })
+  return out
+}
+
+function sceneStats(group) {
+  let draws = 0, tris = 0
+  group.traverse(o => {
+    if (!o.visible || !(o.isMesh || o.isSprite)) return
+    const n = o.isInstancedMesh ? o.count : 1
+    if (!n) return
+    const g = o.geometry
+    const indices = g.index?.count ?? g.attributes.position?.count ?? 0
+    const mats = [].concat(o.material)
+    if (g.groups?.length) {
+      for (const grp of g.groups) {
+        if (!grp.count || mats[grp.materialIndex]?.visible === false) continue
+        draws++
+        tris += (grp.count === Infinity ? indices - grp.start : grp.count) / 3 * n
+      }
+    } else if (mats[0]?.visible !== false) {
+      draws++
+      tris += indices / 3 * n
+    }
+  })
+  return { draws, tris: Math.round(tris) }
+}
+
+function disposeGroup(g) {
+  if (!g) return
+  g.traverse(o => {
+    if (!o.isMesh || o.userData.shared) return
+    if (o.isInstancedMesh || o.isBatchedMesh) o.dispose()
+    o.geometry?.dispose()
+    // ownsMap: sign canvases only; atlas and library textures are managed elsewhere
+    if (o.userData.ownsMap) o.material?.map?.dispose?.()
+    for (const m of [].concat(o.material)) m?.dispose?.()
+  })
+  g.removeFromParent()
+}
+
+function disposeBundle(b) {
+  sceneApi.animators.delete(b.animator)
+  disposeGroup(b.group)
+  b.handle?.dispose()
+  for (const t of b.markerTextures) t.dispose()
+  b.sceneLight?.dispose()
+}
+
+function discardFull() {
+  if (!fullBundle) return
+  disposeBundle(fullBundle)
+  fullBundle = null
+}
+
+function showFull(on) {
+  if (!fullBundle || !root) return false
+  fullBundle.group.visible = !!on
+  root.visible = !on
+  if (on) sceneApi.animators.add(fullBundle.animator)
+  else sceneApi.animators.delete(fullBundle.animator)
+  return true
+}
+
+function restoreFull() {
+  if (!fullBundle || state.building) return false
+  const old = root, oldHandle = sceneHandle, oldMarkerTex = markerTextures, oldAnimator = animator, oldLight = sceneLight
+  ;({ group: root, handle: sceneHandle, inputIdxOf, nonSolidPalette, markerTextures, animator, entityMarkers, doorByCell, sceneLight } = fullBundle)
+  current.value = fullBundle.structure
+  state.info = fullBundle.info
+  applyTechnicalVisibility()
+  useBooks().refresh()
+  root.visible = true
+  sceneApi.contentRoots.add(root)
+  sceneApi.syncAspect()
+  sceneApi.animators.add(animator)
+  fullBundle = null
+  rootSliced = false
+  collBoxCache = new Map()
+  aimBoxCache = new Map()
+  if (old) {
+    sceneApi.contentRoots.delete(old)
+    sceneApi.animators.delete(oldAnimator)
+    disposeGroup(old)
+    oldHandle?.dispose()
+    for (const t of oldMarkerTex) t.dispose()
+    oldLight?.dispose()
+  }
+  return true
+}
+
+let cancelBuild = false
+function cancel() {
+  if (!state.building) return
+  cancelBuild = true
+  state.status = "cancelling…"
+}
+
+// persisted occlusion masks: import once per assets instance before the first
+// build, save back (debounced) when a build grew the cache
+const occState = new WeakMap()
+async function ensureOcclusionCache(lib, assets) {
+  if (!lib.importOcclusionCache) return
+  let st = occState.get(assets)
+  if (st) return st.ready
+  st = {}
+  occState.set(assets, st)
+  st.ready = (async () => {
+    try {
+      st.key = packs.sourcesIdentity()
+      if (!st.key) return
+      const entries = await loadStateCache(st.key)
+      if (entries) await lib.importOcclusionCache(assets, entries)
+      st.saved = entries?.length ?? 0
+    } catch {}
+  })()
+  return st.ready
+}
+let occSaveTimer = null
+function scheduleOcclusionSave(lib, assets) {
+  const st = occState.get(assets)
+  if (!st?.key || !lib.exportOcclusionCache) return
+  clearTimeout(occSaveTimer)
+  occSaveTimer = setTimeout(async () => {
+    try {
+      if (packs.assets.value !== assets) return
+      const entries = await lib.exportOcclusionCache(assets)
+      if (entries.length > (st.saved ?? 0) + 8) {
+        await saveStateCache(st.key, entries)
+        st.saved = entries.length
+      }
+    } catch {}
+  }, 2500)
+}
+
+// true when a build landed, false when cancelled
+async function build(structure = source, refit = true, slice = false, fresh = false) {
+  const assets = packs.assets.value
+  if (!assets || !structure || state.building) return
+  state.building = true
+  cancelBuild = false
+  lock(true)
+  const prevCurrent = current.value, prevSource = source, prevHasSB = state.hasStructureBlocks, prevInfo = state.info,
+    prevInputIdx = inputIdxOf, prevNonSolidPalette = nonSolidPalette
+  let newLight = null
+  function abort() {
+    newLight?.dispose()
+    current.value = prevCurrent
+    source = prevSource
+    state.hasStructureBlocks = prevHasSB
+    state.status = ""
+    return false
+  }
+  try {
+    source = structure
+    const techStates = new Set()
+    structure.palette.forEach((e, i) => {
+      if (e?.Name && (JIGSAW.test(e.Name) || SB.test(e.Name))) techStates.add(i)
+    })
+    state.hasStructureBlocks = techStates.size > 0 && structure.blocks.some(b => techStates.has(b.state))
+    // no toggle to reach in minimal or on a manual load, so the structure is
+    // shown as handed over rather than silently stripped
+    if (state.hideStructureBlocks && !minimal && !state.manual) structure = stripStructureBlocks(structure)
+    // sliced blocks are dropped for real (solid cut faces); size and position stay the full structure's
+    const unsliced = structure
+    if (slice) structure = useSlicers().sliceStructure(structure)
+    const slicedApplied = structure !== unsliced
+    current.value = structure
+    // fresh loads clear the old scene up front so it stops eating frame time
+    // during the new build; rebuilds (levels, slicers) keep it until the swap
+    if (fresh && (root || fullBundle)) {
+      discardFull()
+      if (animator) sceneApi.animators.delete(animator)
+      if (root) {
+        sceneApi.contentRoots.delete(root)
+        disposeGroup(root)
+        sceneHandle?.dispose()
+        for (const t of markerTextures) t.dispose()
+        sceneLight?.dispose()
+      }
+      root = null
+      sceneHandle = null
+      markerTextures = []
+      animator = null
+      sceneLight = null
+      rootSliced = false
+      sceneApi.setGrids([])
+    }
+    const lib = await loadLibrary()
+    lib.setAnimationRenderer?.(sceneApi.renderer)
+    // a new orbit build replaces a suspended stream session's tiles
+    const streamS = (await import("./useStream.js")).useStream()
+    if (streamS.state.session && !streamS.state.on) streamS.shutdown()
+    const [sx, sy, sz] = structure.size
+    state.status = "building…"
+    buildDim = !state.fullbright && /^(the_nether|the_end)$/.test(unsliced.dimension) ? unsliced.dimension : "overworld"
+    state.dimension = buildDim
+    await resolveLegacyNames(structure, lib, assets)
+    await precomputeMapArt(structure, lib, assets)
+    await ensureOcclusionCache(lib, assets)
+
+    // flood filled over what actually builds, so a slice relights; oversized scenes skip it
+    if (state.lighting === "world" && !state.fullbright && lib.computeSceneLight && (sx + 2) * (sy + 2) * (sz + 2) <= 48000000) {
+      const lightBlocks = []
+      // per-state shared descriptors keep the lib's identity memo effective
+      const lightSC = new Map()
+      for (const b of structure.blocks) {
+        let sc = lightSC.get(b.state)
+        if (sc === undefined) {
+          const e = structure.palette[b.state]
+          if (!e?.Name || AIR.test(e.Name)) sc = null
+          else {
+            const name = legacyNames.get(e.Name) ?? e.Name
+            sc = { id: name, properties: fixLegacyProps(name.replace("minecraft:", ""), e.Properties) ?? {} }
+          }
+          lightSC.set(b.state, sc)
+        }
+        if (!sc) continue
+        lightBlocks.push({ id: sc.id, properties: sc.properties, pos: b.pos })
+      }
+      if (lightBlocks.length) {
+        state.status = "lighting…"
+        newLight = await lib.computeSceneLight(lightBlocks, {
+          assets,
+          dimension: buildDim,
+          onProgress: (done, total) => {
+            if (state.progress?.phase !== "light" || done === total || done - state.progress.done > total / 50) state.progress = { phase: "light", done, total }
+          }
+        })
+        if (cancelBuild) return abort()
+        state.status = "building…"
+      }
+    }
+
+    templates = new Map()
+    nonSolid = new Set()
+    nonSolidPalette = new Set()
+    collBoxCache = new Map()
+    aimBoxCache = new Map()
+    const isPlane = el => el.from[0] === el.to[0] || el.from[1] === el.to[1] || el.from[2] === el.to[2]
+
+    // doors and loader-variant states keep their own templates outside createScene
+    async function buildStateTemplate(stateIdx) {
+      if (templates.has(stateIdx)) return templates.get(stateIdx)
+      const entry = structure.palette[stateIdx]
+      const g = new THREE.Group()
+      g.userData.daytime = daytimeUniform
+      let tmpl = null
+      try {
+        const name = legacyNames.get(entry.Name) ?? entry.Name
+        const props = fixLegacyProps(name.replace("minecraft:", ""), entry.Properties)
+        const block = entry.__block ?? { id: name, properties: props ?? {} }
+        const biome = entry.__biome ? { biome: entry.__biome } : null
+        let any = false, allPlanes = true
+        for (const model of await lib.parseBlockstate(assets, name, { data: props ?? {}, ignoreAtlases: true, ...biome })) {
+          const data = await lib.resolveModelData(assets, model)
+          await lib.loadModel(g, assets, data, { display: {}, lighting: lightingOpt(newLight), animate: false, block, neighbors: block.neighbors })
+          if (data?.fluid) continue
+          for (const el of data?.elements ?? []) { any = true; if (!isPlane(el)) allPlanes = false }
+        }
+        if (SOFT_BLOCKS.test(name) || (any && allPlanes && !HARD_BLOCKS.test(name))) nonSolid.add(stateIdx)
+        if (g.children.length) tmpl = g
+      } catch {}
+      templates.set(stateIdx, tmpl)
+      return tmpl
+    }
+    if (lib.ModelLoader) await remapLoaderStates(structure, lib, assets)
+    if (cancelBuild) return abort()
+
+    let inputBlocks = []
+    const inputIdx = new Int32Array(structure.blocks.length).fill(-1)
+    const stateCache = new Map()
+    const scFor = state => {
+      let sc = stateCache.get(state)
+      if (sc === undefined) {
+        const e = structure.palette[state]
+        if (!e?.Name || AIR.test(e.Name) || isOpenable(e) || e.__loaderKey) sc = null
+        else {
+          const name = legacyNames.get(e.Name) ?? e.Name
+          const short = name.replace(/^minecraft:/, "")
+          sc = {
+            name,
+            props: fixLegacyProps(short, e.Properties),
+            biome: e.__biome,
+            isShelf: /(^|_)shelf$/.test(short),
+            isBanner: /(^|_)banner$/.test(short),
+            solid: false
+          }
+        }
+        stateCache.set(state, sc)
+      }
+      return sc
+    }
+    let placeable = 0
+    let inBounds = true
+    for (let i = 0; i < structure.blocks.length; i++) {
+      const b = structure.blocks[i]
+      if (!scFor(b.state)) continue
+      placeable++
+      const p = b.pos
+      if (p[0] < 0 || p[1] < 0 || p[2] < 0 || p[0] >= sx || p[1] >= sy || p[2] >= sz) inBounds = false
+    }
+    // enclosure drop on a dense solid mask: blocks buried under fully-occluding
+    // neighbors on every side never materialize as entries; buried cells read
+    // as absent afterwards (no template, no collision), which only ever affects
+    // blocks nothing can reach or see
+    let buriedOcclusion = null
+    let enc = null
+    if (lib.fullyOccludes && placeable > 20000 && inBounds && sx * sy * sz <= 50_000_000) {
+      for (const [state, sc] of stateCache) {
+        if (!sc) continue
+        const e = structure.palette[state]
+        sc.solid = await lib.fullyOccludes({ id: sc.name, properties: sc.props ?? undefined, assets }).catch(() => false)
+      }
+      if (cancelBuild) return abort()
+      const w = sx, h = sy, d = sz
+      const solid = new Uint8Array(w * h * d)
+      for (let i = 0; i < structure.blocks.length; i++) {
+        const b = structure.blocks[i]
+        const sc = stateCache.get(b.state)
+        if (!sc || !sc.solid) continue
+        const p = b.pos
+        solid[(p[2] * h + p[1]) * w + p[0]] = 1
+      }
+      enc = (x, y, z) => {
+        if (x <= 0 || y <= 0 || z <= 0 || x >= w - 1 || y >= h - 1 || z >= d - 1) return false
+        const i = (z * h + y) * w + x
+        return !!(solid[i - 1] && solid[i + 1] && solid[i - w] && solid[i + w] && solid[i - w * h] && solid[i + w * h])
+      }
+      buriedOcclusion = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < w && y < h && z < d && !!solid[(z * h + y) * w + x]
+    }
+    // dropped cells keep collision as full cubes (like stream tiles), so noclip
+    // or a bad spawn inside sealed terrain bumps out instead of floating in it
+    const buriedBits = enc ? new Uint8Array((sx * sy * sz + 7) >> 3) : null
+    structure.__buried = buriedBits
+    for (let i = 0; i < structure.blocks.length; i++) {
+      const b = structure.blocks[i]
+      const sc = stateCache.get(b.state)
+      if (!sc) continue
+      const p = b.pos
+      if (enc && enc(p[0], p[1], p[2])) {
+        const bi = (p[2] * sy + p[1]) * sx + p[0]
+        buriedBits[bi >> 3] |= 1 << (bi & 7)
+        continue
+      }
+      const entry = { id: sc.name, pos: p }
+      if (sc.props) entry.properties = sc.props
+      if (sc.biome) entry.biome = sc.biome
+      if (b.nbt?.Items && sc.isShelf) {
+        const items = b.nbt.Items.filter(it => typeof it?.id === "string" && !LIVE_ITEM.test(it.id))
+        if (items.length) entry.nbt = { Items: items, align_items_to_bottom: b.nbt.align_items_to_bottom }
+      }
+      if ((b.nbt?.patterns || b.nbt?.Patterns) && sc.isBanner) {
+        entry.nbt = { patterns: b.nbt.patterns ?? b.nbt.Patterns }
+      }
+      inputIdx[i] = inputBlocks.length
+      inputBlocks.push(entry)
+    }
+    // frame models ride the main scene mesh as blocks (facing blockstates are a
+    // lib override); only the contained item stays an entity attachment
+    for (const e of structure.entities ?? []) {
+      const id = e.nbt?.id
+      if (typeof id !== "string" || !FRAME.test(id)) continue
+      const item = e.nbt.Item?.id ?? ""
+      const invisible = Number(e.nbt.Invisible ?? 0) === 1
+      if (invisible && (!item || LIVE_ITEM.test(item))) continue
+      const map = /(^|:)filled_map$/.test(item)
+      const entry = {
+        id: id.includes("glow") ? "minecraft:glow_item_frame" : "minecraft:item_frame",
+        pos: [Math.floor(e.pos[0]), Math.floor(e.pos[1]), Math.floor(e.pos[2])],
+        overlay: true,
+        properties: {
+          facing: FACING6[Number(e.nbt.Facing ?? 3)] ?? "south",
+          map: map ? "true" : "false"
+        }
+      }
+      if (typeof item === "string" && item && !LIVE_ITEM.test(item)) {
+        entry.nbt = { Item: e.nbt.Item, ItemRotation: e.nbt.ItemRotation }
+        if (invisible) entry.nbt.Invisible = 1
+      }
+      inputBlocks.push(entry)
+    }
+    const total = inputBlocks.length
+
+    const perfCal = loadPerf()
+    let warnedOnce = false
+    if (!await restoreGateCheck(total)) return abort()
+    if (perfCal) {
+      const estMs = total * (perfCal.b + perfCal.o)
+      if (estMs > WARN_MS) {
+        warnedOnce = true
+        if (!await askWarn(estMs)) return abort()
+      }
+    }
+    const tBuild = performance.now()
+    let tOpt = null
+
+    // reactive progress writes re-render the status bar, so cap them at ~25/s
+    let progT = 0
+    const setProgress = (status, progress) => {
+      const now = performance.now()
+      if (now - progT < 40 && progress.phase === state.progress?.phase) return
+      progT = now
+      state.status = status
+      state.progress = progress
+    }
+
+    const handle = await lib.createScene(assets, inputBlocks, {
+      mapArt: async (id, info) => {
+        const colors = id != null ? await useWorld().readMap(id) : null
+        if (colors) return lib.renderMapColors(assets, colors)
+        return mapArtFor(Math.floor(info?.pos?.[0] ?? 0), Math.floor(info?.pos?.[1] ?? 0), Math.floor(info?.pos?.[2] ?? 0), info?.facing ?? "north", id)
+      },
+      lighting: state.lighting === "world" ? { dimension: buildDim, light: newLight ?? false, daytime: state.daytime } : state.lighting,
+      keepTemplates: true,
+      ignoreAtlases: true,
+      technical: true,
+      animate: false,
+      externalOcclusion: buriedOcclusion,
+      onProgress: (stage, done, tot) => {
+        if (stage.name === "optimize") {
+          tOpt ??= performance.now()
+          setProgress(`optimising… ${Math.round(done / tot * 100)}%`, { phase: "optimise", done, total: tot })
+        } else if (stage.name === "light") {
+          setProgress("lighting…", { phase: "light", done, total: tot })
+        } else {
+          const f = stage.name === "parse" ? done / tot * 0.15 : 0.15 + done / tot * 0.85
+          setProgress(`building… ${Math.round(f * 100)}%`, { phase: "build", done: Math.round(f * 10000), total: 10000 })
+        }
+        // uncalibrated runs project from live progress; declining the dialog cancels the build
+        if (!warnedOnce && !perfCal && stage.name !== "optimize") {
+          const elapsed = performance.now() - tBuild
+          const overall = (stage.index + done / tot) / stage.count
+          if (elapsed > 1500 && overall > 0.02) {
+            warnedOnce = true
+            const projected = elapsed / overall
+            if (projected > WARN_MS) askWarn(projected).then(ok => { if (!ok) cancelBuild = true })
+          }
+        }
+      },
+      shouldCancel: () => cancelBuild
+    })
+    if (!handle || cancelBuild) {
+      handle?.dispose()
+      return abort()
+    }
+
+    for (let pi = 0; pi < handle.palette.length; pi++) {
+      try {
+        const id = handle.palette[pi].id
+        let any = false, allPlanes = true
+        for (const model of handle.palette[pi].models) {
+          if (model?.fluid) continue
+          const data = await lib.resolveModelData(assets, model)
+          for (const el of data?.elements ?? []) { any = true; if (!isPlane(el)) allPlanes = false }
+        }
+        if (SOFT_BLOCKS.test(id) || (any && allPlanes && !HARD_BLOCKS.test(id))) nonSolidPalette.add(pi)
+      } catch {}
+    }
+    if (cancelBuild) {
+      handle.dispose()
+      return abort()
+    }
+
+    // a centre ≡ 8 (mod 16) keeps block-centred templates on the grid lattice
+    const gridCentre = v => Math.round((v - 8) / 16) * 16 + 8
+    const position = new THREE.Vector3(gridCentre(-(sx - 1) * 8), gridCentre(-(sy - 1) * 8), gridCentre(-(sz - 1) * 8))
+    newLight?.setOffset(position)
+
+    const doorEntries = []
+    for (const b of structure.blocks) {
+      if (!isOpenable(structure.palette[b.state])) continue
+      const openIdx = stateWithOpen(structure, b.state, "true")
+      const closedIdx = stateWithOpen(structure, b.state, "false")
+      await buildStateTemplate(openIdx)
+      await buildStateTemplate(closedIdx)
+      doorEntries.push({ b, openIdx, closedIdx })
+      if (cancelBuild) {
+        handle.dispose()
+        return abort()
+      }
+    }
+
+    // multi-part states and uvlock rotations (baked UVs) can't share: per-state fallback
+    stateRender = new Map()
+    canonDoorTmpl = new Map()
+    for (const e of doorEntries) {
+      for (const stateIdx of [e.openIdx, e.closedIdx]) {
+        if (stateRender.has(stateIdx)) continue
+        const entry = structure.palette[stateIdx]
+        let key = null
+        const rot = new THREE.Matrix4()
+        try {
+          const name = legacyNames.get(entry.Name) ?? entry.Name
+          const props = fixLegacyProps(name.replace("minecraft:", ""), entry.Properties)
+          const models = await lib.parseBlockstate(assets, name, { data: props ?? {}, ignoreAtlases: true })
+          const m = models.length === 1 ? models[0] : null
+          if (m && !(m.uvlock && (m.x || m.y || m.z))) {
+            key = JSON.stringify({ ...m, x: 0, y: 0, z: 0 })
+            // same convention loadModel bakes: rotation.set(-x, -y, z, "ZYX")
+            rot.makeRotationFromEuler(new THREE.Euler(
+              THREE.MathUtils.degToRad(-(m.x ?? 0)),
+              THREE.MathUtils.degToRad(-(m.y ?? 0)),
+              THREE.MathUtils.degToRad(m.z ?? 0), "ZYX"))
+            if (!canonDoorTmpl.has(key)) {
+              const g = new THREE.Group()
+              g.userData.daytime = daytimeUniform
+              const data = await lib.resolveModelData(assets, { ...m, x: 0, y: 0, z: 0 })
+              await lib.loadModel(g, assets, data, { display: {}, lighting: lightingOpt(newLight), animate: false })
+              canonDoorTmpl.set(key, g.children.length ? g : null)
+            }
+            if (!canonDoorTmpl.get(key)) key = null
+          }
+        } catch {}
+        if (!key) {
+          key = "state:" + stateIdx
+          rot.identity()
+          canonDoorTmpl.set(key, templates.get(stateIdx))
+        }
+        stateRender.set(stateIdx, { key, rot })
+      }
+    }
+
+    let loaderCount = 0
+    for (const b of structure.blocks) {
+      if (!structure.palette[b.state]?.__loaderKey) continue
+      const tmpl = await buildStateTemplate(b.state)
+      if (cancelBuild) {
+        handle.dispose()
+        return abort()
+      }
+      if (!tmpl) continue
+      const inst = tmpl.clone()
+      inst.position.set(b.pos[0] * 16, b.pos[1] * 16, b.pos[2] * 16)
+      handle.group.add(inst)
+      loaderCount++
+    }
+
+    // tiny builds are all fixed cost and would poison the per-block rates
+    if (total >= 2000 && tOpt) savePerf((tOpt - tBuild) / total, (performance.now() - tOpt) / total)
+    handle.group.position.copy(position)
+    const next = handle.group
+    const placedCount = total + doorEntries.length + loaderCount
+
+    const old = root, oldHandle = sceneHandle, oldMarkerTex = markerTextures,
+      oldAnimator = animator, oldMarkers = entityMarkers, oldDoors = doorByCell, oldLight = sceneLight
+    root = next
+    sceneHandle = handle
+    inputIdxOf = inputIdx
+    sceneLight = newLight
+    markerTextures = []
+    sceneApi.scene.add(root)
+    sceneApi.contentRoots.add(root)
+    sceneApi.syncAspect()
+    if (old) sceneApi.contentRoots.delete(old)
+    if (animator) sceneApi.animators.delete(animator)
+    const parts = structure.__parts ?? [{ off: [0, 0, 0], size: structure.size }]
+    // cave cells are clipped to the grid footprint so the outline closes along the grid edge
+    let caveWire = null
+    if (structure.cave) {
+      const c = structure.cave
+      const p0 = parts[0]
+      const gw = p0.size[0] + 6, gd = p0.size[2] + 6
+      const xMin = p0.off[0] - 3, zMin = p0.off[2] - 3
+      const cells = new Set()
+      for (const [x, z] of c.cells) {
+        if (x >= xMin && x < xMin + gw && z >= zMin && z < zMin + gd) cells.add(x + "," + z)
+      }
+      const segs = []
+      for (const k of cells) {
+        const [x, z] = k.split(",").map(Number)
+        if (!cells.has((x - 1) + "," + z)) segs.push([x, z, x, z + 1])
+        if (!cells.has((x + 1) + "," + z)) segs.push([x + 1, z, x + 1, z + 1])
+        if (!cells.has(x + "," + (z - 1))) segs.push([x, z, x + 1, z])
+        if (!cells.has(x + "," + (z + 1))) segs.push([x, z + 1, x + 1, z + 1])
+      }
+      const tx = v => position.x + v * 16 - 8, tz = v => position.z + v * 16 - 8
+      caveWire = {
+        segments: segs.map(([x0, z0, x1, z1]) => [tx(x0), tz(z0), tx(x1), tz(z1)]),
+        y0: position.y + c.y0 * 16 - 8.01,
+        y1: position.y + c.y1 * 16 - 8,
+        has: (wx, wz) => cells.has(Math.floor((wx - position.x + 8) / 16) + "," + Math.floor((wz - position.z + 8) / 16))
+      }
+    }
+    sceneApi.setGrids(parts.map(p => {
+      const gw = p.size[0] + 6, gd = p.size[2] + 6
+      return {
+        x: position.x + (p.off[0] - 3) * 16 - 8,
+        z: position.z + (p.off[2] - 3) * 16 - 8,
+        y: position.y + p.off[1] * 16 - 8.01,
+        w: gw,
+        d: gd,
+        label: p.name
+      }
+    }), caveWire)
+    if (refit) sceneApi.fit()
+    attachDoors(doorEntries)
+    await attachEntities(structure, lib, assets)
+    await attachSpawnerEggs(structure, lib, assets)
+    await attachShelves(structure, lib, assets)
+    attachMarkerSprites()
+    try {
+      const signs = await makeSignTexts(structure)
+      if (signs) root.add(signs)
+    } catch {}
+    animator = lib.createAnimator(root)
+    sceneApi.animators.add(animator)
+    useSlicers().onBuild(root, position, [sx, sy, sz], slicedApplied)
+    // shader compiles land here in parallel instead of stalling the first visible frame
+    try { await sceneApi.renderer.compileAsync(root, sceneApi.perspCam, sceneApi.scene) } catch {}
+    state.info = {
+      size: `${sx}×${sy}×${sz}`,
+      blocks: placedCount,
+      palette: handle.palette.length,
+      ...sceneStats(root)
+    }
+    applyTechnicalVisibility()
+    useBooks().refresh()
+    scheduleOcclusionSave(lib, assets)
+    state.status = ""
+    // a new source (or a full build of the same one) invalidates the kept full build
+    if (prevSource !== source || !slicedApplied) discardFull()
+    if (slicedApplied && old && prevSource === source && !rootSliced && !fullBundle) {
+      old.visible = false
+      fullBundle = {
+        group: old, handle: oldHandle, inputIdxOf: prevInputIdx, nonSolidPalette: prevNonSolidPalette,
+        markerTextures: oldMarkerTex, animator: oldAnimator,
+        structure: prevCurrent, info: prevInfo, entityMarkers: oldMarkers, doorByCell: oldDoors, sceneLight: oldLight
+      }
+    } else if (old) {
+      disposeGroup(old)
+      oldHandle?.dispose()
+      for (const t of oldMarkerTex) t.dispose()
+      oldLight?.dispose()
+    }
+    if (fullBundle) {
+      fullBundle.group.visible = false
+      sceneApi.animators.delete(fullBundle.animator)
+    }
+    rootSliced = slicedApplied
+    return true
+  } finally {
+    state.building = false
+    state.progress = null
+    lock(false)
+  }
+}
+
+watch(() => [state.lighting, state.fullbright], () => build(undefined, false))
+watch(() => state.hideStructureBlocks, v => {
+  localStorage.setItem("hideStructureBlocks", String(v))
+  build(undefined, false)
+})
+// scenes always build the icons; the toggle only flips their visibility, so
+// no rebuild. icons are the billboard meshes, kept unmerged by the optimizer
+function applyTechnicalVisibility() {
+  root?.traverse(o => {
+    if (o.isMesh && o.userData.billboard) o.visible = state.technical
+  })
+}
+watch(() => state.technical, v => {
+  localStorage.setItem("technicalBlocks", String(v))
+  applyTechnicalVisibility()
+})
+
+async function exportCurrent(format, name) {
+  if (!root || state.building) return
+  lock(true)
+  state.status = "exporting…"
+  try {
+    await exportScene({ format, name, root })
+    state.status = ""
+  } catch (err) {
+    state.status = `export failed: ${err}`
+  } finally {
+    lock(false)
+  }
+}
+
+const getRoot = () => root
+const getTemplates = () => templates
+const getNonSolid = () => nonSolid
+
+async function clearMapArt() {
+  try { (await loadLibrary()).disposeMapArt?.(packs.assets.value) } catch {}
+}
+
+export function useBuild() {
+  return {
+    state, current, build, cancel, answerWarn, setRestoreGate, restoreGateCheck, getRoot, getTemplates, getNonSolid, showFull, restoreFull,
+    blockAt, blockEntryAt, boxForBlock, boxForEntity, boxForEntityData, markerUnderRay, rayHit, interact, aimDoor, blockBoxes, ringBell, exportCurrent, clearMapArt
+  }
+}

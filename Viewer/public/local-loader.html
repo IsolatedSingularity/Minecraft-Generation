@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Minecraft Java 1.16.1 Structure Viewer</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; grid-template-rows: auto 1fr; background: #111; color: #eee; }
+    header { padding: 10px 14px; display: grid; gap: 8px; border-bottom: 1px solid #333; background: #15191b; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type=file] { max-width: 390px; }
+    input[type=text] { flex: 1; min-width: 240px; padding: 7px 9px; background: #1b1b1b; border: 1px solid #444; color: #eee; }
+    button, select, .nav-link { padding: 7px 10px; background: #242424; border: 1px solid #555; border-radius: 3px; color: #eee; }
+    .nav-link { margin-left: auto; text-decoration: none; }
+    .version { color: #9fd28a; font: 11px ui-monospace, monospace; letter-spacing: .08em; }
+    .quick { display: flex; gap: 5px; flex-wrap: wrap; }
+    .quick button { padding: 4px 7px; color: #bdc6bf; font-size: 11px; }
+    button:disabled { opacity: .5; }
+    #status { font: 12px ui-monospace, monospace; color: #b7c9ff; white-space: pre-wrap; }
+    main { min-height: 0; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    .hint { font-size: 12px; color: #aaa; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <strong>3D STRUCTURE VIEWER</strong>
+    <span class="version">JAVA 1.16.1 · LOCAL JAR ASSETS</span>
+    <span class="hint">The selected jar stays in this browser tab. It is never uploaded.</span>
+    <a class="nav-link" href="./seed-map.html">Seed map</a>
+  </div>
+  <div class="row">
+    <label>Base client jar <input id="base" type="file" accept=".jar,.zip" /></label>
+    <label>Overlay packs <input id="packs" type="file" accept=".jar,.zip" multiple /></label>
+    <button id="load" disabled>Load sources</button>
+  </div>
+  <div class="row">
+    <input id="filter" type="text" placeholder="Filter structures, e.g. village/plains or bastion" disabled />
+    <select id="structures" disabled><option>Load a jar first</option></select>
+    <button id="show" disabled>Show structure</button>
+  </div>
+  <div class="quick" aria-label="Main structure filters">
+    <button type="button" data-filter="village">Village</button>
+    <button type="button" data-filter="bastion">Bastion</button>
+    <button type="button" data-filter="fortress">Fortress</button>
+    <button type="button" data-filter="stronghold">Stronghold</button>
+    <button type="button" data-filter="ruined_portal">Ruined portal</button>
+    <button type="button" data-filter="shipwreck">Shipwreck</button>
+    <button type="button" data-filter="monument">Monument</button>
+    <button type="button" data-filter="mansion">Mansion</button>
+    <button type="button" data-filter="end_city">End city</button>
+    <button type="button" data-filter="">All</button>
+  </div>
+  <div id="status">Waiting for embedded viewer…</div>
+</header>
+<main><iframe id="viewer" title="Mouse-draggable Minecraft structure renderer" src="./?manual&minimal"></iframe></main>
+<script type="module">
+  const frame = document.querySelector('#viewer')
+  const base = document.querySelector('#base')
+  const packs = document.querySelector('#packs')
+  const load = document.querySelector('#load')
+  const filter = document.querySelector('#filter')
+  const structures = document.querySelector('#structures')
+  const show = document.querySelector('#show')
+  const status = document.querySelector('#status')
+
+  let nextId = 0
+  const pending = new Map()
+  let ready = false
+  let names = []
+
+  const setStatus = text => { status.textContent = text }
+
+  window.addEventListener('message', e => {
+    const m = e.data
+    if (m?.source !== 'structure-viewer') return
+    if (m.event === 'ready') {
+      ready = true
+      load.disabled = !base.files.length
+      setStatus('Viewer ready. Choose your local Minecraft client jar.')
+      return
+    }
+    if (m.reply !== undefined) {
+      const p = pending.get(m.reply)
+      if (!p) return
+      pending.delete(m.reply)
+      m.ok ? p.resolve(m) : p.reject(new Error(m.error || 'viewer command failed'))
+    }
+  })
+
+  function send(type, body = {}, transfer = []) {
+    if (!ready) return Promise.reject(new Error('viewer is not ready'))
+    const id = ++nextId
+    const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
+    frame.contentWindow.postMessage({ source: 'structure-viewer', type, id, ...body }, '*', transfer)
+    return promise
+  }
+
+  async function fileBytes(file) {
+    return await file.arrayBuffer()
+  }
+
+  function renderNames() {
+    const q = filter.value.trim().toLowerCase()
+    const found = q ? names.filter(n => n.toLowerCase().includes(q)) : names
+    structures.replaceChildren(...found.slice(0, 5000).map(n => {
+      const o = document.createElement('option')
+      o.value = n
+      o.textContent = n
+      return o
+    }))
+    structures.disabled = !found.length
+    show.disabled = !found.length
+    setStatus(`${names.length} structures indexed; ${found.length} match${found.length === names.length ? '' : ' filter'}.`)
+  }
+
+  base.addEventListener('change', () => { load.disabled = !(ready && base.files.length) })
+  filter.addEventListener('input', renderNames)
+  filter.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !show.disabled) show.click()
+  })
+  document.querySelectorAll('[data-filter]').forEach(button => {
+    button.addEventListener('click', () => {
+      filter.value = button.dataset.filter
+      renderNames()
+    })
+  })
+
+  load.addEventListener('click', async () => {
+    try {
+      load.disabled = true
+      filter.disabled = true
+      show.disabled = true
+      setStatus('Reading local files…')
+      const baseBuf = await fileBytes(base.files[0])
+      const packEntries = []
+      const transfer = [baseBuf]
+      for (const file of packs.files) {
+        const data = await fileBytes(file)
+        packEntries.push({ name: file.name, data })
+        transfer.push(data)
+      }
+      setStatus(`Loading ${base.files[0].name}${packEntries.length ? ` + ${packEntries.length} overlay pack(s)` : ''}…`)
+      await send('loadPacks', { base: baseBuf, packs: packEntries }, transfer)
+      const r = await send('listStructures')
+      names = (r.names || []).slice().sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
+      filter.disabled = false
+      renderNames()
+    } catch (err) {
+      console.error(err)
+      setStatus(`ERROR: ${err.message}`)
+    } finally {
+      load.disabled = !(ready && base.files.length)
+    }
+  })
+
+  show.addEventListener('click', async () => {
+    const path = structures.value
+    if (!path) return
+    try {
+      show.disabled = true
+      setStatus(`Loading ${path}…`)
+      await send('loadStructure', { path })
+      setStatus(`Loaded ${path}`)
+    } catch (err) {
+      console.error(err)
+      setStatus(`ERROR: ${err.message}`)
+    } finally {
+      show.disabled = false
+    }
+  })
+</script>
+</body>
+</html>

@@ -1,0 +1,754 @@
+// Extracts the game's hardcoded (code-built) structures into standard
+// structure .nbt files by running the real piece/feature code against a
+// capturing WorldGenLevel. Compiled with javac against the unobfuscated
+// server jar and run by extract.js.
+//
+// Pieces are instantiated with orientation NORTH: coords map to
+// world = (minX + x, minY + y, maxZ - z) with NO state mirror/rotation,
+// so un-flipping z at write time recovers the exact authored local blocks.
+// The viewer's layout generators re-apply the game's orientation transform.
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.data.registries.VanillaRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LevelHeightAccessor;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.world.level.chunk.UpgradeData;
+import net.minecraft.world.level.levelgen.feature.BonusChestFeature;
+import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.feature.EndGatewayFeature;
+import net.minecraft.world.level.levelgen.feature.EndPlatformFeature;
+import net.minecraft.world.level.levelgen.feature.EndPodiumFeature;
+import net.minecraft.world.level.levelgen.feature.VoidStartPlatformFeature;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.ScatteredFeaturePiece;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructurePieceAccessor;
+import net.minecraft.world.level.levelgen.structure.structures.BuriedTreasurePieces;
+import net.minecraft.world.level.levelgen.structure.structures.NetherFortressPieces;
+import net.minecraft.world.level.levelgen.structure.structures.DesertPyramidPiece;
+import net.minecraft.world.level.levelgen.structure.structures.JungleTemplePiece;
+import net.minecraft.world.level.levelgen.structure.structures.SwampHutPiece;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.ticks.TickContainerAccess;
+
+public class BuiltinExtract {
+  static HolderLookup.Provider REGS;
+  static Object PLAINS;
+  static Path OUT;
+
+  // ---------------------------------------------------------------- random
+
+  // A random that returns fixed values, so extraction is canonical and
+  // repeatable. floatVal is tunable per run: diffing two runs with different
+  // floatVal exposes exactly the cells a BlockSelector randomises.
+  static class CannedRandom implements RandomSource {
+    float floatVal;
+    boolean boolVal;
+    int intVal; // nextInt(bound) result once the script runs out
+    Random floatSeq; // when set, nextFloat rolls a seeded stream instead
+    final ArrayDeque<Integer> script = new ArrayDeque<>(); // consumed first by nextInt(bound)
+    CannedRandom(float f) { this(f, false); }
+    CannedRandom(float f, boolean b) { floatVal = f; boolVal = b; }
+    CannedRandom script(int... vs) { for (int v : vs) script.add(v); return this; }
+    CannedRandom floats(long seed) { floatSeq = new Random(seed); return this; }
+    public RandomSource fork() { return new CannedRandom(floatVal, boolVal); }
+    public net.minecraft.world.level.levelgen.PositionalRandomFactory forkPositional() { throw new UnsupportedOperationException("forkPositional"); }
+    public void setSeed(long seed) {}
+    public int nextInt() { return 0; }
+    public int nextInt(int bound) { return Math.min(script.isEmpty() ? intVal : script.poll(), bound - 1); }
+    public long nextLong() { return 0; }
+    public boolean nextBoolean() { return boolVal; }
+    public float nextFloat() { return floatSeq != null ? floatSeq.nextFloat() : floatVal; }
+    public double nextDouble() { return floatVal; }
+    public double nextGaussian() { return 0; }
+  }
+
+  // canonical run and a divergent run: cells that differ between the two are
+  // exactly the ones a random selector controls, and become fixer masks
+  static CannedRandom runA() { return new CannedRandom(0.9f, false); }
+  static CannedRandom runB() { return new CannedRandom(0.1f, true); }
+
+  // ---------------------------------------------------------------- capture
+
+  static class DummyChunk extends ChunkAccess {
+    DummyChunk() {
+      super(new ChunkPos(0, 0), UpgradeData.EMPTY, LevelHeightAccessor.create(0, 0),
+        new PalettedContainerFactory(null, null, null, null, null, null), 0L, null, null);
+    }
+    @Override public void markPosForPostProcessing(BlockPos pos) {}
+    public BlockState setBlockState(BlockPos pos, BlockState state, int flags) { return null; }
+    public void setBlockEntity(BlockEntity blockEntity) {}
+    public void addEntity(Entity entity) {}
+    public ChunkStatus getPersistedStatus() { return ChunkStatus.EMPTY; }
+    public void removeBlockEntity(BlockPos pos) {}
+    public CompoundTag getBlockEntityNbtForSaving(BlockPos pos, HolderLookup.Provider regs) { return null; }
+    public TickContainerAccess<Block> getBlockTicks() { return null; }
+    public TickContainerAccess<Fluid> getFluidTicks() { return null; }
+    public ChunkAccess.PackedTicks getTicksForSerialization(long tick) { return null; }
+    public BlockState getBlockState(BlockPos pos) { return Blocks.AIR.defaultBlockState(); }
+    public net.minecraft.world.level.material.FluidState getFluidState(BlockPos pos) { return Blocks.AIR.defaultBlockState().getFluidState(); }
+    public BlockEntity getBlockEntity(BlockPos pos) { return null; }
+  }
+
+  static class Capture {
+    final Map<BlockPos, BlockState> placed = new LinkedHashMap<>();
+    final Map<BlockPos, BlockEntity> bes = new HashMap<>();
+    final List<CompoundTag> entities = new ArrayList<>();
+    final Map<BlockPos, BlockState> world = new HashMap<>(); // pre-existing terrain, not captured
+    int groundY = Integer.MIN_VALUE;                          // below this the world reads as `ground`
+    BlockState ground = Blocks.STONE.defaultBlockState();
+    int heightmapY = 0;                                       // heightmap answers
+    int minY = -64;                                           // world floor (the End uses 0)
+    CannedRandom random = runA();                             // level.getRandom()
+    final Set<String> unknown = new TreeSet<>();
+    final ChunkAccess chunk = new DummyChunk();
+
+    void fillWorld(int x0, int y0, int z0, int x1, int y1, int z1, BlockState s) {
+      for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+          for (int z = z0; z <= z1; z++) world.put(new BlockPos(x, y, z), s);
+    }
+
+    // adopt untouched prefilled terrain into the output (dressing around a
+    // piece that in game is embedded in the ground)
+    void includeWorld(int x0, int y0, int z0, int x1, int y1, int z1) {
+      for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+          for (int z = z0; z <= z1; z++) {
+            BlockPos p = new BlockPos(x, y, z);
+            BlockState s = world.get(p);
+            if (s != null && !placed.containsKey(p)) placed.put(p, s);
+          }
+    }
+
+    BlockState get(BlockPos p) {
+      BlockState s = placed.get(p);
+      if (s == null) s = world.get(p);
+      if (s == null) s = p.getY() < groundY ? ground : Blocks.AIR.defaultBlockState();
+      return s;
+    }
+
+    void set(BlockPos p0, BlockState s) {
+      BlockPos p = p0.immutable();
+      placed.put(p, s);
+      bes.remove(p);
+      if (s.hasBlockEntity() && s.getBlock() instanceof EntityBlock eb) {
+        BlockEntity be = eb.newBlockEntity(p, s);
+        if (be != null) bes.put(p, be);
+      }
+    }
+
+    WorldGenLevel level() {
+      InvocationHandler h = (proxy, method, a) -> {
+        String n = method.getName();
+        switch (n) {
+          case "setBlock": case "setBlockAndUpdate": { set((BlockPos) a[0], (BlockState) a[1]); return true; }
+          case "destroyBlock": case "removeBlock": { set((BlockPos) a[0], Blocks.AIR.defaultBlockState()); return true; }
+          case "getBlockState": return get((BlockPos) a[0]);
+          case "getFluidState": return get((BlockPos) a[0]).getFluidState();
+          case "getBlockEntity": {
+            BlockEntity be = bes.get(((BlockPos) a[0]).immutable());
+            if (a.length < 2) return be;
+            return be != null && be.getType() == a[1] ? Optional.of(be) : Optional.empty();
+          }
+          case "isEmptyBlock": return get((BlockPos) a[0]).isAir();
+          case "getMinY": return minY;
+          case "getMaxY": return 319;
+          case "getSeaLevel": return 63;
+          case "getChunk": return chunk;
+          case "getHeight": return a == null || a.length == 0 ? 384 : heightmapY;
+          case "getHeightmapPos": {
+            BlockPos p = (BlockPos) a[1];
+            return new BlockPos(p.getX(), heightmapY, p.getZ());
+          }
+          case "isInsideBuildHeight": return true;
+          case "getRandom": return random;
+          case "getBiome": return PLAINS;
+          case "addFreshEntity": return true;
+          case "toString": return "CaptureLevel";
+          case "hashCode": return System.identityHashCode(proxy);
+          case "equals": return proxy == a[0];
+          default: {
+            unknown.add(n);
+            Class<?> r = method.getReturnType();
+            if (r == boolean.class) return false;
+            if (r == int.class) return 0;
+            if (r == long.class) return 0L;
+            if (r == float.class) return 0f;
+            if (r == double.class) return 0d;
+            return null;
+          }
+        }
+      };
+      return (WorldGenLevel) Proxy.newProxyInstance(WorldGenLevel.class.getClassLoader(), new Class<?>[]{ WorldGenLevel.class }, h);
+    }
+  }
+
+  // ------------------------------------------------------------------- nbt
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  static String pval(BlockState s, Property p) { return p.getName(s.getValue(p)); }
+
+  static CompoundTag paletteEntry(BlockState s) {
+    CompoundTag e = new CompoundTag();
+    e.putString("Name", BuiltInRegistries.BLOCK.getKey(s.getBlock()).toString());
+    if (!s.getProperties().isEmpty()) {
+      CompoundTag props = new CompoundTag();
+      for (Property<?> p : s.getProperties()) props.putString(p.getName(), pval(s, p));
+      e.put("Properties", props);
+    }
+    return e;
+  }
+
+  // 26.3 registers feature types by codec, so a placed instance can name itself.
+  // the end platform is a static helper with no instance, so it says so directly
+  static final TreeSet<String> CAPTURED_FEATURES = new TreeSet<>();
+
+  static void noteFeature(Feature f) {
+    var key = BuiltInRegistries.FEATURE_TYPE.getKey(f.codec());
+    if (key == null) throw new IllegalStateException("unregistered feature: " + f.getClass().getSimpleName());
+    CAPTURED_FEATURES.add(key.toString());
+  }
+
+  static void noteFeature(String id) { CAPTURED_FEATURES.add(id); }
+
+  static void write(String name, Capture cap, BoundingBox bb, boolean northFlip) throws Exception {
+    write(name, cap, bb, northFlip, null);
+  }
+
+  // bb null: fit to the non-air extents of what was placed. northFlip: the
+  // capture ran as an orientation-NORTH piece, so unflip z to authored space.
+  // masks: named world-position lists of randomised cells, written to a
+  // .rand.json sidecar in the same local space for the viewer's fixers.
+  static void write(String name, Capture cap, BoundingBox bb, boolean northFlip, Map<String, List<BlockPos>> masks) throws Exception {
+    if (bb == null) {
+      int[] lo = { Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE }, hi = { Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE };
+      for (Map.Entry<BlockPos, BlockState> e : cap.placed.entrySet()) {
+        if (e.getValue().isAir()) continue;
+        BlockPos p = e.getKey();
+        lo[0] = Math.min(lo[0], p.getX()); lo[1] = Math.min(lo[1], p.getY()); lo[2] = Math.min(lo[2], p.getZ());
+        hi[0] = Math.max(hi[0], p.getX()); hi[1] = Math.max(hi[1], p.getY()); hi[2] = Math.max(hi[2], p.getZ());
+      }
+      if (lo[0] > hi[0]) throw new IllegalStateException(name + ": nothing captured");
+      bb = new BoundingBox(lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]);
+    }
+
+    ListTag palette = new ListTag();
+    Map<BlockState, Integer> palIdx = new LinkedHashMap<>();
+    ListTag blocks = new ListTag();
+    int skipped = 0;
+    for (Map.Entry<BlockPos, BlockState> e : cap.placed.entrySet()) {
+      BlockPos p = e.getKey();
+      if (!bb.isInside(p)) { skipped++; continue; }
+      BlockState s = e.getValue();
+      Integer idx = palIdx.get(s);
+      if (idx == null) { idx = palette.size(); palIdx.put(s, idx); palette.add(paletteEntry(s)); }
+      int lx = p.getX() - bb.minX(), ly = p.getY() - bb.minY();
+      int lz = northFlip ? bb.maxZ() - p.getZ() : p.getZ() - bb.minZ();
+      CompoundTag b = new CompoundTag();
+      b.putInt("state", idx);
+      b.put("pos", intList(lx, ly, lz));
+      BlockEntity be = cap.bes.get(p);
+      if (be != null) {
+        CompoundTag t = be.saveWithoutMetadata(REGS);
+        t.putString("id", BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(be.getType()).toString());
+        b.put("nbt", t);
+      }
+      blocks.add(b);
+    }
+
+    ListTag entities = new ListTag();
+    for (CompoundTag nbt : cap.entities) {
+      // entity positions arrive world-space, shift/flip like blocks
+      ListTag pos = nbt.getListOrEmpty("pos");
+      double ex = pos.getDoubleOr(0, 0) - bb.minX(), ey = pos.getDoubleOr(1, 0) - bb.minY();
+      double ez = northFlip ? bb.maxZ() + 1 - (pos.getDoubleOr(2, 0)) : pos.getDoubleOr(2, 0) - bb.minZ();
+      CompoundTag e = new CompoundTag();
+      ListTag dp = new ListTag();
+      dp.add(DoubleTag.valueOf(ex)); dp.add(DoubleTag.valueOf(ey)); dp.add(DoubleTag.valueOf(ez));
+      e.put("pos", dp);
+      e.put("blockPos", intList((int) Math.floor(ex), (int) Math.floor(ey), (int) Math.floor(ez)));
+      e.put("nbt", nbt.getCompoundOrEmpty("nbt"));
+      entities.add(e);
+    }
+
+    CompoundTag root = new CompoundTag();
+    root.put("size", intList(bb.getXSpan(), bb.getYSpan(), bb.getZSpan()));
+    root.put("palette", palette);
+    root.put("blocks", blocks);
+    root.put("entities", entities);
+    root.putInt("DataVersion", SharedConstants.getCurrentVersion().dataVersion().version());
+
+    Path file = OUT.resolve("data/minecraft/structure/" + name + ".nbt");
+    Files.createDirectories(file.getParent());
+    NbtIo.writeCompressed(root, file);
+
+    int maskCells = 0;
+    if (masks != null && !masks.isEmpty()) {
+      StringBuilder json = new StringBuilder("{\n");
+      boolean firstMask = true;
+      for (Map.Entry<String, List<BlockPos>> m : masks.entrySet()) {
+        if (!firstMask) json.append(",\n");
+        firstMask = false;
+        json.append("  \"").append(m.getKey()).append("\": [");
+        boolean firstCell = true;
+        List<int[]> local = new ArrayList<>();
+        for (BlockPos p : m.getValue()) {
+          if (!bb.isInside(p)) { System.out.println("[builtin] WARN mask cell outside bb: " + name + " " + m.getKey() + " " + p); continue; }
+          int lz = northFlip ? bb.maxZ() - p.getZ() : p.getZ() - bb.minZ();
+          local.add(new int[]{ p.getX() - bb.minX(), p.getY() - bb.minY(), lz });
+        }
+        local.sort(Comparator.<int[]>comparingInt(c -> c[1]).thenComparingInt(c -> c[2]).thenComparingInt(c -> c[0]));
+        for (int[] c : local) {
+          if (!firstCell) json.append(",");
+          firstCell = false;
+          json.append("[").append(c[0]).append(",").append(c[1]).append(",").append(c[2]).append("]");
+          maskCells++;
+        }
+        json.append("]");
+      }
+      json.append("\n}\n");
+      Files.writeString(OUT.resolve("data/minecraft/structure/" + name + ".rand.json"), json.toString());
+    }
+
+    System.out.println("[builtin] " + name + ": " + blocks.size() + " blocks, " + bb.getXSpan() + "x" + bb.getYSpan() + "x" + bb.getZSpan()
+      + (maskCells > 0 ? ", " + maskCells + " mask cells" : "")
+      + (skipped > 0 ? " (" + skipped + " outside bb)" : "")
+      + (cap.unknown.isEmpty() ? "" : " unknown level calls: " + cap.unknown));
+  }
+
+  static ListTag intList(int... vs) {
+    ListTag l = new ListTag();
+    for (int v : vs) l.add(IntTag.valueOf(v));
+    return l;
+  }
+
+  static HolderLookup.Provider worldLookup() {
+    for (String name : new String[]{ "createWorldLookup", "createLookup" }) {
+      try { return (HolderLookup.Provider) VanillaRegistries.class.getMethod(name).invoke(null); }
+      catch (NoSuchMethodException e) { continue; }
+      catch (Exception e) { throw new RuntimeException(e); }
+    }
+    throw new RuntimeException("no VanillaRegistries world-lookup factory found");
+  }
+
+  // ---------------------------------------------------------------- pieces
+
+  static final BoundingBox WORLD_BB = new BoundingBox(-100000, -1000, -100000, 100000, 1000, 100000);
+
+  // world position under the SOUTH orientation transform (Rotation.NONE)
+  static BlockPos southWorldPos(BoundingBox bb, int x, int y, int z) {
+    return new BlockPos(bb.minX() + x, bb.minY() + y, bb.minZ() + z);
+  }
+
+  static void setHeightPosition(StructurePiece piece, int v) throws Exception {
+    java.lang.reflect.Field f = ScatteredFeaturePiece.class.getDeclaredField("heightPosition");
+    f.setAccessible(true);
+    f.setInt(piece, v);
+  }
+
+  interface PieceRun { StructurePiece run(Capture cap, CannedRandom rand) throws Exception; }
+
+  static Capture runTwice(PieceRun body, Map<String, List<BlockPos>> masks, java.util.function.Function<BlockPos, String> classify) throws Exception {
+    return runTwice(body, masks, classify, runA(), runB());
+  }
+
+  // runs the piece twice (canonical + divergent random) and returns the
+  // canonical capture plus the diff cells, classified by the given namer
+  static Capture runTwice(PieceRun body, Map<String, List<BlockPos>> masks, java.util.function.Function<BlockPos, String> classify, CannedRandom randA, CannedRandom randB) throws Exception {
+    Capture capA = new Capture();
+    capA.random = randA;
+    body.run(capA, capA.random);
+    Capture capB = new Capture();
+    capB.random = randB;
+    body.run(capB, capB.random);
+    if (!capA.placed.keySet().equals(capB.placed.keySet()))
+      System.out.println("[builtin] WARN diff runs placed different cells (structural divergence)");
+    for (Map.Entry<BlockPos, BlockState> e : capA.placed.entrySet()) {
+      BlockState other = capB.placed.get(e.getKey());
+      if (other == null || other == e.getValue()) continue;
+      String name = classify.apply(e.getKey());
+      if (name == null) { System.out.println("[builtin] WARN unclassified diff cell " + e.getKey() + ": " + e.getValue() + " vs " + other); continue; }
+      masks.computeIfAbsent(name, k -> new ArrayList<>()).add(e.getKey());
+    }
+    return capA;
+  }
+
+  static CompoundTag entityTag(String id, double x, double y, double z) {
+    CompoundTag e = new CompoundTag();
+    ListTag pos = new ListTag();
+    pos.add(DoubleTag.valueOf(x)); pos.add(DoubleTag.valueOf(y)); pos.add(DoubleTag.valueOf(z));
+    e.put("pos", pos);
+    CompoundTag nbt = new CompoundTag();
+    nbt.putString("id", id);
+    e.put("nbt", nbt);
+    return e;
+  }
+
+  static void desertPyramid() throws Exception {
+    Map<String, List<BlockPos>> masks = new LinkedHashMap<>();
+    DesertPyramidPiece[] keep = new DesertPyramidPiece[1];
+    Capture cap = runTwice((c, rand) -> {
+      DesertPyramidPiece piece = new DesertPyramidPiece(rand, 0, 0);
+      piece.setOrientation(Direction.SOUTH);
+      setHeightPosition(piece, 0);
+      BoundingBox bb = piece.getBoundingBox();
+      // desert terrain below ground level: the cellar redresses it (skipAir
+      // boxes) and fillColumnDown pillars stop against it
+      c.fillWorld(bb.minX() - 1, bb.minY() - 16, bb.minZ() - 1, bb.maxX() + 1, bb.minY() - 1, bb.maxZ() + 1, Blocks.SAND.defaultBlockState());
+      piece.postProcess(c.level(), null, null, rand, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+      // afterPlace turns every potential position into sand, then rolls 5-7
+      // suspicious ones per world seed (a viewer fixer re-rolls those)
+      for (BlockPos p : piece.getPotentialSuspiciousSandWorldPositions()) c.set(p, Blocks.SAND.defaultBlockState());
+      keep[0] = piece;
+      return piece;
+    }, masks, p -> {
+      int localY = p.getY() - keep[0].getBoundingBox().minY();
+      return localY == 0 ? "collapsed_roof" : localY == -1 ? "stair_variant" : null;
+    });
+    masks.put("suspicious_sand", new ArrayList<>(keep[0].getPotentialSuspiciousSandWorldPositions()));
+    write("builtin/desert_pyramid", cap, null, false, masks);
+  }
+
+  static void jungleTemple() throws Exception {
+    Map<String, List<BlockPos>> masks = new LinkedHashMap<>();
+    Capture cap = runTwice((c, rand) -> {
+      JungleTemplePiece piece = new JungleTemplePiece(rand, 0, 0);
+      piece.setOrientation(Direction.SOUTH);
+      setHeightPosition(piece, 0);
+      piece.postProcess(c.level(), null, null, rand, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+      return piece;
+    }, masks, p -> "moss");
+    write("builtin/jungle_temple", cap, null, false, masks);
+  }
+
+  static void swampHut() throws Exception {
+    Capture cap = new Capture();
+    CannedRandom rand = runA();
+    cap.random = rand;
+    SwampHutPiece piece = new SwampHutPiece(rand, 0, 0);
+    piece.setOrientation(Direction.SOUTH);
+    setHeightPosition(piece, 0);
+    BoundingBox bb = piece.getBoundingBox();
+    cap.groundY = bb.minY(); // the stilts' fillColumnDown stops at the box
+    try {
+      piece.postProcess(cap.level(), null, null, rand, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+    } catch (Exception e) {
+      // the witch/cat spawn needs a real ServerLevel; blocks are already done
+    }
+    BlockPos wp = southWorldPos(bb, 2, 2, 5);
+    cap.entities.add(entityTag("minecraft:witch", wp.getX() + 0.5, wp.getY(), wp.getZ() + 0.5));
+    cap.entities.add(entityTag("minecraft:cat", wp.getX() + 0.5, wp.getY(), wp.getZ() + 0.5));
+    write("builtin/swamp_hut", cap, null, false);
+  }
+
+  static void bonusChest() throws Exception {
+    Capture cap = new Capture();
+    cap.random = runA();
+    cap.heightmapY = 0;
+    cap.fillWorld(-1, -1, -1, 16, -1, 16, Blocks.GRASS_BLOCK.defaultBlockState());
+    BonusChestFeature bonus = new BonusChestFeature();
+    noteFeature(bonus);
+    bonus.place(cap.level(), null, cap.random, new BlockPos(0, 0, 0));
+    // keep the grass the chest and torches stand on
+    for (BlockPos p : new ArrayList<>(cap.placed.keySet())) {
+      BlockPos below = p.below();
+      BlockState g = cap.world.get(below);
+      if (g != null && !cap.placed.containsKey(below)) cap.placed.put(below, g);
+    }
+    write("features/bonus_chest", cap, null, false);
+  }
+
+  // dungeon (MonsterRoomFeature): a Feature whose walls are pre-existing
+  // terrain. each size variant is extracted inside a stone pocket with one
+  // doorway hole; the viewer's generator picks the variant and re-rolls the
+  // floor, spawner mob and chests per seed like the game
+  // x/y offsets of the cave mouth on a wall, relative to the wall's centre
+  static final int[][] DUNGEON_MOUTH = { { -1, 0 }, { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 }, { 1, 2 } };
+
+  static void dungeon(int xs, int zs) throws Exception {
+    int xr = xs - 2, zr = zs - 2; // the nextInt(2) rolls behind each size
+    Map<String, List<BlockPos>> masks = new LinkedHashMap<>();
+    Capture cap = runTwice((c, rand) -> {
+      rand.script(xr, zr);
+      if (rand.boolVal) rand.intVal = 1; // divergent run: floor rolls mossy
+      c.fillWorld(-xs - 2, -2, -zs - 2, xs + 2, 5, zs + 2, Blocks.STONE.defaultBlockState());
+      // the feature never carves an opening: ring cells that are already air
+      // survive the wall pass, so the doorway is whatever a cave had eaten
+      for (int[] cell : DUNGEON_MOUTH) {
+        c.world.put(new BlockPos(cell[0], cell[1], -zs - 1), Blocks.AIR.defaultBlockState());
+      }
+      net.minecraft.world.level.levelgen.feature.MonsterRoomFeature room = new net.minecraft.world.level.levelgen.feature.MonsterRoomFeature();
+      noteFeature(room);
+      if (!room.place(c.level(), null, rand, BlockPos.ZERO))
+        throw new IllegalStateException("dungeon refused to place");
+      // the feature leaves already-air cells alone, so nothing records them and
+      // the doorway would ship as absent cells rather than air
+      for (int[] cell : DUNGEON_MOUTH) {
+        BlockPos p = new BlockPos(cell[0], cell[1], -zs - 1);
+        if (c.level().getBlockState(p).isAir()) c.set(p, Blocks.CAVE_AIR.defaultBlockState());
+      }
+      return null;
+    }, masks, p -> p.getY() == -1 ? "floor" : null);
+    write("features/dungeon/" + (xs * 2 + 1) + "x" + (zs * 2 + 1), cap, null, false, masks);
+  }
+
+  static void buriedTreasure() throws Exception {
+    Capture cap = new Capture();
+    cap.random = runA();
+    cap.heightmapY = 0;
+    cap.fillWorld(-2, -4, -2, 2, -1, 2, Blocks.SAND.defaultBlockState());
+    cap.groundY = -4;
+    BuriedTreasurePieces.BuriedTreasurePiece piece = new BuriedTreasurePieces.BuriedTreasurePiece(BlockPos.ZERO);
+    piece.postProcess(cap.level(), null, null, cap.random, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+    // reorient faced the chest by its neighbours; the tree entry faces north
+    BlockPos chestPos = null;
+    for (Map.Entry<BlockPos, BlockState> e : cap.placed.entrySet()) {
+      if (e.getValue().is(Blocks.CHEST)) chestPos = e.getKey();
+    }
+    if (chestPos != null) {
+      cap.placed.put(chestPos, cap.placed.get(chestPos)
+        .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH));
+    }
+    write("builtin/buried_treasure", cap, null, false);
+  }
+
+  // ---------------------------------------------------------- nether fortress
+
+  static final StructurePieceAccessor NO_COLLISION = new StructurePieceAccessor() {
+    public void addPiece(StructurePiece piece) {}
+    public StructurePiece findCollisionPiece(BoundingBox box) { return null; }
+  };
+
+  // every piece extracted at orientation NORTH with its own bounding box, so
+  // nbt local coords equal the game's box-local coords and the JS layout can
+  // paste them at the boxes it computes
+  static void fortressPiece(String name, StructurePiece piece) throws Exception {
+    if (piece == null) throw new IllegalStateException(name + ": createPiece returned null");
+    Capture cap = new Capture();
+    cap.random = runA();
+    cap.groundY = piece.getBoundingBox().minY(); // support pillars stop at the box
+    piece.postProcess(cap.level(), null, null, cap.random, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+    write("builtin/nether_fortress/" + name, cap, piece.getBoundingBox(), false);
+  }
+
+  static void netherFortress() throws Exception {
+    CannedRandom r = runA();
+    Direction N = Direction.NORTH;
+    fortressPiece("bridge_straight", NetherFortressPieces.BridgeStraight.createPiece(NO_COLLISION, r, 0, 64, 0, N, 0));
+    fortressPiece("bridge_crossing", NetherFortressPieces.BridgeCrossing.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("room_crossing", NetherFortressPieces.RoomCrossing.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("stairs_room", NetherFortressPieces.StairsRoom.createPiece(NO_COLLISION, 0, 64, 0, 0, N));
+    fortressPiece("monster_throne", NetherFortressPieces.MonsterThrone.createPiece(NO_COLLISION, 0, 64, 0, 0, N));
+    fortressPiece("castle_entrance", NetherFortressPieces.CastleEntrance.createPiece(NO_COLLISION, r, 0, 64, 0, N, 0));
+    fortressPiece("castle_small_corridor", NetherFortressPieces.CastleSmallCorridorPiece.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("castle_small_corridor_right_turn", NetherFortressPieces.CastleSmallCorridorRightTurnPiece.createPiece(NO_COLLISION, r, 0, 64, 0, N, 0));
+    fortressPiece("castle_small_corridor_left_turn", NetherFortressPieces.CastleSmallCorridorLeftTurnPiece.createPiece(NO_COLLISION, r, 0, 64, 0, N, 0));
+    fortressPiece("castle_corridor_stairs", NetherFortressPieces.CastleCorridorStairsPiece.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("castle_corridor_t_balcony", NetherFortressPieces.CastleCorridorTBalconyPiece.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("castle_small_corridor_crossing", NetherFortressPieces.CastleSmallCorridorCrossingPiece.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+    fortressPiece("castle_stalk_room", NetherFortressPieces.CastleStalkRoom.createPiece(NO_COLLISION, 0, 64, 0, N, 0));
+  }
+
+  // --------------------------------------------------------------- mineshaft
+
+  // one sample corridor per wood type as the tree entries; the real system
+  // is generated in code. extracted inside solid stone (mineshafts redress
+  // terrain) with the tube kept as display shell, rails on, chests off
+  static CannedRandom mineshaftRandom(int... script) {
+    CannedRandom rand = new CannedRandom(0.05f);
+    rand.intVal = 1;
+    rand.script(script);
+    return rand;
+  }
+
+  static void mineshaftPiece(String name, Capture cap, StructurePiece piece) throws Exception {
+    try {
+      piece.postProcess(cap.level(), null, null, cap.random, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+    } catch (Exception e) {
+      System.out.println("[builtin] " + name + " postProcess stopped early: " + e);
+    }
+    write("builtin/mineshaft/" + name, cap, null, false);
+  }
+
+  // only the crossings are extracted: the corridors and the room are random
+  // in game (length, rails, webs, size), so the viewer generates them
+  static void mineshaft(String folder, net.minecraft.world.level.levelgen.structure.structures.MineshaftStructure.Type type) throws Exception {
+    // crossings: support pillars need a solid roof above their four spots
+    for (boolean tall : new boolean[]{ false, true }) {
+      Capture c = new Capture();
+      c.random = mineshaftRandom(tall ? 0 : 1); // the nextInt(4)==0 roll picks two floors
+      c.heightmapY = 10000;
+      BoundingBox cb = net.minecraft.world.level.levelgen.structure.structures.MineshaftPieces.MineShaftCrossing.findCrossing(NO_COLLISION, c.random, 0, 64, 0, Direction.NORTH);
+      for (int px : new int[]{ cb.minX() + 1, cb.maxX() - 1 })
+        for (int pz : new int[]{ cb.minZ() + 1, cb.maxZ() - 1 })
+          c.fillWorld(px, cb.maxY() + 1, pz, px, cb.maxY() + 1, pz, Blocks.STONE.defaultBlockState());
+      mineshaftPiece(folder + (tall ? "/crossing_two_floored" : "/crossing"), c,
+        new net.minecraft.world.level.levelgen.structure.structures.MineshaftPieces.MineShaftCrossing(0, cb, Direction.NORTH, type));
+    }
+
+  }
+
+  // -------------------------------------------------------------- stronghold
+
+  // canonical stronghold pieces: door roll scripted to OPENING, side-branch
+  // bools false, floats 0.9 vs 0.35 so the two runs differ on exactly the
+  // SmoothStoneSelector edge cells (torches 0.1, cobwebs 0.07 and portal eyes
+  // 0.9 stay put in both runs and are re-rolled in JS at known coordinates)
+  interface StrongholdMake { StructurePiece make(CannedRandom rand) throws Exception; }
+
+  static void strongholdPiece(String name, int[] script, StrongholdMake make) throws Exception {
+    Map<String, List<BlockPos>> masks = new LinkedHashMap<>();
+    Capture cap = runTwice((c, rand) -> {
+      rand.script(script);
+      // strongholds are carved through solid rock: the skipAir shells only
+      // redress existing blocks, so the whole world reads as stone
+      c.groundY = 10000;
+      StructurePiece piece = make.make(rand);
+      if (piece == null) throw new IllegalStateException(name + ": createPiece returned null");
+      piece.postProcess(c.level(), null, null, rand, WORLD_BB, new ChunkPos(0, 0), BlockPos.ZERO);
+      return piece;
+    }, masks, p -> "stone", new CannedRandom(0.9f, false), new CannedRandom(0.35f, false));
+    // rerun canonically to get the piece for its bounding box
+    CannedRandom rand = new CannedRandom(0.9f, false);
+    rand.script(script);
+    StructurePiece piece = make.make(rand);
+    write("builtin/stronghold/" + name, cap, piece.getBoundingBox(), false, masks);
+  }
+
+  static void stronghold() throws Exception {
+    var acc = NO_COLLISION;
+    Direction N = Direction.NORTH;
+    // door roll 0 = OPENING; straight also pins leftChild/rightChild to false
+    strongholdPiece("straight", new int[]{ 0, 1, 1 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.Straight.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("prison_hall", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.PrisonHall.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("left_turn", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.LeftTurn.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("right_turn", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.RightTurn.createPiece(acc, r, 0, 64, 0, N, 1));
+    for (int type = 0; type <= 3; type++) {
+      final int t = type;
+      strongholdPiece("room_crossing_" + t, new int[]{ 0, t }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.RoomCrossing.createPiece(acc, r, 0, 64, 0, N, 1));
+    }
+    strongholdPiece("straight_stairs_down", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.StraightStairsDown.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("stairs_down", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.StairsDown.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("five_crossing", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.FiveCrossing.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("chest_corridor", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.ChestCorridor.createPiece(acc, r, 0, 64, 0, N, 1));
+    strongholdPiece("library", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.Library.createPiece(acc, r, 0, 64, 0, N, 1));
+    // the short library exists when the tall box does not fit: fake a
+    // collision for 11-high boxes so createPiece takes the shrink path
+    StructurePieceAccessor shortAcc = new StructurePieceAccessor() {
+      public void addPiece(StructurePiece piece) {}
+      public StructurePiece findCollisionPiece(BoundingBox box) {
+        return box.getYSpan() > 6 ? new BuriedTreasurePieces.BuriedTreasurePiece(new BlockPos(9999, 9999, 9999)) : null;
+      }
+    };
+    strongholdPiece("library_short", new int[]{ 0 }, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.Library.createPiece(shortAcc, r, 0, 64, 0, N, 1));
+    strongholdPiece("portal_room", new int[]{}, r -> net.minecraft.world.level.levelgen.structure.structures.StrongholdPieces.PortalRoom.createPiece(acc, 0, 64, 0, N, 1));
+  }
+
+  // ------------------------------------------------------------- structures
+
+  static void endPlatform() throws Exception {
+    Capture cap = new Capture();
+    noteFeature("minecraft:end_platform");
+    EndPlatformFeature.createEndPlatform(cap.level(), new BlockPos(0, 0, 0), false);
+    write("features/end/platform", cap, null, false);
+  }
+
+  static void endGateway() throws Exception {
+    Capture cap = new Capture();
+    EndGatewayFeature gateway = new EndGatewayFeature(Optional.empty(), false);
+    noteFeature(gateway);
+    gateway.place(cap.level(), null, new CannedRandom(0.9f), new BlockPos(0, 0, 0));
+    write("features/end/gateway", cap, null, false);
+  }
+
+  // the game builds the platform chunk by chunk; running the feature once
+  // per chunk around the platform origin captures the whole disc
+  static void voidStartPlatform() throws Exception {
+    Capture cap = new Capture();
+    VoidStartPlatformFeature feature = new VoidStartPlatformFeature();
+    noteFeature(feature);
+    for (int cx = -1; cx <= 1; cx++) {
+      for (int cz = -1; cz <= 1; cz++) {
+        feature.place(cap.level(), null, cap.random, new BlockPos(cx * 16, 0, cz * 16));
+      }
+    }
+    write("features/void_start_platform", cap, null, false);
+  }
+
+  static void exitPortal(boolean active) throws Exception {
+    Capture cap = new Capture();
+    BlockPos origin = new BlockPos(0, 0, 0);
+    EndPodiumFeature podium = new EndPodiumFeature(active);
+    noteFeature(podium);
+    podium.place(cap.level(), null, new CannedRandom(0.9f), origin);
+    // the first dragon fight leaves the egg on the pillar (EnderDragonFight)
+    if (active) cap.set(origin.above(4), Blocks.DRAGON_EGG.defaultBlockState());
+    write(active ? "features/end/exit_portal/active" : "features/end/exit_portal/inactive", cap, null, false);
+  }
+
+  public static void main(String[] args) throws Exception {
+    SharedConstants.tryDetectVersion();
+    Bootstrap.bootStrap();
+    REGS = worldLookup();
+    // a direct holder: is(tag) is false without needing bound datapack tags
+    PLAINS = net.minecraft.core.Holder.direct(REGS.lookupOrThrow(net.minecraft.core.registries.Registries.BIOME).getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS).value());
+    OUT = Path.of(args[0]);
+
+    desertPyramid();
+    jungleTemple();
+    swampHut();
+    bonusChest();
+    buriedTreasure();
+    dungeon(2, 2);
+    dungeon(3, 2);
+    dungeon(2, 3);
+    dungeon(3, 3);
+    netherFortress();
+    stronghold();
+    mineshaft("normal", net.minecraft.world.level.levelgen.structure.structures.MineshaftStructure.Type.NORMAL);
+    mineshaft("mesa", net.minecraft.world.level.levelgen.structure.structures.MineshaftStructure.Type.MESA);
+    endPlatform();
+    endGateway();
+    voidStartPlatform();
+    exitPortal(false);
+    exitPortal(true);
+
+    StringBuilder feats = new StringBuilder("[\n");
+    int fi = 0;
+    for (String id : CAPTURED_FEATURES) {
+      feats.append("  \"").append(id).append("\"").append(++fi < CAPTURED_FEATURES.size() ? "," : "").append("\n");
+    }
+    Files.createDirectories(OUT.resolve("viewer"));
+    Files.writeString(OUT.resolve("viewer/captured_features.json"), feats.append("]\n").toString());
+    System.out.println("[builtin] captured features: " + CAPTURED_FEATURES);
+    System.out.println("[builtin] done");
+  }
+}

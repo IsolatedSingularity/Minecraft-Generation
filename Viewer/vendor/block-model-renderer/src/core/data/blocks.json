@@ -1,0 +1,750 @@
+{
+  "_generated": "from minecraft 26.3-snapshot-3 by tools/generate/generate.js",
+  "waterloggable": {
+    "suffix": [
+      "_amethyst_bud",
+      "_bars",
+      "_chain",
+      "_coral",
+      "_dripleaf",
+      "_fan",
+      "_fence",
+      "_golem_statue",
+      "_grate",
+      "_leaves",
+      "_lightning_rod",
+      "_pane",
+      "_sensor",
+      "_shelf",
+      "_sign",
+      "_slab",
+      "_stairs",
+      "_trapdoor",
+      "_wall",
+      "campfire",
+      "candle",
+      "chest",
+      "lantern",
+      "rail"
+    ],
+    "exact": [
+      "amethyst_cluster",
+      "barrier",
+      "big_dripleaf_stem",
+      "conduit",
+      "decorated_pot",
+      "dried_ghast",
+      "glow_lichen",
+      "hanging_roots",
+      "heavy_core",
+      "ladder",
+      "light",
+      "lightning_rod",
+      "mangrove_propagule",
+      "mangrove_roots",
+      "pointed_dripstone",
+      "resin_clump",
+      "scaffolding",
+      "sculk_shrieker",
+      "sculk_vein",
+      "sea_pickle",
+      "sulfur_spike"
+    ],
+    "except": [
+      "jack_o_lantern",
+      "sea_lantern"
+    ]
+  },
+  "waterlogged": {
+    "suffix": [
+      "seagrass"
+    ],
+    "exact": [
+      "bubble_column",
+      "kelp",
+      "kelp_plant"
+    ]
+  },
+  "nonOccluding": {
+    "suffix": [
+      "_box",
+      "_grate",
+      "_leaves",
+      "azalea",
+      "campfire",
+      "door",
+      "glass",
+      "spawner"
+    ],
+    "exact": [
+      "barrier",
+      "beacon",
+      "chorus_flower",
+      "frosted_ice",
+      "honey_block",
+      "ice",
+      "ladder",
+      "mangrove_roots",
+      "pale_moss_carpet",
+      "powder_snow",
+      "scaffolding",
+      "slime_block",
+      "straw_bed",
+      "test_instance_block",
+      "vault"
+    ]
+  },
+  "selfCullAll": {
+    "suffix": [
+      "_grate",
+      "glass",
+      "ice"
+    ],
+    "exact": [
+      "honey_block",
+      "powder_snow",
+      "slime_block"
+    ],
+    "except": [
+      "packed_ice"
+    ]
+  },
+  "selfCullY": {
+    "suffix": [
+      "_bars",
+      "_pane"
+    ],
+    "exact": [
+      "mangrove_roots"
+    ]
+  },
+  "lightEmission": [
+    {
+      "value": 15,
+      "suffix": [
+        "_froglight",
+        "lantern"
+      ],
+      "exact": [
+        "beacon",
+        "conduit",
+        "end_gateway",
+        "end_portal",
+        "fire",
+        "glowstone",
+        "lava",
+        "lava_cauldron",
+        "shroomlight"
+      ],
+      "except": [
+        "soul_lantern"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "candles": "1",
+              "lit": "true"
+            },
+            3
+          ],
+          [
+            {
+              "candles": "2",
+              "lit": "true"
+            },
+            6
+          ],
+          [
+            {
+              "candles": "3",
+              "lit": "true"
+            },
+            9
+          ],
+          [
+            {
+              "candles": "4",
+              "lit": "true"
+            },
+            12
+          ]
+        ]
+      },
+      "suffix": [
+        "candle"
+      ],
+      "exact": []
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            3
+          ]
+        ]
+      },
+      "suffix": [
+        "_cake"
+      ],
+      "exact": []
+    },
+    {
+      "value": 1,
+      "suffix": [
+        "_sensor"
+      ],
+      "exact": [
+        "brewing_stand",
+        "brown_mushroom",
+        "dragon_egg",
+        "end_portal_frame",
+        "small_amethyst_bud"
+      ]
+    },
+    {
+      "value": 10,
+      "suffix": [],
+      "exact": [
+        "crying_obsidian",
+        "soul_fire",
+        "soul_lantern",
+        "soul_torch",
+        "soul_wall_torch"
+      ]
+    },
+    {
+      "value": 14,
+      "suffix": [],
+      "exact": [
+        "copper_torch",
+        "copper_wall_torch",
+        "end_rod",
+        "torch",
+        "wall_torch"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            15
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "campfire",
+        "copper_bulb",
+        "redstone_lamp",
+        "waxed_copper_bulb"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            13
+          ]
+        ]
+      },
+      "suffix": [
+        "furnace"
+      ],
+      "exact": [
+        "smoker"
+      ]
+    },
+    {
+      "value": 2,
+      "suffix": [],
+      "exact": [
+        "firefly_bush",
+        "medium_amethyst_bud"
+      ]
+    },
+    {
+      "value": 7,
+      "suffix": [],
+      "exact": [
+        "enchanting_table",
+        "ender_chest"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "berries": "true"
+            },
+            14
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "cave_vines",
+        "cave_vines_plant"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            12
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "exposed_copper_bulb",
+        "waxed_exposed_copper_bulb"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            4
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "oxidized_copper_bulb",
+        "waxed_oxidized_copper_bulb"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            7
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "redstone_torch",
+        "redstone_wall_torch"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            8
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "waxed_weathered_copper_bulb",
+        "weathered_copper_bulb"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            9
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "deepslate_redstone_ore",
+        "redstone_ore"
+      ]
+    },
+    {
+      "value": 11,
+      "suffix": [],
+      "exact": [
+        "nether_portal"
+      ]
+    },
+    {
+      "value": 3,
+      "suffix": [],
+      "exact": [
+        "magma_block"
+      ]
+    },
+    {
+      "value": 4,
+      "suffix": [],
+      "exact": [
+        "large_amethyst_bud"
+      ]
+    },
+    {
+      "value": 5,
+      "suffix": [],
+      "exact": [
+        "amethyst_cluster"
+      ]
+    },
+    {
+      "value": 6,
+      "suffix": [],
+      "exact": [
+        "sculk_catalyst"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "charges": "1"
+            },
+            3
+          ],
+          [
+            {
+              "charges": "2"
+            },
+            7
+          ],
+          [
+            {
+              "charges": "3"
+            },
+            11
+          ],
+          [
+            {
+              "charges": "4"
+            },
+            15
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "respawn_anchor"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "level": "1"
+            },
+            1
+          ],
+          [
+            {
+              "level": "10"
+            },
+            10
+          ],
+          [
+            {
+              "level": "11"
+            },
+            11
+          ],
+          [
+            {
+              "level": "12"
+            },
+            12
+          ],
+          [
+            {
+              "level": "13"
+            },
+            13
+          ],
+          [
+            {
+              "level": "14"
+            },
+            14
+          ],
+          [
+            {
+              "level": "15"
+            },
+            15
+          ],
+          [
+            {
+              "level": "2"
+            },
+            2
+          ],
+          [
+            {
+              "level": "3"
+            },
+            3
+          ],
+          [
+            {
+              "level": "4"
+            },
+            4
+          ],
+          [
+            {
+              "level": "5"
+            },
+            5
+          ],
+          [
+            {
+              "level": "6"
+            },
+            6
+          ],
+          [
+            {
+              "level": "7"
+            },
+            7
+          ],
+          [
+            {
+              "level": "8"
+            },
+            8
+          ],
+          [
+            {
+              "level": "9"
+            },
+            9
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "light"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "lit": "true"
+            },
+            10
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "soul_campfire"
+      ]
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "pickles": "1",
+              "waterlogged": "true"
+            },
+            6
+          ],
+          [
+            {
+              "pickles": "2",
+              "waterlogged": "true"
+            },
+            9
+          ],
+          [
+            {
+              "pickles": "3",
+              "waterlogged": "true"
+            },
+            12
+          ],
+          [
+            {
+              "pickles": "4",
+              "waterlogged": "true"
+            },
+            15
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "sea_pickle"
+      ]
+    },
+    {
+      "value": {
+        "default": 12,
+        "cases": [
+          [
+            {
+              "vault_state": "inactive"
+            },
+            6
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "vault"
+      ]
+    },
+    {
+      "value": {
+        "default": 7,
+        "cases": [
+          [
+            {
+              "down": "false",
+              "east": "false",
+              "north": "false",
+              "south": "false",
+              "up": "false",
+              "west": "false"
+            },
+            0
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "glow_lichen"
+      ]
+    },
+    {
+      "value": {
+        "default": 8,
+        "cases": [
+          [
+            {
+              "trial_spawner_state": "cooldown"
+            },
+            0
+          ],
+          [
+            {
+              "trial_spawner_state": "inactive"
+            },
+            0
+          ],
+          [
+            {
+              "trial_spawner_state": "waiting_for_players"
+            },
+            4
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "trial_spawner"
+      ]
+    }
+  ],
+  "shapeLightOcclusion": [
+    {
+      "value": 1,
+      "suffix": [
+        "_sensor",
+        "_shelf",
+        "_stairs"
+      ],
+      "exact": [
+        "daylight_detector",
+        "dirt_path",
+        "enchanting_table",
+        "end_portal_frame",
+        "farmland",
+        "lectern",
+        "piston_head",
+        "sculk_shrieker",
+        "snow",
+        "stonecutter"
+      ]
+    },
+    {
+      "value": {
+        "default": 1,
+        "cases": [
+          [
+            {
+              "type": "double"
+            },
+            0
+          ]
+        ]
+      },
+      "suffix": [
+        "_slab"
+      ],
+      "exact": []
+    },
+    {
+      "value": {
+        "default": 0,
+        "cases": [
+          [
+            {
+              "extended": "true"
+            },
+            1
+          ]
+        ]
+      },
+      "suffix": [],
+      "exact": [
+        "piston",
+        "sticky_piston"
+      ]
+    }
+  ]
+}

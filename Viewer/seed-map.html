@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Minecraft Java 1.16.1 Seed Map</title>
+</head>
+<body>
+  <div id="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./seed-map.html" aria-label="Minecraft 1.16.1 seed map home">
+        <span class="brand-mark">M</span>
+        <span><strong>SEED ATLAS</strong><small>JAVA 1.16.1</small></span>
+      </a>
+      <form id="seed-form" class="seed-form">
+        <label for="seed">World seed</label>
+        <input id="seed" name="seed" inputmode="numeric" spellcheck="false" value="6090144754301628691">
+        <button type="submit">Apply</button>
+      </form>
+      <label class="dimension-control" for="dimension">
+        <span>Dimension</span>
+        <select id="dimension">
+          <option value="overworld">Overworld</option>
+          <option value="nether">Nether</option>
+          <option value="end">End</option>
+        </select>
+      </label>
+      <nav class="viewer-links" aria-label="Viewer navigation">
+        <a class="active" href="./seed-map.html">Seed map</a>
+        <a href="./local-loader.html">3D structures</a>
+      </nav>
+    </header>
+
+    <aside class="layers-panel" aria-label="Map layers">
+      <div class="panel-heading">
+        <div><small>LOCAL WORLDGEN</small><h1>Layers</h1></div>
+        <button id="collapse-layers" class="icon-button" type="button" aria-label="Collapse layers">‹</button>
+      </div>
+      <section>
+        <h2>Terrain</h2>
+        <label class="toggle-row"><input id="biomes-toggle" type="checkbox" checked><span>Biome backdrop</span></label>
+        <label class="toggle-row"><input id="terrain-toggle" type="checkbox" checked><span>Terrain shading</span></label>
+        <p class="layer-note">Cubiomes <code>mapApproxHeight</code> shading appears at 1:4 and 1:1.</p>
+        <label class="toggle-row"><input id="grid-toggle" type="checkbox"><span>Chunk grid</span></label>
+      </section>
+      <section>
+        <div class="section-title"><h2>Structures</h2><button id="select-all" type="button">select</button><button id="clear-all" type="button">clear</button></div>
+        <label class="toggle-row subdued"><input id="viable-only" type="checkbox" checked><span>Biome-viable only</span></label>
+        <div id="structure-list" class="structure-list"></div>
+      </section>
+      <section class="provenance">
+        <h2>Exactness</h2>
+        <p><strong>Biome tiles</strong> and candidate coordinates come from Cubiomes pinned to <code>MC_1_16_1</code>.</p>
+        <p>Markers labelled <em>viable</em> pass Cubiomes biome checks. They are not claims about every final block.</p>
+      </section>
+    </aside>
+
+    <button id="open-layers" class="open-layers" type="button">Layers</button>
+    <main id="map" aria-label="Interactive Minecraft seed map"></main>
+
+    <form id="goto-form" class="goto-card">
+      <label>X <input id="goto-x" inputmode="numeric" value="0"></label>
+      <label>Z <input id="goto-z" inputmode="numeric" value="0"></label>
+      <button type="submit">Go</button>
+    </form>
+
+    <div id="cursor" class="cursor-readout">X 0 · Z 0</div>
+    <div id="status" class="status-card">Loading Cubiomes WebAssembly…</div>
+    <div id="popup" class="map-popup" hidden></div>
+  </div>
+  <script type="module" src="/src/seed-map/main.js"></script>
+</body>
+</html>
