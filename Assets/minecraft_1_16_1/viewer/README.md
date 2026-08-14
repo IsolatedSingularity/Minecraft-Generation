@@ -18,6 +18,11 @@ to select a local JAR. Rebuild it with:
 .\Viewer\scripts\build-1161-client-assets.ps1
 ```
 
+`worldgen_registry.zip` is generated from the mapped Java 1.16.1 village,
+outpost, and bastion pool declarations. It contains 128 template-pool JSON
+entries, 10 assembly-start descriptors, and a provenance manifest. Rebuild it
+with `npm run build:worldgen-registry` from `Viewer/`.
+
 Do not copy the complete client JAR into the repository.
 
 Current deterministic inventory: 6,200 entries. Current SHA-256:

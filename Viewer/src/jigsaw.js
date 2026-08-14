@@ -11,6 +11,16 @@ export async function runJigsaw(start, { loadStruct, loadPool, loadFeature, maxD
     if (!structs.has(ref)) structs.set(ref, await Promise.resolve(loadStruct(ref)).catch(() => null))
     return structs.get(ref)
   }
+  async function getCandidate(ref) {
+    if (typeof ref === "string") return getStruct(ref)
+    if (!ref?.list?.length) return null
+    const key = `list:${ref.list.join("|")}`
+    if (!structs.has(key)) structs.set(key, Promise.all(ref.list.map(getStruct)).then(items => {
+      const valid = items.filter(Boolean)
+      return valid.length ? combine(valid.map(struct => ({ struct }))) : null
+    }))
+    return structs.get(key)
+  }
   async function getPool(ref) {
     if (!pools.has(ref)) pools.set(ref, await Promise.resolve(loadPool(ref)).catch(() => null))
     return pools.get(ref)
@@ -66,13 +76,13 @@ export async function runJigsaw(start, { loadStruct, loadPool, loadFeature, maxD
         const tried = new Set()
         jig: for (const loc of candidates) {
           if (loc === EMPTY) break // empty_pool_element won the roll: place nothing
-          const key = typeof loc === "string" ? loc : loc.feature
+          const key = typeof loc === "string" ? loc : loc.feature ?? `list:${loc.list.join("|")}`
           if (tried.has(key)) continue
           tried.add(key)
           // feature_pool_element: the game gives it one jigsaw at the feature origin
           // facing down, so it only joins an upward-facing one, and since
           // 26.3-snapshot-6 that jigsaw takes whatever name the parent targets
-          if (typeof loc !== "string") {
+          if (loc.feature) {
             if (!loadFeature || wj.front !== "up") continue
             const feat = await loadFeature(loc.feature, Math.floor(rand() * 0x7fffffff)).catch(() => null)
             if (!feat?.blocks?.length) continue
@@ -80,7 +90,7 @@ export async function runJigsaw(start, { loadStruct, loadPool, loadFeature, maxD
             if (place(feat, 0, [targetPos[0] - org[0], targetPos[1] - org[1], targetPos[2] - org[2]])) break jig
             continue
           }
-          const child = await getStruct(loc)
+          const child = await getCandidate(loc)
           if (!child) continue
           const childJigs = jigsawsOf(child)
           for (const k of shuffle([0, 1, 2, 3], rand)) {

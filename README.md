@@ -383,8 +383,9 @@ full GitHub Pages viewer; the same tools also run completely locally through
 
 [![Interactive Java 1.16.1 seed map](Viewer/previews/seed-map.png)](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 
-Pan and zoom across seed-accurate Cubiomes biome fields, enable lightweight
-terrain shading, change dimensions, and overlay major structure candidates.
+Pan and zoom across seed-accurate Cubiomes biome fields, including the End
+density surface and Nether cave-floor relief, then optionally overlay major
+structure candidates. Structure overlays begin switched off.
 
 </td>
 <td width="50%">
@@ -393,8 +394,10 @@ terrain shading, change dimensions, and overlay major structure candidates.
 
 [![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html)
 
-Search 925 bundled Java 1.16.1 templates and generated entries, then drag to
-orbit textured structures without uploading or selecting game files.
+Search 930 bundled Java 1.16.1 templates and generated entries, or use the blue
+**Full assemblies** catalog for villages, all bastions, fortresses,
+strongholds, End structures, monuments, mansions, temples, and other major
+families. Drag to orbit without uploading or selecting game files.
 
 </td>
 </tr>

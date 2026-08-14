@@ -22,7 +22,7 @@ async function api() {
         destroy: module.cwrap("mc_destroy", null, ["number"]),
         biomeColors: module.cwrap("mc_biome_colors", "number", ["number"]),
         biomeTile: module.cwrap("mc_biome_tile", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
-        heightTile: module.cwrap("mc_height_tile", "number", ["number", "number", "number", "number", "number", "number"]),
+        heightTile: module.cwrap("mc_height_tile", "number", ["number", "number", "number", "number", "number", "number", "number"]),
         structures: module.cwrap("mc_structures", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
         stride: module.cwrap("mc_structure_stride", "number", [])()
       }
@@ -85,17 +85,24 @@ async function renderTile(message) {
 
     let heights = null
     let heightWidth = 0
-    if (message.terrain && message.dimension !== -1 && message.scale <= 4) {
+    let directStride = 1
+    if (message.terrain && message.scale <= 4) {
+      const directSurface = message.dimension !== 0
+      // Preserve one density height per displayed pixel. Two workers process
+      // independent tiles concurrently; a dimension change terminates stale
+      // work so it cannot block the newly selected dimension.
+      directStride = 1
       const blocksWide = message.width * message.scale
       const blocksHigh = message.height * message.scale
-      heightWidth = Math.ceil(blocksWide / 4) + 2
-      const heightHeight = Math.ceil(blocksHigh / 4) + 2
+      heightWidth = directSurface ? Math.ceil(message.width / directStride) + 2 : Math.ceil(blocksWide / 4) + 2
+      const heightHeight = directSurface ? Math.ceil(message.height / directStride) + 2 : Math.ceil(blocksHigh / 4) + 2
       const heightsPointer = bindings.module._malloc(heightWidth * heightHeight * 4)
       try {
         const heightResult = bindings.heightTile(
           context,
-          Math.floor(message.sampleX * message.scale / 4) - 1,
-          Math.floor(message.sampleZ * message.scale / 4) - 1,
+          directSurface ? message.scale * directStride : message.scale,
+          directSurface ? Math.floor(message.sampleX / directStride) - 1 : Math.floor(message.sampleX * message.scale / 4) - 1,
+          directSurface ? Math.floor(message.sampleZ / directStride) - 1 : Math.floor(message.sampleZ * message.scale / 4) - 1,
           heightWidth,
           heightHeight,
           heightsPointer
@@ -116,14 +123,19 @@ async function renderTile(message) {
           ? bindings.colors.subarray(biomeId * 3, biomeId * 3 + 3)
           : [36, 39, 43]
         let shade = 1
+        let surfaceHeight = null
         if (heights) {
-          const hx = Math.min(heightWidth - 2, Math.floor(x * message.scale / 4) + 1)
-          const hy = Math.min(heights.length / heightWidth - 2, Math.floor(y * message.scale / 4) + 1)
+          const directSurface = message.dimension !== 0
+          const hx = directSurface ? Math.floor(x / directStride) + 1 : Math.min(heightWidth - 2, Math.floor(x * message.scale / 4) + 1)
+          const hy = directSurface ? Math.floor(y / directStride) + 1 : Math.min(heights.length / heightWidth - 2, Math.floor(y * message.scale / 4) + 1)
           shade = shadePixel(heights, heightWidth, hx, hy)
+          surfaceHeight = heights[hy * heightWidth + hx]
         }
-        rgba[index * 4] = Math.round(colour[0] * shade)
-        rgba[index * 4 + 1] = Math.round(colour[1] * shade)
-        rgba[index * 4 + 2] = Math.round(colour[2] * shade)
+        const isEndVoid = message.dimension === 1 && surfaceHeight <= 0
+        const base = isEndVoid ? [12, 8, 22] : colour
+        rgba[index * 4] = Math.round(base[0] * shade)
+        rgba[index * 4 + 1] = Math.round(base[1] * shade)
+        rgba[index * 4 + 2] = Math.round(base[2] * shade)
         rgba[index * 4 + 3] = 255
       }
     }

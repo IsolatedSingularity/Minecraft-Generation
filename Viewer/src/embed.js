@@ -2,6 +2,7 @@ import { usePacks } from "./composables/usePacks.js"
 import { useStructure } from "./composables/useStructure.js"
 import { useStructures } from "./composables/useStructures.js"
 import { useWorld } from "./composables/useWorld.js"
+import { useSession } from "./composables/useSession.js"
 import { setHighlights } from "./composables/useHighlight.js"
 
 const SOURCE = "structure-viewer"
@@ -90,6 +91,37 @@ const COMMANDS = {
       throw new Error("loadStructure needs data or path")
     }
     if (structure.state.error) throw new Error(structure.state.error)
+  },
+  async loadAssembly({ path, seed = 0x11610001 }) {
+    if (!path || !useStructures().has(path)) throw new Error(`structure not found: ${path}`)
+    const numericSeed = typeof seed === "string" && /^[0-9a-f]{1,8}$/i.test(seed)
+      ? Number.parseInt(seed, 16)
+      : Number(seed)
+    if (!Number.isFinite(numericSeed)) throw new Error("assembly seed must be a 32-bit integer or 1-8 hex digits")
+    const structure = useStructure()
+    const completeCodeGenerated = new Set([
+      "minecraft/builtin/desert_pyramid",
+      "minecraft/builtin/jungle_temple",
+      "minecraft/builtin/swamp_hut",
+      "minecraft/features/end/exit_portal/active",
+      "minecraft/features/end/exit_portal/inactive"
+    ])
+    const direct = completeCodeGenerated.has(path)
+    const session = useSession()
+    if (direct) {
+      await COMMANDS.loadStructure({ path })
+      return { path, seed: numericSeed >>> 0, assembled: false, level: 0, maxDepth: 1 }
+    }
+    session.adoptUrlSession((numericSeed >>> 0).toString(16), "2147483647")
+    await structure.loadVanilla(path)
+    if (structure.state.error) throw new Error(structure.state.error)
+    return {
+      path,
+      seed: numericSeed >>> 0,
+      assembled: direct ? false : session.state.active,
+      level: session.state.level,
+      maxDepth: session.state.maxDepth
+    }
   },
   listStructures({ filter } = {}) {
     const names = useStructures().state.names

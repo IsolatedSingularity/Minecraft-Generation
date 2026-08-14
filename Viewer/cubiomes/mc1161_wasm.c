@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "generator.h"
 #include "finders.h"
@@ -92,8 +93,7 @@ EXPORTED ViewerContext *mc_create(uint32_t seed_high, uint32_t seed_low, int dim
     context->dimension = dimension;
     setupGenerator(&context->generator, MC_1_16_1, 0);
     applySeed(&context->generator, dimension, context->seed);
-    if (dimension != DIM_NETHER)
-        initSurfaceNoise(&context->surface, dimension, context->seed);
+    initSurfaceNoise(&context->surface, dimension, context->seed);
     return context;
 }
 
@@ -132,24 +132,105 @@ EXPORTED int mc_biome_tile(
 
 EXPORTED int mc_height_tile(
     ViewerContext *context,
-    int sample_x4,
-    int sample_z4,
+    int scale,
+    int sample_x,
+    int sample_z,
     int width,
     int height,
     float *output)
 {
     if (!context || !output || width <= 0 || height <= 0) return 1;
+    if (scale != 1 && scale != 2 && scale != 4 && scale != 8) return 2;
+    if (context->dimension == DIM_END) {
+        return mapEndSurfaceHeight(
+            output,
+            &context->generator.en,
+            &context->surface,
+            sample_x,
+            sample_z,
+            width,
+            height,
+            scale,
+            0
+        );
+    }
+
     if (context->dimension == DIM_NETHER) {
-        for (int i = 0; i < width * height; i++) output[i] = 127.0f;
+        const int first_x = sample_x * scale;
+        const int first_z = sample_z * scale;
+        const int last_x = first_x + (width - 1) * scale;
+        const int last_z = first_z + (height - 1) * scale;
+        const int cell_x0 = floor_div(first_x, 4);
+        const int cell_z0 = floor_div(first_z, 4);
+        const int cell_x1 = floor_div(last_x, 4) + 1;
+        const int cell_z1 = floor_div(last_z, 4) + 1;
+        const int cells_wide = cell_x1 - cell_x0 + 1;
+        const int cells_high = cell_z1 - cell_z0 + 1;
+        const int column_size = 17;
+        double *columns = (double *)malloc(
+            sizeof(double) * (size_t)cells_wide * (size_t)cells_high * column_size
+        );
+        if (!columns) return 3;
+
+        for (int cz = cell_z0; cz <= cell_z1; cz++) {
+            for (int cx = cell_x0; cx <= cell_x1; cx++) {
+                double *column = columns
+                    + ((cz - cell_z0) * cells_wide + (cx - cell_x0)) * column_size;
+                for (int cy = 0; cy <= 16; cy++) {
+                    double density = sampleSurfaceNoise(&context->surface, cx, cy, cz);
+                    double top = (16.0 - cy) / 3.0;
+                    if (top < 0.0) top = 0.0;
+                    if (top > 1.0) top = 1.0;
+                    density = 120.0 + top * (density - 120.0);
+                    double bottom = (cy + 1.0) / 4.0;
+                    if (bottom < 0.0) bottom = 0.0;
+                    if (bottom > 1.0) bottom = 1.0;
+                    column[cy] = 320.0 + bottom * (density - 320.0);
+                }
+            }
+        }
+
+        for (int iz = 0; iz < height; iz++) {
+            const int block_z = first_z + iz * scale;
+            const int cell_z = floor_div(block_z, 4);
+            const double dz = (block_z - cell_z * 4) / 4.0;
+            for (int ix = 0; ix < width; ix++) {
+                const int block_x = first_x + ix * scale;
+                const int cell_x = floor_div(block_x, 4);
+                const double dx = (block_x - cell_x * 4) / 4.0;
+                const int base = ((cell_z - cell_z0) * cells_wide + (cell_x - cell_x0)) * column_size;
+                const double *n00 = columns + base;
+                const double *n10 = n00 + column_size;
+                const double *n01 = n00 + cells_wide * column_size;
+                const double *n11 = n01 + column_size;
+                int saw_air = 0;
+                int floor_y = 31;
+                for (int y = 122; y >= 32; y--) {
+                    const int cy = y >> 3;
+                    const double dy = (y & 7) / 8.0;
+                    const double x00 = n00[cy] + dx * (n10[cy] - n00[cy]);
+                    const double x01 = n01[cy] + dx * (n11[cy] - n01[cy]);
+                    const double x10 = n00[cy + 1] + dx * (n10[cy + 1] - n00[cy + 1]);
+                    const double x11 = n01[cy + 1] + dx * (n11[cy + 1] - n01[cy + 1]);
+                    const double density = (x00 + dz * (x01 - x00))
+                        + dy * ((x10 + dz * (x11 - x10)) - (x00 + dz * (x01 - x00)));
+                    if (density <= 0.0) saw_air = 1;
+                    else if (saw_air) { floor_y = y; break; }
+                }
+                output[iz * width + ix] = (float)floor_y;
+            }
+        }
+        free(columns);
         return 0;
     }
+
     return mapApproxHeight(
         output,
         NULL,
         &context->generator,
         &context->surface,
-        sample_x4,
-        sample_z4,
+        sample_x,
+        sample_z,
         width,
         height
     );

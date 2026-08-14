@@ -32,15 +32,15 @@ void initSurfaceNoise(SurfaceNoise *sn, int dim, uint64_t seed)
         sn->xzFactor = 80;
         sn->yFactor = 160;
     }
-    else // DIM_OVERWORLD
+    else
     {
         octaveInit(&sn->octsurf, &s, sn->oct+40, -3, 4);
         skipNextN(&s, 262*10);
         octaveInit(&sn->octdepth, &s, sn->oct+44, -15, 16);
-        sn->xzScale = 0.9999999814507745;
-        sn->yScale = 0.9999999814507745;
+        sn->xzScale = dim == DIM_NETHER ? 1.0 : 0.9999999814507745;
+        sn->yScale = dim == DIM_NETHER ? 3.0 : 0.9999999814507745;
         sn->xzFactor = 80;
-        sn->yFactor = 160;
+        sn->yFactor = dim == DIM_NETHER ? 60 : 160;
     }
 }
 

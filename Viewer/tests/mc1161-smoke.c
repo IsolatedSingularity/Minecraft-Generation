@@ -135,6 +135,19 @@ int main(void)
     );
     CHECK(nether_biome == 171, "Java 1.16.1 Nether biome oracle");
 
+    float nether_heights[256];
+    CHECK(
+        mc_height_tile(nether, 1, 0, 0, 16, 16, nether_heights) == 0,
+        "generate Nether navigable-surface sample"
+    );
+    float nether_min = 128, nether_max = -1;
+    for (int index = 0; index < 256; index++) {
+        if (nether_heights[index] < nether_min) nether_min = nether_heights[index];
+        if (nether_heights[index] > nether_max) nether_max = nether_heights[index];
+    }
+    CHECK(nether_min >= 31 && nether_max <= 122, "Nether surface below roof and above lava");
+    CHECK(nether_min < nether_max, "Nether density surface has local relief");
+
     int nether_count = mc_structures(
         nether,
         0,
@@ -154,6 +167,15 @@ int main(void)
         return 1;
     }
     mc_destroy(nether);
+
+    ViewerContext *end = mc_create(0, 42, DIM_END);
+    CHECK(end != NULL, "create End context");
+    float end_center = -1, end_gap = -1;
+    CHECK(mc_height_tile(end, 1, 0, 0, 1, 1, &end_center) == 0, "generate End center height");
+    CHECK(mc_height_tile(end, 1, 500, 0, 1, 1, &end_gap) == 0, "generate End gap height");
+    CHECK(end_center > 0, "End central island density at origin");
+    CHECK(end_gap <= 0, "End void gap before outer islands");
+    mc_destroy(end);
 
     puts("PASS: Cubiomes Java 1.16.1 viewer smoke checks");
     return 0;

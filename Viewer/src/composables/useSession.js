@@ -142,6 +142,7 @@ async function regenerate() {
     try {
       const res = await resolve(state.level)
       structure = res.structure
+      if (!structure) throw new Error(`${state.kind ?? "session"} generator returned no structure`)
       // a solve that stops short IS at max depth (deeper levels re-solve identically);
       // floor 1, not the deepest piece: even an empty round consumed the base's jigsaws
       if (state.kind === "jigsaw" && (res.exhausted || res.capped || res.depth < Math.min(state.level, genCap))) {

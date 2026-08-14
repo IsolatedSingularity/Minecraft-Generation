@@ -7,9 +7,12 @@
     "dev": "vite",
     "build:builtins": "node scripts/build-1161-builtins.mjs",
     "build:client-assets": "powershell -ExecutionPolicy Bypass -File scripts/build-1161-client-assets.ps1",
+    "build:worldgen-registry": "node scripts/build-1161-worldgen.mjs",
     "build:wasm": "powershell -ExecutionPolicy Bypass -File scripts/build-wasm.ps1",
     "test:builtins": "node tests/builtins-smoke.mjs",
     "test:client-assets": "node tests/client-assets-smoke.mjs",
+    "test:worldgen-registry": "node tests/worldgen-registry-smoke.mjs",
+    "test:legacy1161": "node tests/legacy1161-smoke.mjs",
     "test:wasm": "powershell -ExecutionPolicy Bypass -File scripts/test-wasm.ps1",
     "build": "vite build",
     "preview": "vite preview"

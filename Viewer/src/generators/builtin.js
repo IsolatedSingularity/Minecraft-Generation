@@ -3,13 +3,20 @@ import { loadLibrary } from "../lib.js"
 import { usePacks } from "../composables/usePacks.js"
 import { runMonument } from "./monument.js"
 import { mineshaftPieceGens, runMineshaftRoom, runMineshaftRoomMesa } from "./mineshaft.js"
-import { makeEndSpikeSize } from "./endspikes.js"
+import { makeEndSpikeSize, runEndSpikes, runEndSpikesActive } from "./endspikes.js"
+import { runSwampHut } from "./swamphut.js"
+import { runDesertPyramid1161, runJungleTemple1161 } from "./legacy1161.js"
 
 // nbt-less structures: the tree entry is synthesized, loads run the generator at seed 0
 export const GENERATED = {
   "minecraft/builtin/ocean_monument": runMonument,
   "minecraft/builtin/mineshaft/normal/room": runMineshaftRoom,
-  "minecraft/builtin/mineshaft/mesa/room": runMineshaftRoomMesa
+  "minecraft/builtin/mineshaft/mesa/room": runMineshaftRoomMesa,
+  "minecraft/builtin/swamp_hut": runSwampHut,
+  "minecraft/builtin/desert_pyramid": runDesertPyramid1161,
+  "minecraft/builtin/jungle_temple": runJungleTemple1161,
+  "minecraft/features/end/exit_portal/active": runEndSpikesActive,
+  "minecraft/features/end/exit_portal/inactive": runEndSpikes
 }
 for (let size = 0; size < 10; size++) {
   const caged = size === 1 || size === 2 ? "_caged" : ""

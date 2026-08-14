@@ -3,8 +3,9 @@
 This directory adds two mouse-interactive, browser-based tools to the project:
 
 - **Seed Atlas** — pan and zoom through Cubiomes biome output, optional
-  `mapApproxHeight` terrain shading, a chunk grid, dimension switching, and
-  structure candidate overlays.
+  terrain shading, a chunk grid, dimension switching, and structure candidate
+  overlays. Close views use the 1.16.1 End density surface and Nether
+  navigable cave-floor density rather than the former broad approximation.
 - **3D Structure Viewer** — search the bundled Minecraft 1.16.1 structure
   templates, and orbit, zoom, inspect, or walk through rendered structures.
 
@@ -36,8 +37,11 @@ local Vite server. Open:
 - `http://127.0.0.1:5173/seed-map.html`
 - `http://127.0.0.1:5173/local-loader.html`
 
-The 3D catalog and textures load automatically. The filter buttons expose the
-main families, including villages, bastions, Nether fortresses, strongholds,
+The 3D catalog and textures load automatically. The blue **Full assemblies**
+control exposes connected villages, all four bastion types, fortresses,
+strongholds, End cities and the End arena, mansions, monuments, mineshafts,
+outposts, temples, huts, ruins, shipwrecks, portals, and fossils. The ordinary
+filter buttons expose the main families, including villages, bastions, Nether fortresses, strongholds,
 ruined portals, shipwrecks, monuments, mansions, and End cities. The embedded
 pack contains all 866 canonical 1.16.1 NBT templates; a separate 43-file
 source-checked bundle restores the fortress and stronghold piece templates and
@@ -69,6 +73,8 @@ npm run dev -- --host 127.0.0.1
 - Enter exact X/Z coordinates and select **Go**.
 - The URL fragment records seed, center, zoom, dimension, and active layers so
   a view can be copied or bookmarked.
+- The End keeps true void pixels dark and labels the tiny central exit portal;
+  the label remains visible even when structure overlays are off.
 
 ### 3D structures
 
@@ -78,28 +84,35 @@ npm run dev -- --host 127.0.0.1
   structure**.
 - The public viewer loads its bundled 1.16.1 rendering assets before exposing
   the 3D catalog, preventing model-less empty renders.
-- For procedural fortress, stronghold, village, mansion, and End City entries,
-  use the viewer's **Level** and **Re-roll** controls to grow and regenerate the
-  multi-piece assembly. The bundled fortress and stronghold piece rules are the
-  families specifically checked against the local 1.16.1 Java sources.
+- Use the blue **Full assemblies** dropdown to generate a connected major
+  structure immediately. Its seed field and **Re-roll** button produce another
+  deterministic showcase layout. The bundled fortress, stronghold, village,
+  outpost, and bastion pools and start depths were extracted from the local
+  1.16.1 Java sources.
 - Use **Blocks** to inspect block counts and the expand icon for fullscreen.
 - The full viewer also retains first-person walk and local-file workflows.
 
 ## Accuracy boundary
 
 The seed map compiles the vendored Cubiomes C implementation with the generator
-pinned to `MC_1_16_1`. Biome tiles, approximate surface-height shading,
+pinned to `MC_1_16_1`. Biome tiles, Overworld approximate surface shading,
 random-spread candidates, viability checks, Nether fortress/bastion splitting,
 and all 128 stronghold candidates are calculated locally from the entered seed.
+At close zoom the End uses Cubiomes' 1.16.1 island density, while the Nether
+uses the version's lower/upper/interpolation octave stack and slide parameters
+to display the highest navigable cave floor beneath the bedrock roof.
 
 Structure markers identify candidate chunks and optionally pass Cubiomes biome
 viability; they do not claim every final block survives terrain, neighboring
-features, or later world-generation checks. Terrain shading is Cubiomes'
-approximate height map, not a rendered world save.
+features, or later world-generation checks. The map is a local density/biome
+view, not a rendered world save with carvers, surface blocks, or decoration.
 
-Raw NBT templates in the bundled 1.16.1 client subset are version-exact. A
-multi-piece reference assembly is useful for understanding a large family, but
-it is not a claim that a particular world seed produces that exact arrangement.
+Raw NBT templates in the bundled 1.16.1 client subset are version-exact.
+Desert pyramids, jungle temples, swamp huts, and the End exit fountain/spikes
+are source ports because vanilla generates them in Java instead of loading NBT.
+A multi-piece reference assembly preserves the version's pools, weights, and
+connections, but its 32-bit showcase seed is not a claim that a particular
+world seed produces that exact arrangement or processor/weathering roll.
 For block-for-block proof of a generated instance, load the corresponding world
 save or structure export in the full viewer.
 
@@ -112,6 +125,8 @@ Python, a compiler, or Emscripten. Rebuilding them is optional:
 cd Viewer
 npm run test:builtins
 npm run test:client-assets
+npm run test:worldgen-registry
+npm run test:legacy1161
 npm run build:wasm
 npm run test:wasm
 npm run build
@@ -138,6 +153,9 @@ npm audit --audit-level=moderate
   6,200 version-locked files: 764 blockstates, 2,485 models, 2,084 textures,
   all 866 client structure templates, and `pack.mcmeta`. Rebuild it from the
   local extracted 1.16.1 client with `npm run build:client-assets`.
+- `../Assets/minecraft_1_16_1/viewer/worldgen_registry.zip` contains 128
+  source-extracted 1.16.1 template pools and 10 full-assembly starts. Rebuild it
+  from the routed local Java reference with `npm run build:worldgen-registry`.
 - `vendor/block-model-renderer/` contains the local browser renderer and its
   preserved license. No CDN module or hosted asset is required at runtime.
 

@@ -253,8 +253,8 @@ export const inBox = (p, b) =>
 
 export const EMPTY = Symbol("empty_pool_element")
 
-// list_pool_element approximated by its first entry; feature_pool_element comes
-// back as { feature } to generate rather than load
+// list_pool_element returns every co-located template so jigsaw assembly can
+// reproduce compound pieces such as the outpost watchtower plus its overlay.
 export function poolTemplates(pool) {
   const out = []
   for (const e of pool?.elements ?? []) {
@@ -263,10 +263,13 @@ export function poolTemplates(pool) {
     const type = (el.element_type ?? "").replace("minecraft:", "")
     let loc = null
     if (type === "empty_pool_element") loc = EMPTY
-    else if (type === "list_pool_element") loc = el.elements?.[0]?.location
+    else if (type === "list_pool_element") {
+      const list = (el.elements ?? []).map(item => item?.location).filter(v => typeof v === "string").map(strip)
+      loc = list.length ? { list } : null
+    }
     else if (type === "feature_pool_element") loc = typeof el.feature === "string" ? { feature: el.feature } : null
     else loc = el.location
-    if (loc !== EMPTY && typeof loc !== "string" && !loc?.feature) continue
+    if (loc !== EMPTY && typeof loc !== "string" && !loc?.feature && !loc?.list) continue
     if (typeof loc === "string") loc = strip(loc)
     for (let i = 0; i < w; i++) out.push(loc)
   }

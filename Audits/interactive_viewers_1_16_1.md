@@ -15,16 +15,19 @@ not change or certify the older static structure-generation plots in `Code/`.
 - Colors now come directly from Cubiomes `initBiomeColors`; there is no separate
   hand-tuned JavaScript palette. In particular, ocean is `#000070` and deep
   ocean is `#000030`.
+- At close zoom the End calls Cubiomes `mapEndSurfaceHeight`; zero-height pixels
+  remain void. The Nether uses the exact 1.16.1 cave-generator octave stack and
+  slide parameters, then reports the highest navigable floor below Y=122.
 - The WASM smoke fixture checks independent known seed-42 biome and structure
-  coordinates, repeat determinism, Nether output, all 128 strongholds, and the
-  dark-water palette values.
+  coordinates, repeat determinism, non-flat bounded Nether relief, central End
+  land plus the void gap, all 128 strongholds, and the dark-water palette.
 
 ### Boundary
 
-The biome map is version-locked and deterministic. Overworld and End relief is
-Cubiomes `mapApproxHeight`, so it is deliberately labelled approximate rather
-than block-exact terrain. Nether relief is not synthesized. Candidate markers
-do not prove that every final block survives later terrain and feature gates.
+The biome/density map is version-locked and deterministic. Overworld relief
+remains Cubiomes `mapApproxHeight`. Nether relief represents a density-derived
+navigable cave floor, not exposed terrain with carvers and surface replacement.
+Candidate markers do not prove every final block survives later generation.
 
 ## 3D structures
 
@@ -43,11 +46,20 @@ do not prove that every final block survives later terrain and feature gates.
   depth 50, and radius 112 were compared with the mapped Java 1.16.1
   `NetherFortressGenerator` and `StrongholdGenerator` sources. The selected NBT
   palettes use block IDs available in 1.16.1.
+- The assembly registry is generated from the mapped 1.16.1 Java pool classes:
+  128 template pools and 10 declared starts cover five village types, the
+  pillager outpost, and all four bastion types. List-pool elements remain
+  colocated instead of silently discarding companion templates.
+- Desert pyramid, jungle temple, swamp hut, and End portal/spike structures are
+  direct source ports because those structures have no canonical client NBT.
+  Smoke tests check dimensions and characteristic chests, TNT, dispensers,
+  entities, portal blocks, and ten End crystals.
 
 ### Boundary
 
-The generated fortress and stronghold assemblies reproduce their checked piece
-selection and connection rules for an interactive reference seed. They are not
-yet coupled to a Seed Atlas world coordinate or terrain realization. That
+The generated assemblies reproduce checked piece selection, pool weight, and
+connection rules for a deterministic interactive showcase seed. Processor
+weathering and the exact natural world-seed RNG stream are not yet reproduced.
+They are not coupled to a Seed Atlas coordinate or terrain realization. That
 coupling belongs in a later, separately validated structure-generation phase;
 the existing plots remain untouched here.

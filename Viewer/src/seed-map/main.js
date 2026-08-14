@@ -19,7 +19,9 @@ import { FullScreen, ScaleLine, defaults as defaultControls } from "ol/control.j
 import { biomeName, biomesForDimension, DIMENSIONS, STRUCTURES } from "./biomes.js"
 
 const WORLD_LIMIT = 33_554_432
-const TILE_SIZE = 256
+// Smaller tiles preserve per-pixel density accuracy while letting the map show
+// completed center tiles progressively instead of waiting on large 256px jobs.
+const TILE_SIZE = 128
 const RESOLUTIONS = [256, 64, 16, 4, 1]
 const DEFAULT_TYPES = new Set()
 
@@ -30,20 +32,33 @@ const elements = Object.fromEntries([
   "collapse-layers", "open-layers"
 ].map(id => [id, document.getElementById(id)]))
 
-const worker = new Worker(new URL("./mc1161-worker.js", import.meta.url), { type: "module" })
 let requestId = 0
 const pending = new Map()
-worker.onmessage = event => {
-  const request = pending.get(event.data.id)
-  if (!request) return
-  pending.delete(event.data.id)
-  event.data.ok ? request.resolve(event.data) : request.reject(new Error(event.data.error))
+const WORKER_COUNT = Math.min(4, Math.max(2, navigator.hardwareConcurrency || 2))
+let workers = []
+let nextWorker = 0
+function resetWorker() {
+  for (const worker of workers) worker.terminate()
+  for (const request of pending.values()) request.reject(new Error("dimension changed"))
+  pending.clear()
+  workers = Array.from({ length: WORKER_COUNT }, () => {
+    const worker = new Worker(new URL("./mc1161-worker.js", import.meta.url), { type: "module" })
+    worker.onmessage = event => {
+      const request = pending.get(event.data.id)
+      if (!request) return
+      pending.delete(event.data.id)
+      event.data.ok ? request.resolve(event.data) : request.reject(new Error(event.data.error))
+    }
+    return worker
+  })
+  nextWorker = 0
 }
+resetWorker()
 
 function callWorker(body) {
   const id = ++requestId
   const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
-  worker.postMessage({ id, ...body })
+  workers[nextWorker++ % workers.length].postMessage({ id, ...body })
   return promise
 }
 
@@ -165,6 +180,26 @@ function structureStyle(feature) {
 }
 const structureLayer = new VectorLayer({ source: structureSource, style: structureStyle, zIndex: 5 })
 
+const endLandmarkSource = new VectorSource()
+const endLandmarkLayer = new VectorLayer({
+  source: endLandmarkSource,
+  zIndex: 4,
+  style: new Style({
+    image: new CircleStyle({
+      radius: 5,
+      fill: new Fill({ color: "#f0cf67" }),
+      stroke: new Stroke({ color: "#2b1e39", width: 2 })
+    }),
+    text: new Text({
+      text: "Exit portal",
+      offsetY: 14,
+      font: "600 10px system-ui",
+      fill: new Fill({ color: "#f3df9a" }),
+      stroke: new Stroke({ color: "rgba(20,12,28,.92)", width: 3 })
+    })
+  })
+})
+
 const gridSource = new VectorSource()
 const gridLayer = new VectorLayer({
   source: gridSource,
@@ -175,7 +210,7 @@ const gridLayer = new VectorLayer({
 
 const map = new OLMap({
   target: "map",
-  layers: [terrainLayer, gridLayer, structureLayer],
+  layers: [terrainLayer, gridLayer, endLandmarkLayer, structureLayer],
   controls: defaultControls({ zoom: true, rotate: false, attribution: false }).extend([
     new FullScreen(),
     new ScaleLine({ units: "metric", bar: true, minWidth: 100 })
@@ -273,6 +308,12 @@ function updateGrid() {
   gridSource.addFeatures(lines)
 }
 
+function updateEndLandmark() {
+  endLandmarkSource.clear()
+  if (elements.dimension.value === "end")
+    endLandmarkSource.addFeature(new Feature(new Point([0, 0])))
+}
+
 async function updateStructures() {
   const token = ++structureRequestToken
   const size = map.getSize()
@@ -343,6 +384,7 @@ function refreshWorld() {
   terrainSource.refresh()
   updateStructures()
   updateGrid()
+  updateEndLandmark()
   syncHash()
 }
 
@@ -365,6 +407,7 @@ elements["seed-form"].addEventListener("submit", event => {
   try {
     seed = parseSeed(elements.seed.value)
     elements.seed.value = seed
+    resetWorker()
     refreshWorld()
   } catch (error) {
     elements.status.textContent = error.message
@@ -372,6 +415,7 @@ elements["seed-form"].addEventListener("submit", event => {
 })
 
 elements.dimension.addEventListener("change", () => {
+  resetWorker()
   renderDimensionButtons()
   renderStructureControls()
   renderBiomeLegend()
@@ -474,6 +518,7 @@ map.on("singleclick", event => {
 renderStructureControls()
 renderDimensionButtons()
 gridLayer.setVisible(elements["grid-toggle"].checked)
+updateEndLandmark()
 callWorker({ type: "ready" }).then(response => {
   biomeColors = response.colors
   renderBiomeLegend()

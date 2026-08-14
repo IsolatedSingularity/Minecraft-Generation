@@ -575,6 +575,7 @@ function loadFeatures(rels, reroll = false) {
 const FIELD_N = 256
 
 function shapeKey(s) {
+  if (!s) throw new Error("feature field returned an empty structure")
   const rows = s.blocks.map(b => {
     const e = s.palette[b.state]
     return `${b.pos[0] - s.anchor[0]},${b.pos[1]},${b.pos[2] - s.anchor[2]}|${e.Name}|${e.Properties ? JSON.stringify(e.Properties) : ""}`

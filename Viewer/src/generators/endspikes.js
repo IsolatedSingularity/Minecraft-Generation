@@ -5,6 +5,27 @@ import { rand32, rnd, shuffle, statePicker } from "../transforms.js"
 // the podium's portal ring sits at the End's surface height
 const PORTAL_Y = 62
 
+// Exact block rules from 1.16.1 EndPortalFeature.generate. The feature is
+// code-generated in vanilla (there is no structure NBT in the client jar).
+function buildExitPortal(stateFor, blocks, active) {
+  const within = (x, y, z, radius) => x * x + y * y + z * z <= radius * radius
+  for (let x = -4; x <= 4; x++) for (let y = -1; y <= 32; y++) for (let z = -4; z <= 4; z++) {
+    const inner = within(x, y, z, 2.5)
+    if (!inner && !within(x, y, z, 3.5)) continue
+    let name
+    if (y < 0) name = inner ? "minecraft:bedrock" : "minecraft:end_stone"
+    else if (y > 0) continue // air above the fountain is not emitted
+    else if (!inner) name = "minecraft:bedrock"
+    else if (active) name = "minecraft:end_portal"
+    else continue
+    blocks.push({ state: stateFor(name), pos: [x, PORTAL_Y + y, z] })
+  }
+  for (let y = 0; y < 4; y++) blocks.push({ state: stateFor("minecraft:bedrock"), pos: [0, PORTAL_Y + y, 0] })
+  for (const [x, z, facing] of [[0, -1, "north"], [0, 1, "south"], [-1, 0, "west"], [1, 0, "east"]]) {
+    blocks.push({ state: stateFor("minecraft:wall_torch", { facing, lit: "true" }), pos: [x, PORTAL_Y + 2, z] })
+  }
+}
+
 function buildSpike(stateFor, blocks, entities, cx, cz, size) {
   const radius = 2 + Math.floor(size / 3)
   const height = 76 + size * 3
@@ -60,7 +81,7 @@ function normalise(palette, blocks, entities) {
   }
 }
 
-export const makeEndSpikes = active => async (loadStruct, { seed } = {}) => {
+export const makeEndSpikes = active => async (_loadStruct, { seed } = {}) => {
   const rand = rnd(seed ?? rand32())
   const sizes = shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], rand)
   const { palette, stateFor } = statePicker()
@@ -72,21 +93,11 @@ export const makeEndSpikes = active => async (loadStruct, { seed } = {}) => {
     buildSpike(stateFor, blocks, entities, cx, cz, sizes[i])
   }
 
-  const portal = await loadStruct("builtin/end/exit_portal/" + (active ? "active" : "inactive"))
-  let off = [0, 0, 0]
-  if (portal) {
-    off = [-Math.floor(portal.size[0] / 2), PORTAL_Y, -Math.floor(portal.size[2] / 2)]
-    const map = portal.palette.map(e => stateFor(e.Name, e.Properties))
-    for (const b of portal.blocks) {
-      const block = { state: map[b.state], pos: [b.pos[0] + off[0], b.pos[1] + off[1], b.pos[2] + off[2]] }
-      if (b.nbt) block.nbt = b.nbt
-      blocks.push(block)
-    }
-  }
+  buildExitPortal(stateFor, blocks, active)
 
   // anchor on the portal (the base nbt's origin) so the camera stays with it
   const structure = normalise(palette, blocks, entities)
-  structure.anchor = [off[0] + structure.anchor[0], off[1], off[2] + structure.anchor[2]]
+  structure.anchor = [structure.anchor[0], PORTAL_Y, structure.anchor[2]]
   return { structure, maxDepth: 1 }
 }
 

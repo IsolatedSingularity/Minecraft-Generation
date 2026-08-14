@@ -16,6 +16,10 @@
     .version { color: #9fd28a; font: 11px ui-monospace, monospace; letter-spacing: .08em; }
     .quick { display: flex; gap: 5px; flex-wrap: wrap; }
     .quick button { padding: 4px 7px; color: #bdc6bf; font-size: 11px; }
+    .assembly-row { padding: 8px; border: 1px solid #285f94; border-radius: 4px; background: rgba(20, 54, 87, .24); }
+    .assembly-button { border-color: #3b8bd2; background: #174e7d; color: #e4f3ff; }
+    .assembly-select { min-width: min(480px, 70vw); border-color: #397fb8; color: #69b8f5; background: #132d43; }
+    .assembly-seed { width: 104px !important; min-width: 104px !important; flex: 0 !important; color: #9ed3ff !important; border-color: #397fb8 !important; }
     button:disabled { opacity: .5; }
     #status { font: 12px ui-monospace, monospace; color: #b7c9ff; white-space: pre-wrap; }
     main { position: relative; min-height: 0; }
@@ -48,6 +52,7 @@
     <button id="show" disabled>Show structure</button>
   </div>
   <div class="quick" aria-label="Main structure filters">
+    <button id="full-assemblies" class="assembly-button" type="button">Full assemblies</button>
     <button type="button" data-filter="village">Village</button>
     <button type="button" data-filter="bastion">Bastion</button>
     <button type="button" data-filter="fortress">Fortress</button>
@@ -58,6 +63,13 @@
     <button type="button" data-filter="mansion">Mansion</button>
     <button type="button" data-filter="end_city">End city</button>
     <button type="button" data-filter="">All</button>
+  </div>
+  <div id="assembly-row" class="row assembly-row">
+    <strong>FULL ASSEMBLIES</strong>
+    <select id="assemblies" class="assembly-select" disabled><option>Loading complete structures…</option></select>
+    <label>Seed <input id="assembly-seed" class="assembly-seed" type="text" value="11610001" maxlength="8" spellcheck="false" /></label>
+    <button id="show-assembly" class="assembly-button" disabled>Generate complete structure</button>
+    <button id="reroll-assembly" class="assembly-button" disabled>Re-roll</button>
   </div>
   <div id="status">Waiting for embedded viewer…</div>
 </header>
@@ -80,6 +92,47 @@
   const show = document.querySelector('#show')
   const status = document.querySelector('#status')
   const viewerShell = document.querySelector('#viewer-shell')
+  const assemblies = document.querySelector('#assemblies')
+  const assemblySeed = document.querySelector('#assembly-seed')
+  const showAssembly = document.querySelector('#show-assembly')
+  const rerollAssembly = document.querySelector('#reroll-assembly')
+
+  const ASSEMBLIES = [
+    ['Bastions', 'Bridge bastion', 'minecraft/bastion/bridge/starting_pieces/entrance_base'],
+    ['Bastions', 'Hoglin-stable bastion', 'minecraft/bastion/hoglin_stable/air_base'],
+    ['Bastions', 'Housing-units bastion', 'minecraft/bastion/units/air_base'],
+    ['Bastions', 'Treasure-room bastion', 'minecraft/bastion/treasure/big_air_full'],
+    ['Villages', 'Plains village', 'minecraft/village/plains/town_centers/plains_fountain_01'],
+    ['Villages', 'Desert village', 'minecraft/village/desert/town_centers/desert_meeting_point_1'],
+    ['Villages', 'Savanna village', 'minecraft/village/savanna/town_centers/savanna_meeting_point_1'],
+    ['Villages', 'Snowy village', 'minecraft/village/snowy/town_centers/snowy_meeting_point_1'],
+    ['Villages', 'Taiga village', 'minecraft/village/taiga/town_centers/taiga_meeting_point_1'],
+    ['Large procedural', 'Nether fortress', 'minecraft/builtin/nether_fortress/bridge_crossing'],
+    ['Large procedural', 'Stronghold', 'minecraft/builtin/stronghold/stairs_down'],
+    ['Large procedural', 'End city with bridges and towers', 'minecraft/end_city/base_floor'],
+    ['Large procedural', 'End arena: exit portal and ten towers', 'minecraft/features/end/exit_portal/active'],
+    ['Large procedural', 'Woodland mansion', 'minecraft/woodland_mansion/entrance'],
+    ['Large procedural', 'Ocean monument', 'minecraft/builtin/ocean_monument'],
+    ['Large procedural', 'Normal mineshaft', 'minecraft/builtin/mineshaft/normal/room'],
+    ['Large procedural', 'Badlands mineshaft', 'minecraft/builtin/mineshaft/mesa/room'],
+    ['Large procedural', 'Pillager outpost', 'minecraft/pillager_outpost/base_plate'],
+    ['Complete templates', 'Desert pyramid', 'minecraft/builtin/desert_pyramid'],
+    ['Complete templates', 'Jungle temple', 'minecraft/builtin/jungle_temple'],
+    ['Complete templates', 'Swamp hut', 'minecraft/builtin/swamp_hut'],
+    ['Complete templates', 'Igloo with basement', 'minecraft/igloo/top'],
+    ['Complete templates', 'Shipwreck with mast', 'minecraft/shipwreck/with_mast'],
+    ['Complete templates', 'Giant ruined portal', 'minecraft/ruined_portal/giant_portal_1'],
+    ['Complete templates', 'Large cold ocean ruin', 'minecraft/underwater_ruin/big_brick_1'],
+    ['Complete templates', 'Large warm ocean ruin', 'minecraft/underwater_ruin/big_warm_4'],
+    ['Complete templates', 'Overworld fossil', 'minecraft/fossil/skull_1']
+  ]
+  const COMPLETE_CODE_GENERATED = new Set([
+    'minecraft/builtin/desert_pyramid',
+    'minecraft/builtin/jungle_temple',
+    'minecraft/builtin/swamp_hut',
+    'minecraft/features/end/exit_portal/active',
+    'minecraft/features/end/exit_portal/inactive'
+  ])
 
   let nextId = 0
   const pending = new Map()
@@ -129,11 +182,33 @@
       if (!names.length) throw new Error('bundled structure catalog is empty')
       viewerShell.classList.add('assets-ready')
       filter.disabled = false
+      renderAssemblies()
       renderNames()
     } catch (err) {
       console.error(err)
       setStatus(`ERROR: ${err.message}`)
     }
+  }
+
+  function renderAssemblies() {
+    const available = ASSEMBLIES.filter(([, , path]) => names.includes(path))
+    const groups = new Map()
+    for (const [group, label, path] of available) {
+      if (!groups.has(group)) groups.set(group, [])
+      const option = document.createElement('option')
+      option.value = path
+      option.textContent = label
+      groups.get(group).push(option)
+    }
+    assemblies.replaceChildren(...[...groups].map(([label, options]) => {
+      const group = document.createElement('optgroup')
+      group.label = label
+      group.append(...options)
+      return group
+    }))
+    assemblies.disabled = !available.length
+    showAssembly.disabled = !available.length
+    rerollAssembly.disabled = !available.length
   }
 
   function renderNames() {
@@ -186,6 +261,7 @@
       names = (r.names || []).slice().sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
       viewerShell.classList.add('assets-ready')
       filter.disabled = false
+      renderAssemblies()
       renderNames()
     } catch (err) {
       console.error(err)
@@ -210,6 +286,49 @@
       show.disabled = false
     }
   })
+
+  function randomSeed() {
+    const value = new Uint32Array(1)
+    crypto.getRandomValues(value)
+    return value[0].toString(16).padStart(8, '0')
+  }
+
+  async function generateAssembly(freshSeed = false) {
+    const path = assemblies.value
+    if (!path) return
+    if (freshSeed) assemblySeed.value = randomSeed()
+    const seed = assemblySeed.value.trim()
+    if (!/^[0-9a-f]{1,8}$/i.test(seed)) {
+      setStatus('ERROR: assembly seed must be 1-8 hexadecimal digits')
+      return
+    }
+    if (COMPLETE_CODE_GENERATED.has(path)) {
+      structures.value = path
+      setTimeout(() => show.click(), 0)
+      return
+    }
+    try {
+      showAssembly.disabled = true
+      rerollAssembly.disabled = true
+      setStatus(`Generating complete ${assemblies.selectedOptions[0].textContent}…`)
+      const result = await send('loadAssembly', { path, seed })
+      const suffix = result.assembled ? ` · level ${result.level}/${result.maxDepth}` : ' · complete template'
+      setStatus(`Loaded ${assemblies.selectedOptions[0].textContent}${suffix} · seed ${seed}`)
+    } catch (err) {
+      console.error(err)
+      setStatus(`ERROR: ${err.message}`)
+    } finally {
+      showAssembly.disabled = assemblies.disabled
+      rerollAssembly.disabled = assemblies.disabled
+    }
+  }
+
+  document.querySelector('#full-assemblies').addEventListener('click', () => {
+    document.querySelector('#assembly-row').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    assemblies.focus()
+  })
+  showAssembly.addEventListener('click', () => generateAssembly(false))
+  rerollAssembly.addEventListener('click', () => generateAssembly(true))
 </script>
 </body>
 </html>
