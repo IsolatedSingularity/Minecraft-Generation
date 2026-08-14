@@ -53,7 +53,7 @@ from core.structures import (
 from dragon_pathfinding import trajectory_animation_state
 from multi_structure_generation import nether_structure_candidates
 from redstone_quasi_connectivity import bud_animation_state
-from seed_loading import chunk_status_snapshot
+from seed_loading import chunk_status_snapshot, loading_tracker_snapshot
 from structure_placement import overworld_structure_candidates
 
 
@@ -313,7 +313,7 @@ class StructureTests(unittest.TestCase):
 
 
 class ChunkStatusTests(unittest.TestCase):
-    def test_dependency_wave_reaches_source_target_status_rings(self):
+    def test_spawn_region_wave_finishes_all_441_chunks(self):
         stages, growth, hidden = chunk_status_snapshot(0)
         center = 10
         self.assertEqual(stages[center, center], 0)
@@ -326,13 +326,23 @@ class ChunkStatusTests(unittest.TestCase):
         first_hold = chunk_status_snapshot(50)
         for snapshot in (final_generation, first_hold):
             stages, growth, hidden = snapshot
-            self.assertEqual(stages[center, center], 12)
-            self.assertEqual(stages[center, center + 1], 8)
-            self.assertEqual(stages[center, center + 2], 7)
-            self.assertEqual(stages[center, center + 3], 1)
-            self.assertEqual(stages[center, center + 10], 1)
+            self.assertTrue(np.all(stages == 12))
             self.assertEqual(growth[center, center + 10], 1.0)
             self.assertFalse(hidden[center, center + 10])
+
+        midpoint, _, _ = chunk_status_snapshot(25)
+        self.assertGreater(midpoint[center, center], midpoint[0, 0])
+
+    def test_loading_tracker_keeps_dependency_shells_separate(self):
+        stages, hidden = loading_tracker_snapshot(49)
+        center = 22
+        self.assertEqual(stages.shape, (45, 45))
+        self.assertEqual(stages[center, center + 10], 12)
+        self.assertEqual(stages[center, center + 11], 8)
+        self.assertEqual(stages[center, center + 12], 7)
+        self.assertEqual(stages[center, center + 13], 1)
+        self.assertEqual(stages[center, center + 20], 1)
+        self.assertTrue(hidden[center, center + 21])
 
 
 class EndGeometryTests(unittest.TestCase):

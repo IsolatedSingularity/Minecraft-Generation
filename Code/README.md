@@ -86,9 +86,9 @@ The generator shows every in-bounds random-spread candidate across a broad chunk
 **Output**: Plots/structure_placement.gif
 
 #### `seed_loading.py`
-**Java 1.16.1 Chunk Status Dependency Wave**
+**Java 1.16.1 Spawn Region Preparation**
 
-Reveals exact fixed-seed biome IDs, base heights, and vanilla-textured surfaces chunk by chunk beside a larger vanilla-style spawn tracker. The thirteen-status order and source-required 21 x 21 terminal dependency footprint remain intact. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Relative timing remains explicitly modeled.
+Reveals exact fixed-seed biome IDs, base heights, and vanilla-textured surfaces while all 441 chunks in the 21 x 21 start-ticket region progress to `FULL`. A separate 45 x 45 tracker shows the lower-status generation dependencies outside that completed square: `FEATURES`, then `LIQUID_CARVERS`, then `STRUCTURE_STARTS`. The terminal states are source-backed; the center-out timing remains explicitly modeled.
 
 **Output**: `Plots/seed_loading.gif`
 

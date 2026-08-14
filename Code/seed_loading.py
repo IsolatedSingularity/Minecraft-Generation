@@ -1,7 +1,8 @@
 """Java 1.16.1 spawn preparation and chunk-status visualization.
 
-The status order, 21 by 21 target footprint, and vanilla loading-screen colour
-mapping are source-backed. Relative task timing is an explanatory schedule.
+The status order, fully generated 21 by 21 spawn region, surrounding dependency
+shells, and vanilla loading-screen colour mapping are source-backed. Relative
+task timing is an explanatory schedule.
 """
 
 from pathlib import Path
@@ -43,8 +44,17 @@ STATUS_COLORS = [
     '#6B6359', '#414B8D', '#4D9C56', '#B7B7A7', '#C87362', '#BBD0C5', '#73D49B',
 ]
 
-# ChunkStatus.DISTANCE_TO_TARGET_GENERATION_STATUS in Java 1.16.1.
-TARGET_STATUS_BY_DISTANCE = {0: 12, 1: 8, 2: 7}
+# ChunkStatus.DISTANCE_TO_TARGET_GENERATION_STATUS in Java 1.16.1. These
+# statuses describe the neighbours required around a FULL chunk. They do not
+# describe the terminal state of the 441 chunks held by the START ticket.
+DEPENDENCY_STATUS_BY_DISTANCE = {
+    1: 8,
+    2: 7,
+    **{distance: 1 for distance in range(3, 11)},
+}
+FULL_STATUS = len(STATUS_NAMES) - 1
+SPAWN_RADIUS = 10
+TRACKER_RADIUS = 22
 
 
 def _distance_grid(radius):
@@ -56,32 +66,56 @@ def _distance_grid(radius):
     )
 
 
-def chunk_status_snapshot(frame_index, fps=10, duration=6, full_hold=1, radius=10):
-    """Return an outside-in schedule for the exact terminal dependency footprint."""
+def _animation_progress(frame_index, fps, duration, full_hold):
     total_frames = int(round(float(fps) * float(duration)))
     hold_frames = int(round(float(fps) * float(full_hold)))
     generation_frames = total_frames - hold_frames
     if generation_frames < 2:
         raise ValueError('duration must leave at least two generation frames')
-    progress = (
+    return (
         1.0 if int(frame_index) >= generation_frames
         else int(frame_index) / max(generation_frames - 1, 1)
     )
+
+
+def chunk_status_snapshot(frame_index, fps=10, duration=6, full_hold=1, radius=10):
+    """Return an explanatory center-out schedule for the 21 by 21 spawn region."""
+    progress = _animation_progress(frame_index, fps, duration, full_hold)
     distances = _distance_grid(radius)
+    # A radius-11 START ticket gives every chunk at Chebyshev distance 10 or
+    # less a ticket level below 33, whose target generation status is FULL.
+    # Java's concurrent scheduler does not promise a visual order, so the
+    # animation uses a deterministic center-out wave.
+    work = progress * (FULL_STATUS + radius)
+    stages = np.floor(work - distances).astype(int)
+    stages = np.clip(stages, 0, FULL_STATUS)
+    hidden = np.zeros(distances.shape, dtype=bool)
+    if progress >= 1.0:
+        stages.fill(FULL_STATUS)
+    return stages, np.where(hidden, 0.0, 1.0), hidden
+
+
+def loading_tracker_snapshot(
+    frame_index, fps=10, duration=6, full_hold=1,
+    spawn_radius=SPAWN_RADIUS, tracker_radius=TRACKER_RADIUS,
+):
+    """Return the spawn region plus its lower-status generation dependencies."""
+    progress = _animation_progress(frame_index, fps, duration, full_hold)
+    distances = _distance_grid(tracker_radius)
+    dependency_distance = distances - spawn_radius
     target = np.zeros(distances.shape, dtype=int)
-    target[distances <= 10] = 1
-    for distance, status in TARGET_STATUS_BY_DISTANCE.items():
-        target[distances == distance] = status
-    # The target status at each Chebyshev distance is source-defined.  Java's
-    # task scheduler is concurrent and does not promise a presentation order,
-    # so the animation uses an explicit outside-in dependency schedule.
-    work = progress * (len(STATUS_NAMES) - 1 + radius)
-    stages = np.floor(work - (radius - distances)).astype(int)
-    stages = np.clip(stages, 0, target)
-    hidden = distances > 10.0
+    target[distances <= spawn_radius] = FULL_STATUS
+    for distance, status in DEPENDENCY_STATUS_BY_DISTANCE.items():
+        target[dependency_distance == distance] = status
+
+    work = progress * (FULL_STATUS + spawn_radius)
+    stages = np.floor(work - distances).astype(int)
+    stages = np.maximum(stages, 0)
+    stages = np.minimum(stages, target)
+    hidden = target == 0
     if progress >= 1.0:
         stages = target
-    return stages, np.where(hidden, 0.0, 1.0), hidden
+    return stages, hidden
 
 
 def _world_stage_rgba(biome_layer, terrain, heights, chunk_stages):
@@ -118,9 +152,8 @@ def create_seed_loading_animation(
 ):
     """Render progressive terrain meaning beside the vanilla-style tracker."""
     total_frames = int(round(fps * duration))
-    hold_frames = int(round(fps * full_hold))
-    generation_frames = total_frames - hold_frames
-    radius = 10
+    radius = SPAWN_RADIUS
+    tracker_radius = TRACKER_RADIUS
     display_radius = 10.5
     resolution = 169
     block_x_values = np.linspace(-168, 168, resolution)
@@ -163,7 +196,7 @@ def create_seed_loading_animation(
     axis.set_ylim(-display_radius, display_radius)
     axis.set_xlabel('Chunk X')
     axis.set_ylabel('Chunk Z')
-    axis.set_title('21 x 21 CHUNK DEPENDENCY REGION', fontsize=11, pad=8)
+    axis.set_title('21 x 21 SPAWN REGION  |  441 CHUNKS', fontsize=11, pad=8)
     axis.scatter([0], [0], marker='+', s=90, c=COLORS['text'], linewidths=1.2, zorder=8)
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
@@ -180,26 +213,32 @@ def create_seed_loading_animation(
         axis.axhline(boundary, color='#11151D', linewidth=0.28, alpha=0.42, zorder=4)
 
     tracker = side.inset_axes([0.02, 0.35, 0.96, 0.62])
-    tracker.set_title('VANILLA-STYLE SPAWN REGION TRACKER', fontsize=8.4, pad=5)
+    tracker.set_title('SPAWN REGION + GENERATION DEPENDENCIES', fontsize=8.1, pad=5)
     tracker.set_aspect('equal')
     tracker.set_xticks([])
     tracker.set_yticks([])
     tracker.set_facecolor('#080808')
-    initial_stages, _, initial_hidden = chunk_status_snapshot(
-        0, fps=fps, duration=duration, full_hold=full_hold, radius=radius,
+    tracker_stages, tracker_hidden = loading_tracker_snapshot(
+        0, fps=fps, duration=duration, full_hold=full_hold,
+        spawn_radius=radius, tracker_radius=tracker_radius,
     )
     tracker_image = tracker.imshow(
-        np.ma.masked_where(initial_hidden | (initial_stages == 0), initial_stages),
+        np.ma.masked_where(tracker_hidden | (tracker_stages == 0), tracker_stages),
         origin='lower',
         interpolation='nearest', cmap=ListedColormap(VANILLA_STATUS_COLORS),
         vmin=0, vmax=len(VANILLA_STATUS_COLORS) - 1,
     )
     tracker.add_patch(Rectangle(
-        (-0.5, -0.5), 21, 21, fill=False,
-        edgecolor='#FFEEFF', linewidth=1.0, alpha=0.72,
+        (-0.5, -0.5), 2 * tracker_radius + 1, 2 * tracker_radius + 1,
+        fill=False, edgecolor='#FFEEFF', linewidth=0.8, alpha=0.48,
     ))
     tracker.add_patch(Rectangle(
-        (radius - 0.5, radius - 0.5), 1, 1, fill=False,
+        (tracker_radius - radius - 0.5, tracker_radius - radius - 0.5),
+        2 * radius + 1, 2 * radius + 1, fill=False,
+        edgecolor=COLORS['cyan'], linewidth=1.2, alpha=0.92,
+    ))
+    tracker.add_patch(Rectangle(
+        (tracker_radius - 0.5, tracker_radius - 0.5), 1, 1, fill=False,
         edgecolor=COLORS['gold'], linewidth=1.8,
     ))
 
@@ -228,7 +267,7 @@ def create_seed_loading_animation(
         stage_boxes.append((index, box))
 
     figure.suptitle(
-        'BUILDING THE SPAWN REGION', color=COLORS['text'],
+        'PREPARING THE SPAWN REGION', color=COLORS['text'],
         fontsize=17, fontweight='black', y=0.96,
     )
 
@@ -240,11 +279,19 @@ def create_seed_loading_animation(
         world_image.set_data(_world_stage_rgba(
             biome_layer, terrain, heights, stages,
         ))
-        tracker_image.set_data(np.ma.masked_where(hidden | (stages == 0), stages))
-        center_stage = int(stages[radius, radius])
-        visible_stage = min(center_stage, 12)
-        stage_text.set_text(f'CENTER CHUNK  {STATUS_NAMES[visible_stage]}')
-        progress_text.set_text(f'{round(100.0 * center_stage / 12):d}% PIPELINE')
+        tracker_stages, tracker_hidden = loading_tracker_snapshot(
+            frame_index, fps=fps, duration=duration,
+            full_hold=full_hold, spawn_radius=radius,
+            tracker_radius=tracker_radius,
+        )
+        tracker_image.set_data(np.ma.masked_where(
+            tracker_hidden | (tracker_stages == 0), tracker_stages,
+        ))
+        full_chunks = int(np.count_nonzero(stages == FULL_STATUS))
+        pipeline_progress = np.sum(stages) / (stages.size * FULL_STATUS)
+        visible_stage = int(np.max(stages))
+        stage_text.set_text(f'FULL CHUNKS  {full_chunks:3d} / {stages.size}')
+        progress_text.set_text(f'{round(100.0 * pipeline_progress):d}% REGION PIPELINE')
         for index, box in stage_boxes:
             box.set_edgecolor(COLORS['text'] if index == visible_stage else '#07090E')
             box.set_linewidth(1.5 if index == visible_stage else 0.5)
