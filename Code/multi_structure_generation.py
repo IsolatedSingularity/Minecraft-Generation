@@ -54,7 +54,7 @@ def _draw_legend(axis):
     axis.set_ylim(0, 1)
     axis.axis('off')
     axis.text(
-        0.0, 0.98, 'SOURCE-SHAPED BIOME PROXY',
+        0.0, 0.98, '1.16.1 MULTI-NOISE BIOMES',
         color=COLORS['text'], fontsize=10, fontweight='black', va='top',
     )
     for index, (name, biome) in enumerate(NETHER_TERRAIN_CLASSES.items()):
@@ -94,7 +94,7 @@ def _draw_legend(axis):
 
 
 def nether_structure_candidates(
-    seed=42, region_radius=12, resolution=640, display_half_width=None,
+    seed=42, region_radius=12, resolution=385, display_half_width=None,
 ):
     """Return inclusive candidate-stage Nether structure layers.
 
@@ -156,17 +156,17 @@ def nether_structure_candidates(
 
 
 def create_multi_structure_animation(
-    save_path, seed=42, region_radius=46, fps=8, duration=13,
+    save_path, seed=42, region_radius=62, fps=8, duration=13,
 ):
     shared, portals, _, (minimum, maximum) = nether_structure_candidates(
-        seed, region_radius, display_half_width=500,
+        seed, region_radius, display_half_width=1640,
     )
     total_frames = int(fps * duration)
 
-    figure = plt.figure(figsize=(16.0, 8.6), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(10.5, 10.5), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[3.8, 1.05],
-        left=0.055, right=0.98, top=0.89, bottom=0.11, wspace=0.08,
+        1, 2, width_ratios=[3.60, 1.40],
+        left=0.065, right=0.98, top=0.90, bottom=0.095, wspace=0.08,
     )
     axis = figure.add_subplot(grid[0, 0])
     legend_axis = figure.add_subplot(grid[0, 1])
@@ -182,10 +182,10 @@ def create_multi_structure_animation(
 
     draw_minecraft_terrain(
         axis, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='nether', resolution=800, alpha=0.92,
+        dimension='nether', resolution=385, alpha=0.92,
         coordinate_scale=16.0, showcase=False,
     )
-    grid_extent = region_radius + 2
+    grid_extent = int(np.ceil(max(abs(minimum), abs(maximum)) / NETHER_STRUCTURE_SPACING)) + 2
     for coordinate in range(-grid_extent, grid_extent + 1):
         if coordinate % 5:
             continue
@@ -202,15 +202,15 @@ def create_multi_structure_animation(
 
     candidate_collections = {
         'fortress': axis.scatter(
-            [], [], s=3.2, marker='s', c=STRUCTURE_SCHEMATICS['fortress'].primary,
+            [], [], s=4.8, marker='s', c=STRUCTURE_SCHEMATICS['fortress'].secondary,
             edgecolors='none', linewidths=0.0, alpha=0.78, zorder=7,
         ),
         'bastion': axis.scatter(
-            [], [], s=3.6, marker='D', c=STRUCTURE_SCHEMATICS['bastion'].primary,
+            [], [], s=5.0, marker='D', c=STRUCTURE_SCHEMATICS['bastion'].secondary,
             edgecolors='none', linewidths=0.0, alpha=0.78, zorder=7,
         ),
         'ruined_portal': axis.scatter(
-            [], [], s=4.0, marker='*', c=STRUCTURE_SCHEMATICS['ruined_portal'].primary,
+            [], [], s=5.4, marker='*', c=STRUCTURE_SCHEMATICS['ruined_portal'].secondary,
             edgecolors='none', linewidths=0.0, alpha=0.76, zorder=8,
         ),
     }
@@ -229,12 +229,8 @@ def create_multi_structure_animation(
     axis.add_patch(active_portal)
     detail = axis.inset_axes([0.715, 0.685, 0.27, 0.29])
     detail.set_zorder(20)
-    draw_minecraft_terrain(
-        detail, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='nether', resolution=800, alpha=0.98,
-        coordinate_scale=16.0, showcase=False,
-    )
     detail.set_facecolor('#140E12')
+    detail.grid(color=COLORS['grid'], linewidth=0.42, alpha=0.34)
     detail.tick_params(colors=COLORS['muted'], labelsize=5.8, pad=1)
     for spine in detail.spines.values():
         spine.set_color(COLORS['text'])
@@ -262,7 +258,8 @@ def create_multi_structure_animation(
     detail.set_title('ACTIVE GRID DETAIL', fontsize=6.8, pad=3)
     _draw_legend(legend_axis)
     figure.suptitle(
-        'NETHER STRUCTURE GENERATION',
+        f'NETHER STRUCTURE CANDIDATES  |  {(maximum - minimum) * 16:,} x '
+        f'{(maximum - minimum) * 16:,} BLOCKS',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.96,
     )
 
@@ -290,6 +287,11 @@ def create_multi_structure_animation(
         )
 
         shared_item = shared[shared_count - 1]
+        detail.set_title(
+            f"{shared_item['name'].replace('_', ' ').upper()}  |  "
+            f"CHUNK {shared_item['chunk_x']}, {shared_item['chunk_z']}",
+            fontsize=6.4, pad=3,
+        )
         active_shared.set_xy((
             shared_item['region_x'] * NETHER_STRUCTURE_SPACING,
             shared_item['region_z'] * NETHER_STRUCTURE_SPACING,
@@ -314,7 +316,7 @@ def create_multi_structure_animation(
         else:
             detail_portal.set_visible(False)
             detail_portal_point.set_offsets(np.empty((0, 2)))
-        detail_half_width = 80
+        detail_half_width = 128
         detail_center_x = np.clip(
             shared_item['chunk_x'], minimum + detail_half_width,
             maximum - detail_half_width,
@@ -336,7 +338,7 @@ def create_multi_structure_animation(
     animation = FuncAnimation(
         figure, update, frames=total_frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=72)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
     plt.close(figure)
     optimize_gif(save_path, colors=32)
     return str(save_path)

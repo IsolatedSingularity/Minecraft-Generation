@@ -392,7 +392,10 @@ def scripted_showcase():
             if distance < nearest_distance:
                 nearest_distance = distance
                 nearest = tuple(sorted((int(left), int(right))))
-        return nearest if nearest_distance <= 11.0 else None
+        # Curved steering can bow more than eleven blocks away from its legal
+        # graph chord.  The chord is still the route edge being traversed, so
+        # keep it visible instead of dropping the highlight mid-flight.
+        return nearest
 
     def append_curve(points, state, samples=9, fireball=False, graph_nodes=None):
         curve = source_steered_path(

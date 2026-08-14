@@ -14,12 +14,12 @@ RENDERED_GIFS = {
     'dragon_holding_strafe.gif': (900, 500, 88),
     'dragon_landing_perch.gif': (900, 500, 88),
     'dragon_takeoff.gif': (900, 500, 80),
-    # The 3 s final hold is coalesced into the final optimized GIF frame.
-    'dragon_trajectory_ensemble.gif': (1400, 800, 180),
+    # The 3.2 s final hold is coalesced into the final optimized GIF frame.
+    'dragon_trajectory_ensemble.gif': (1400, 800, 220),
     # Unchanged wave cells are coalesced while their timing is retained.
     'seed_loading.gif': (1200, 700, 20),
-    'structure_placement.gif': (1000, 550, 90),
-    'multi_structure_generation.gif': (1000, 550, 80),
+    'structure_placement.gif': (1000, 1000, 90),
+    'multi_structure_generation.gif': (1000, 1000, 80),
     'redstone_quasi_connectivity.gif': (900, 550, 45),
 }
 
@@ -49,9 +49,9 @@ class AssetIntegrityTests(unittest.TestCase):
     def test_retained_new_gifs_decode_and_are_bounded(self):
         maximum_sizes = {
             'dragon_pathfinding_hero.gif': 32 * 1024 * 1024,
-            'dragon_trajectory_ensemble.gif': 36 * 1024 * 1024,
-            'structure_placement.gif': 15 * 1024 * 1024,
-            'multi_structure_generation.gif': 17 * 1024 * 1024,
+            'dragon_trajectory_ensemble.gif': 55 * 1024 * 1024,
+            'structure_placement.gif': 35 * 1024 * 1024,
+            'multi_structure_generation.gif': 32 * 1024 * 1024,
         }
         for name, dimensions in RENDERED_GIFS.items():
             minimum_width, minimum_height, minimum_frames = dimensions
@@ -81,11 +81,11 @@ class AssetIntegrityTests(unittest.TestCase):
 
     def test_deliberately_slow_animations_retain_their_timing(self):
         expected_duration_ranges = {
-            'dragon_pathfinding_hero.gif': (34_000, 38_000),
-            'dragon_holding_strafe.gif': (6_000, 8_000),
-            'dragon_landing_perch.gif': (6_000, 8_000),
-            'dragon_takeoff.gif': (6_000, 8_000),
-            'dragon_trajectory_ensemble.gif': (21_000, 25_000),
+            'dragon_pathfinding_hero.gif': (43_000, 47_000),
+            'dragon_holding_strafe.gif': (7_000, 9_000),
+            'dragon_landing_perch.gif': (7_000, 9_000),
+            'dragon_takeoff.gif': (7_000, 9_000),
+            'dragon_trajectory_ensemble.gif': (31_000, 33_500),
             'seed_loading.gif': (7_000, 7_500),
             'structure_placement.gif': (10_000, 13_500),
             'multi_structure_generation.gif': (10_000, 14_000),
@@ -127,6 +127,18 @@ class AssetIntegrityTests(unittest.TestCase):
         for relative in ('README.md', 'Code/README.md', 'Plots/README.md'):
             text = (ROOT / relative).read_text(encoding='utf-8')
             self.assertNotIn('\N{EM DASH}', text, relative)
+
+    def test_root_readme_math_uses_supported_macros(self):
+        text = (ROOT / 'README.md').read_text(encoding='utf-8')
+        self.assertNotIn(r'\operatorname', text)
+        self.assertNotIn(r'\mathsf', text)
+        for block in text.split('$$')[1::2]:
+            depth = 0
+            for character in block:
+                depth += character == '{'
+                depth -= character == '}'
+                self.assertGreaterEqual(depth, 0, block)
+            self.assertEqual(depth, 0, block)
 
     def test_root_readme_uses_static_flow_figures(self):
         text = (ROOT / 'README.md').read_text(encoding='utf-8')

@@ -53,7 +53,7 @@ def _regions_covering(minimum, maximum, spacing):
 
 
 def overworld_structure_candidates(
-    seed=42, region_radius=14, resolution=640, max_per_structure=None,
+    seed=42, region_radius=51, resolution=385, max_per_structure=None,
 ):
     """Return exact candidate-stage starts from every displayed structure grid.
 
@@ -94,7 +94,7 @@ def overworld_structure_candidates(
             ):
                 continue
             item['biome'] = biome
-            item['illustrative_biome_match'] = structure_biome_compatible(
+            item['biome_context_match'] = structure_biome_compatible(
                 config.name, biome,
             )
             item['spacing'] = config.spacing
@@ -161,24 +161,24 @@ def _draw_legends(axis):
         )
     axis.text(
         0.0, 0.018,
-        'Terrain is source-informed context, not a biome gate.\n'
-        'All in-bounds candidates are shown; outpost direct gates apply.',
-        color=COLORS['muted'], fontsize=6.6, va='bottom', linespacing=1.35,
+        'Terrain: 1.16.1 biome graph and base height.\n'
+        'All candidates shown. Outpost direct gates apply.',
+        color=COLORS['muted'], fontsize=5.9, va='bottom', linespacing=1.35,
     )
 
 
 def create_structure_placement_animation(
-    save_path, seed=42, region_radius=14, fps=8, duration=12,
+    save_path, seed=42, region_radius=51, fps=8, duration=12,
 ):
     candidates, _, (minimum, maximum) = overworld_structure_candidates(
         seed=seed, region_radius=region_radius,
     )
     total_frames = int(fps * duration)
 
-    figure = plt.figure(figsize=(16.0, 8.8), facecolor=COLORS['background'])
+    figure = plt.figure(figsize=(10.5, 10.5), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
-        1, 2, width_ratios=[3.70, 1.34],
-        left=0.048, right=0.98, top=0.90, bottom=0.12, wspace=0.08,
+        1, 2, width_ratios=[3.60, 1.40],
+        left=0.065, right=0.98, top=0.90, bottom=0.095, wspace=0.08,
     )
     axis = figure.add_subplot(grid[0, 0])
     legend_axis = figure.add_subplot(grid[0, 1])
@@ -193,7 +193,7 @@ def create_structure_placement_animation(
 
     draw_minecraft_terrain(
         axis, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='overworld', resolution=640, alpha=0.82,
+        dimension='overworld', resolution=385, alpha=0.82,
         coordinate_scale=16.0, showcase=False,
     )
     for coordinate in range(
@@ -216,9 +216,9 @@ def create_structure_placement_animation(
     for config in OVERWORLD_STRUCTURES:
         style = STRUCTURE_SCHEMATICS[config.name]
         candidate_collections[config.name] = axis.scatter(
-            [], [], s=15, marker=marker_by_name[config.name],
-            c=style.primary, edgecolors=COLORS['text'], linewidths=0.22,
-            alpha=0.88, zorder=6,
+            [], [], s=2.0, marker=marker_by_name[config.name],
+            c=style.primary, edgecolors='none', linewidths=0.0,
+            alpha=0.76, zorder=6,
         )
 
     current_region = Rectangle(
@@ -239,8 +239,8 @@ def create_structure_placement_animation(
     axis.add_patch(active_outline)
     detail = axis.inset_axes([0.715, 0.685, 0.27, 0.29])
     draw_minecraft_terrain(
-        detail, (minimum, maximum, minimum, maximum), seed=seed,
-        dimension='overworld', resolution=640, alpha=0.96,
+        detail, (-96, 96, -96, 96), seed=seed,
+        dimension='overworld', resolution=193, alpha=0.96,
         coordinate_scale=16.0, showcase=False,
     )
     detail.set_facecolor(COLORS['panel'])
@@ -276,10 +276,11 @@ def create_structure_placement_animation(
             c=style.primary, edgecolors=COLORS['text'], linewidths=0.18,
             alpha=0.9, zorder=9,
         )
-    detail.set_title('CENTRAL 192 x 192 CHUNK DETAIL', fontsize=6.8, pad=3)
+    detail.set_title('CENTRAL 3,072 x 3,072 BLOCK DETAIL', fontsize=6.8, pad=3)
     _draw_legends(legend_axis)
     figure.suptitle(
-        'OVERWORLD STRUCTURE CANDIDATE PLACEMENT',
+        f'OVERWORLD STRUCTURE CANDIDATES  |  {(maximum - minimum) * 16:,} x '
+        f'{(maximum - minimum) * 16:,} BLOCKS',
         color=COLORS['text'], fontsize=18, fontweight='black', y=0.965,
     )
 
@@ -319,7 +320,7 @@ def create_structure_placement_animation(
     animation = FuncAnimation(
         figure, update, frames=total_frames, interval=1000 / fps, blit=False,
     )
-    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=68)
+    animation.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
     plt.close(figure)
     optimize_gif(save_path, colors=32)
     return str(save_path)

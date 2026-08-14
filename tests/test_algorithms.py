@@ -37,6 +37,8 @@ from core.minecraft_visuals import (
     minecraft_biome_grid,
     minecraft_nether_biome_grid,
 )
+from core.vanilla_biomes import NetherBiomeSource, OverworldBiomeSource
+from core.vanilla_terrain import VanillaTerrainSampler
 from core.strongholds import generate_stronghold_candidates
 from core.structures import (
     NETHER_RUINED_PORTAL,
@@ -167,15 +169,15 @@ class DragonTopologyTests(unittest.TestCase):
         self.assertTrue(any(frame.damage_pulse > 0.0 for frame in frames))
 
     def test_trajectory_batches_and_exact_final_hold(self):
-        active_last = trajectory_animation_state(193)
-        hold_first = trajectory_animation_state(194)
-        hold_last = trajectory_animation_state(223)
-        self.assertEqual(active_last, (240, 225, 1.0))
-        self.assertEqual(hold_first, (240, 225, 1.0))
-        self.assertEqual(hold_last, (240, 225, 1.0))
-        shown = [trajectory_animation_state(index)[0] for index in range(224)]
+        active_last = trajectory_animation_state(287)
+        hold_first = trajectory_animation_state(288)
+        hold_last = trajectory_animation_state(319)
+        self.assertEqual(active_last, (480, 468, 1.0))
+        self.assertEqual(hold_first, (480, 468, 1.0))
+        self.assertEqual(hold_last, (480, 468, 1.0))
+        shown = [trajectory_animation_state(index)[0] for index in range(320)]
         self.assertTrue(all(left <= right for left, right in zip(shown, shown[1:])))
-        for frame_index in range(194):
+        for frame_index in range(288):
             route_count, featured_index, _ = trajectory_animation_state(frame_index)
             self.assertLess(featured_index, route_count)
 
@@ -199,7 +201,7 @@ class StructureTests(unittest.TestCase):
             {config.name for config in OVERWORLD_STRUCTURES},
         )
         self.assertTrue(any(
-            not item['illustrative_biome_match'] for item in candidates
+            not item['biome_context_match'] for item in candidates
         ))
         self.assertEqual(biomes.shape, (256, 256))
         self.assertGreater(
@@ -243,15 +245,44 @@ class StructureTests(unittest.TestCase):
         self.assertEqual((end_city['offset_x'], end_city['offset_z']), (7, 3))
         self.assertFalse(END_CITY.uniform)
 
-    def test_registered_biomes_are_visible_in_showcase_maps(self):
+    def test_biome_maps_never_inject_showcase_classes(self):
         overworld = minecraft_biome_grid(
             42, 384, (-168, 168), coordinate_scale=16.0, showcase=True,
         )
         nether = minecraft_nether_biome_grid(
             42, 384, (-140, 140), coordinate_scale=16.0, showcase=True,
         )
-        self.assertEqual(set(overworld.ravel()), set(OVERWORLD_BIOMES))
+        self.assertTrue(set(overworld.ravel()) <= set(OVERWORLD_BIOMES))
+        self.assertEqual(
+            minecraft_biome_grid(42, 1, (0, 0))[0, 0],
+            'snowy_tundra',
+        )
         self.assertEqual(set(nether.ravel()), set(NETHER_BIOMES))
+
+    def test_vanilla_biomes_and_heights_match_original_jar_oracle(self):
+        overworld = OverworldBiomeSource(42)
+        expected_biomes = {
+            (0, 0): 12, (100, 100): 34, (-100, 40): 12,
+            (1000, -700): 3, (-128, 0): 30,
+        }
+        for point, expected in expected_biomes.items():
+            self.assertEqual(overworld.sample(*point), expected, point)
+
+        nether = NetherBiomeSource(42)
+        expected_nether = {
+            (0, 0): 171, (100, 100): 171,
+            (-100, 40): 8, (1000, -700): 170,
+        }
+        for point, expected in expected_nether.items():
+            self.assertEqual(nether.sample(*point), expected, point)
+
+        terrain = VanillaTerrainSampler(42, 'overworld')
+        block_x = np.array([0, 16, 100, -100])
+        block_z = np.array([0, 16, 100, 40])
+        np.testing.assert_array_equal(
+            terrain.height_points(block_x, block_z),
+            np.array([69, 69, 69, 63]),
+        )
 
     def test_nether_shared_split_converges_to_two_fifths(self):
         candidates = [
@@ -354,7 +385,7 @@ class EndGeometryTests(unittest.TestCase):
         ))
 
         evaluated, _, _ = end_city_height_candidates(
-            42, max_coordinate_blocks=2400, resolution=401,
+            42, max_coordinate_blocks=2400, resolution=17,
         )
         self.assertGreater(len(evaluated), len(cities))
         self.assertEqual(
@@ -366,11 +397,11 @@ class EndGeometryTests(unittest.TestCase):
         )
         self.assertTrue(all(len(item['sample_heights']) == 4 for item in evaluated))
         self.assertTrue(all(
-            item['model_min_height'] == min(item['sample_heights'])
+            item['min_height'] == min(item['sample_heights'])
             for item in evaluated
         ))
         self.assertTrue(all(
-            item['qualified'] == (item['model_min_height'] >= 60.0)
+            item['qualified'] == (item['min_height'] >= 60)
             for item in evaluated
         ))
 

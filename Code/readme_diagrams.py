@@ -13,7 +13,7 @@ apply_style()
 
 DIAGRAMS = {
     'world_generation_flow.svg': {
-        'size': (12.0, 4.2),
+        'size': (12.0, 3.5),
         'nodes': {
             'seed': (0.08, 0.50, 'WORLD\nSEED'),
             'rng': (0.28, 0.50, 'JAVA RANDOM\nSTATE'),
@@ -28,7 +28,7 @@ DIAGRAMS = {
                   ('terrain', 'view'), ('gates', 'view')],
     },
     'noise_composition_flow.svg': {
-        'size': (12.0, 4.2),
+        'size': (12.0, 3.5),
         'nodes': {
             'broad': (0.10, 0.76, 'BROAD NOISE\nCONTINENTS'),
             'medium': (0.10, 0.50, 'MEDIUM NOISE\nREGIONS'),
@@ -41,7 +41,7 @@ DIAGRAMS = {
                   ('sum', 'fields'), ('fields', 'biomes')],
     },
     'dragon_navigation_flow.svg': {
-        'size': (12.0, 4.6),
+        'size': (12.0, 3.7),
         'nodes': {
             'state': (0.09, 0.72, 'CURRENT\nFIGHT STATE'),
             'crystals': (0.09, 0.28, 'LIVING\nCRYSTALS'),
@@ -55,7 +55,7 @@ DIAGRAMS = {
                   ('steer', 'motion'), ('motion', 'state')],
     },
     'structure_candidate_flow.svg': {
-        'size': (12.0, 4.4),
+        'size': (12.0, 3.6),
         'nodes': {
             'input': (0.09, 0.50, 'WORLD SEED,\nREGION, SALT'),
             'rng': (0.29, 0.50, '48-BIT\nJAVA RANDOM'),
@@ -79,25 +79,25 @@ def _draw_diagram(path, specification):
     node_artists = {}
     for index, (key, (x, y, label)) in enumerate(specification['nodes'].items()):
         color = (COLORS['cyan'], COLORS['violet'], COLORS['coral'], COLORS['gold'])[index % 4]
-        width = 0.16 if len(label) < 22 else 0.19
-        height = 0.19
+        width = 0.135 if len(label) < 22 else 0.165
+        height = 0.115
         node = FancyBboxPatch(
             (x - width / 2, y - height / 2), width, height,
-            boxstyle='round,pad=0.016,rounding_size=0.035',
+            boxstyle='round,pad=0.010,rounding_size=0.018',
             facecolor=COLORS['panel_alt'], edgecolor=color,
-            linewidth=1.8, zorder=3,
+            linewidth=1.65, zorder=3,
         )
         axis.add_patch(node)
         axis.text(x, y, label, ha='center', va='center', color=COLORS['text'],
-                  fontsize=9.2, fontweight='black', linespacing=1.25, zorder=4)
+                  fontsize=8.7, fontweight='black', linespacing=1.14, zorder=4)
         node_artists[key] = node
     for start, end in specification['edges']:
         arrow = FancyArrowPatch(
             posA=specification['nodes'][start][:2],
             posB=specification['nodes'][end][:2],
             patchA=node_artists[start], patchB=node_artists[end],
-            arrowstyle='-|>', mutation_scale=13, color='#77849A',
-            linewidth=1.45, connectionstyle='arc3,rad=0.0', zorder=2,
+            arrowstyle='-|>', mutation_scale=15.5, color='#8C9AB1',
+            linewidth=1.75, connectionstyle='arc3,rad=0.0', zorder=2,
         )
         axis.add_patch(arrow)
     figure.savefig(
@@ -105,6 +105,13 @@ def _draw_diagram(path, specification):
         metadata={'Date': None, 'Creator': 'Minecraft-Generation'},
     )
     plt.close(figure)
+    # Matplotlib emits trailing spaces in multi-line SVG path data.  Keep the
+    # generated files deterministic and friendly to ``git diff --check``.
+    svg = path.read_text(encoding='utf-8')
+    path.write_text(
+        '\n'.join(line.rstrip() for line in svg.splitlines()) + '\n',
+        encoding='utf-8', newline='\n',
+    )
 
 
 def create_readme_diagrams(output_dir):

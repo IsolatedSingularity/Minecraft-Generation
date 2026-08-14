@@ -12,7 +12,10 @@ from matplotlib.colors import ListedColormap, to_rgb
 from matplotlib.patches import Rectangle
 import numpy as np
 
-from core.minecraft_visuals import minecraft_terrain_rgba
+from core.minecraft_visuals import (
+    overworld_surface_sample,
+    terrain_rgba_from_sample,
+)
 from core.rendering import optimize_gif
 from core.style import COLORS, apply_style
 
@@ -54,7 +57,7 @@ def _distance_grid(radius):
 
 
 def chunk_status_snapshot(frame_index, fps=10, duration=6, full_hold=1, radius=10):
-    """Return a staged view of the exact terminal dependency footprint."""
+    """Return an outside-in schedule for the exact terminal dependency footprint."""
     total_frames = int(round(float(fps) * float(duration)))
     hold_frames = int(round(float(fps) * float(full_hold)))
     generation_frames = total_frames - hold_frames
@@ -69,38 +72,44 @@ def chunk_status_snapshot(frame_index, fps=10, duration=6, full_hold=1, radius=1
     target[distances <= 10] = 1
     for distance, status in TARGET_STATUS_BY_DISTANCE.items():
         target[distances == distance] = status
-    active_stage = min(len(STATUS_NAMES) - 1, int(np.floor(progress * len(STATUS_NAMES))))
-    stages = np.minimum(active_stage, target)
+    # The target status at each Chebyshev distance is source-defined.  Java's
+    # task scheduler is concurrent and does not promise a presentation order,
+    # so the animation uses an explicit outside-in dependency schedule.
+    work = progress * (len(STATUS_NAMES) - 1 + radius)
+    stages = np.floor(work - (radius - distances)).astype(int)
+    stages = np.clip(stages, 0, target)
     hidden = distances > 10.0
     if progress >= 1.0:
         stages = target
     return stages, np.where(hidden, 0.0, 1.0), hidden
 
 
-def _world_stage_rgba(terrain, progress):
-    """Build a visible terrain proxy instead of tinting a finished surface."""
+def _world_stage_rgba(biome_layer, terrain, heights, chunk_stages):
+    """Reveal source-derived terrain only when each chunk reaches that stage."""
     height, width, _ = terrain.shape
     background = np.asarray(to_rgb(COLORS['background']))
     output = np.empty((height, width, 4), dtype=float)
     output[..., :3] = background
     output[..., 3] = 1.0
 
-    luminance = np.mean(terrain, axis=2, keepdims=True)
-    noise_layer = np.repeat(luminance, 3, axis=2) * np.array([0.70, 0.78, 0.92])
-    biome_layer = 0.38 * terrain + 0.62 * np.array([0.19, 0.25, 0.34])
-    surface_layer = 0.78 * terrain + 0.22 * luminance
-    features_layer = np.clip(terrain * 1.10 + 0.035, 0.0, 1.0)
+    rows = np.floor(np.linspace(0, 21, height, endpoint=False)).astype(int)
+    columns = np.floor(np.linspace(0, 21, width, endpoint=False)).astype(int)
+    pixel_stages = chunk_stages[np.ix_(rows, columns)]
 
-    stages = (
-        (0.10, 0.24, biome_layer),
-        (0.22, 0.42, noise_layer),
-        (0.38, 0.60, surface_layer),
-        (0.56, 0.79, features_layer),
-        (0.74, 0.96, terrain),
-    )
-    for start, end, layer in stages:
-        blend = np.clip((progress - start) / (end - start), 0.0, 1.0)
-        output[..., :3] = output[..., :3] * (1.0 - blend) + layer * blend
+    early = (pixel_stages >= 1) & (pixel_stages < 3)
+    output[early, :3] = np.asarray(to_rgb('#242A33'))
+    biome_mask = pixel_stages == 3
+    output[biome_mask, :3] = biome_layer[biome_mask, :3]
+
+    height_values = np.asarray(heights, dtype=float)
+    height_normalized = np.clip((height_values - 48.0) / 48.0, 0.0, 1.0)
+    noise_layer = np.repeat(height_normalized[..., None], 3, axis=2)
+    noise_layer *= np.asarray([0.69, 0.78, 0.91])
+    noise_mask = pixel_stages == 4
+    output[noise_mask, :3] = noise_layer[noise_mask]
+
+    surface_mask = pixel_stages >= 5
+    output[surface_mask, :3] = terrain[surface_mask, :3]
     return output
 
 
@@ -112,15 +121,27 @@ def create_seed_loading_animation(
     hold_frames = int(round(fps * full_hold))
     generation_frames = total_frames - hold_frames
     radius = 10
-    display_radius = 180
-    resolution = 361
-    terrain = minecraft_terrain_rgba(
-        seed, resolution=resolution, dimension='overworld',
-        x_extent=(-display_radius - 0.5, display_radius + 0.5),
-        z_extent=(-display_radius - 0.5, display_radius + 0.5),
-        coordinate_scale=16.0, showcase=False,
-    )[..., :3]
-    initial_world = _world_stage_rgba(terrain, 0.0)
+    display_radius = 10.5
+    resolution = 169
+    block_x_values = np.linspace(-168, 168, resolution)
+    block_z_values = np.linspace(-168, 168, resolution)
+    block_x, block_z = np.meshgrid(block_x_values, block_z_values)
+    biome_ids, heights = overworld_surface_sample(
+        seed, resolution=resolution,
+        x_extent=(-168, 168), z_extent=(-168, 168), coordinate_scale=1.0,
+    )
+    terrain = terrain_rgba_from_sample(
+        biome_ids, heights, block_x, block_z, 'overworld',
+    )
+    biome_layer = terrain_rgba_from_sample(
+        biome_ids, heights, block_x, block_z, 'overworld', flat=True,
+    )
+    initial_stages, _, _ = chunk_status_snapshot(
+        0, fps=fps, duration=duration, full_hold=full_hold, radius=radius,
+    )
+    initial_world = _world_stage_rgba(
+        biome_layer, terrain, heights, initial_stages,
+    )
 
     figure = plt.figure(figsize=(12.8, 7.2), facecolor=COLORS['background'])
     grid = figure.add_gridspec(
@@ -142,7 +163,7 @@ def create_seed_loading_animation(
     axis.set_ylim(-display_radius, display_radius)
     axis.set_xlabel('Chunk X')
     axis.set_ylabel('Chunk Z')
-    axis.set_title('WHAT EACH GENERATION STAGE ADDS', fontsize=11, pad=8)
+    axis.set_title('21 x 21 CHUNK DEPENDENCY REGION', fontsize=11, pad=8)
     axis.scatter([0], [0], marker='+', s=90, c=COLORS['text'], linewidths=1.2, zorder=8)
     for spine in axis.spines.values():
         spine.set_color(COLORS['grid'])
@@ -154,7 +175,11 @@ def create_seed_loading_animation(
                   edgecolor=COLORS['grid'], alpha=0.94), zorder=9,
     )
 
-    tracker = side.inset_axes([0.08, 0.38, 0.84, 0.56])
+    for boundary in np.arange(-10.5, 11.5, 1.0):
+        axis.axvline(boundary, color='#11151D', linewidth=0.28, alpha=0.42, zorder=4)
+        axis.axhline(boundary, color='#11151D', linewidth=0.28, alpha=0.42, zorder=4)
+
+    tracker = side.inset_axes([0.02, 0.35, 0.96, 0.62])
     tracker.set_title('VANILLA-STYLE SPAWN REGION TRACKER', fontsize=8.4, pad=5)
     tracker.set_aspect('equal')
     tracker.set_xticks([])
@@ -179,10 +204,10 @@ def create_seed_loading_animation(
     ))
 
     progress_text = side.text(
-        0.50, 0.335, '0%', ha='center', va='center',
+        0.50, 0.305, '0%', ha='center', va='center',
         color=COLORS['text'], fontsize=19, fontweight='black',
     )
-    strip = side.inset_axes([0.04, 0.08, 0.92, 0.18])
+    strip = side.inset_axes([0.04, 0.045, 0.92, 0.18])
     strip.set_xlim(0, 7)
     strip.set_ylim(0, 2)
     strip.axis('off')
@@ -208,16 +233,13 @@ def create_seed_loading_animation(
     )
 
     def update(frame_index):
-        progress = (
-            1.0 if frame_index >= generation_frames
-            else frame_index / max(generation_frames - 1, 1)
-        )
-        eased = progress * progress * (3.0 - 2.0 * progress)
-        world_image.set_data(_world_stage_rgba(terrain, eased))
         stages, _, hidden = chunk_status_snapshot(
             frame_index, fps=fps, duration=duration,
             full_hold=full_hold, radius=radius,
         )
+        world_image.set_data(_world_stage_rgba(
+            biome_layer, terrain, heights, stages,
+        ))
         tracker_image.set_data(np.ma.masked_where(hidden | (stages == 0), stages))
         center_stage = int(stages[radius, radius])
         visible_stage = min(center_stage, 12)

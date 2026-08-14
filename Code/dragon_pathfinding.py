@@ -46,12 +46,12 @@ DRAGON_SPRITE_PATH = (
     Path(__file__).resolve().parents[1]
     / 'pngfind.com-ender-dragon-png-6585528.png'
 )
-HUD_PROBABILITY_X = 0.365
-HUD_PROBABILITY_WIDTH = 0.410
+HUD_PROBABILITY_X = 0.335
+HUD_PROBABILITY_WIDTH = 0.390
 
 
 def _prepare_dragon_sprite():
-    """Return a compact, tinted square sprite plus a soft alpha glow."""
+    """Return a compact tinted sprite whose wings can be articulated."""
     source = Image.open(DRAGON_SPRITE_PATH).convert('RGBA')
     alpha_box = source.getchannel('A').getbbox()
     if alpha_box is None:
@@ -73,19 +73,41 @@ def _prepare_dragon_sprite():
     )
     rgba[..., :3] = np.clip(colour, 0.0, 1.0)
     tinted = Image.fromarray(np.uint8(np.clip(rgba, 0.0, 1.0) * 255), 'RGBA')
-    glow_alpha = tinted.getchannel('A').filter(
+    return tinted
+
+
+def _articulate_dragon_wings(sprite, extension):
+    """Foreshorten the two wing layers while leaving the body rigid."""
+    extension = float(np.clip(extension, 0.76, 1.0))
+    output = Image.new('RGBA', sprite.size, (0, 0, 0, 0))
+    left_pivot, right_pivot = 50, 70
+    left = sprite.crop((0, 0, left_pivot, sprite.height))
+    right = sprite.crop((right_pivot, 0, sprite.width, sprite.height))
+    left_width = max(1, int(round(left.width * extension)))
+    right_width = max(1, int(round(right.width * extension)))
+    left = left.resize((left_width, sprite.height), Image.Resampling.BICUBIC)
+    right = right.resize((right_width, sprite.height), Image.Resampling.BICUBIC)
+    output.alpha_composite(left, (left_pivot - left_width, 0))
+    output.alpha_composite(sprite.crop((left_pivot, 0, right_pivot, sprite.height)),
+                           (left_pivot, 0))
+    output.alpha_composite(right, (right_pivot, 0))
+    return output
+
+
+def _dragon_glow(sprite):
+    alpha = sprite.getchannel('A').filter(
         ImageFilter.MaxFilter(7)
     ).filter(ImageFilter.GaussianBlur(2.2))
-    glow = Image.new('RGBA', tinted.size, (142, 77, 204, 0))
-    glow.putalpha(glow_alpha.point(lambda value: int(value * 0.32)))
-    return tinted, glow
+    glow = Image.new('RGBA', sprite.size, (142, 77, 204, 0))
+    glow.putalpha(alpha.point(lambda value: int(value * 0.32)))
+    return glow
 
 
 class DragonSpriteArtist:
     """Rotating raster sprite with cached state tint and violet glow."""
 
     def __init__(self, axis, size_blocks=12.0, zorder=12):
-        self.base, self.glow = _prepare_dragon_sprite()
+        self.base = _prepare_dragon_sprite()
         self.cache = {}
         blank = np.zeros((120, 120, 4), dtype=np.uint8)
         self.half_size = float(size_blocks) / 2.0
@@ -98,15 +120,19 @@ class DragonSpriteArtist:
             interpolation='bilinear', zorder=zorder,
         )
 
-    def update(self, position, angle, state, scale=1.0):
+    def update(self, position, angle, state, scale=1.0, wing_phase=0.0):
         quantized = int(round(float(angle) / 2.0) * 2) % 360
-        key = (quantized, state)
+        flap_index = int(round(6.0 * (0.5 + 0.5 * np.sin(float(wing_phase)))))
+        key = (quantized, state, flap_index)
         if key not in self.cache:
             rotation = quantized - 90
-            sprite = self.base.rotate(
+            articulated = _articulate_dragon_wings(
+                self.base, 0.76 + 0.24 * flap_index / 6.0,
+            )
+            sprite = articulated.rotate(
                 rotation, resample=Image.Resampling.BICUBIC, expand=False,
             )
-            glow = self.glow.rotate(
+            glow = _dragon_glow(articulated).rotate(
                 rotation, resample=Image.Resampling.BICUBIC, expand=False,
             )
             rgba = np.asarray(sprite).astype(float) / 255.0
@@ -480,7 +506,7 @@ def _set_active_graph_edge(artist, edge, color):
     artist.set_color(color)
 
 
-def _nearest_route_edge(position, node_path, maximum_distance=11.0):
+def _nearest_route_edge(position, node_path):
     """Return the route edge nearest a projected continuous flight position."""
     if len(node_path) < 2:
         return None
@@ -499,11 +525,11 @@ def _nearest_route_edge(position, node_path, maximum_distance=11.0):
         if distance < best_distance:
             best_distance = distance
             best_edge = tuple(sorted((int(left), int(right))))
-    return best_edge if best_distance <= float(maximum_distance) else None
+    return best_edge
 
 
 def create_dragon_pathfinding_animation(
-    save_path, fps=12, dpi=100, colors=96,
+    save_path, fps=10, dpi=100, colors=96,
 ):
     """Create the shorter README hero animation."""
     frames = scripted_showcase()
@@ -524,7 +550,7 @@ def create_dragon_pathfinding_animation(
     ) = _draw_state_machine(machine)
 
     active_edge = LineCollection(
-        [], linewidths=5.4, capstyle='round', joinstyle='round',
+        [], linewidths=3.6, capstyle='round', joinstyle='round',
         alpha=0.82, zorder=8.4,
     )
     arena.add_collection(active_edge)
@@ -579,9 +605,12 @@ def create_dragon_pathfinding_animation(
         sitting = frame.state in {
             'hover', 'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
         }
-        pulse_amplitude = 0.010 if sitting else 0.020
-        sprite_scale = 1.0 + pulse_amplitude * np.sin(2.0 * np.pi * frame_index / 7.0)
-        active.update(frame.position, angle, frame.state, scale=sprite_scale)
+        wing_phase = (-0.5 * np.pi if sitting
+                      else 2.0 * np.pi * frame_index / 10.0)
+        active.update(
+            frame.position, angle, frame.state,
+            scale=1.0, wing_phase=wing_phase,
+        )
         _set_active_graph_edge(
             active_edge, frame.active_edge,
             to_rgba(STATE_COLORS[frame.state], 0.86),
@@ -669,7 +698,7 @@ def _clip_ranges(frames):
     }
 
 
-def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
+def create_dragon_detail_clips(output_dir, fps=12, dpi=100):
     """Create compact zoomed state clips for the README detail section."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -682,7 +711,7 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
         _arena_static(arena, compact=True, limits=70)
         figure.subplots_adjust(left=0.02, right=0.98, top=0.94, bottom=0.02)
         active_edge = LineCollection(
-            [], linewidths=5.8, capstyle='round', joinstyle='round',
+            [], linewidths=3.8, capstyle='round', joinstyle='round',
             alpha=0.82, zorder=8.4,
         )
         arena.add_collection(active_edge)
@@ -690,7 +719,7 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
             [], linewidths=3.2, capstyle='round', joinstyle='round', zorder=9,
         )
         arena.add_collection(trail)
-        active = DragonSpriteArtist(arena, size_blocks=18.0, zorder=13)
+        active = DragonSpriteArtist(arena, size_blocks=19.0, zorder=13)
         breath_cloud, breath_particles, breath_stream = _create_breath_artists(arena)
         permanent_titles = {
             'dragon_holding_strafe.gif': 'HOLDING AND STRAFING',
@@ -723,9 +752,13 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
                 ])
                 vector = points[-1] - points[-2]
                 angle = np.degrees(np.arctan2(vector[1], vector[0]))
+            sitting = frame.state in {
+                'hover', 'sitting_scanning', 'sitting_attacking', 'sitting_flaming',
+            }
             active.update(
-                frame.position, angle, frame.state,
-                scale=1.0 + 0.016 * np.sin(2.0 * np.pi * frame_index / 7.0),
+                frame.position, angle, frame.state, scale=1.0,
+                wing_phase=(-0.5 * np.pi if sitting
+                            else 2.0 * np.pi * frame_index / 9.0),
             )
             _set_active_graph_edge(
                 active_edge, frame.active_edge,
@@ -749,8 +782,8 @@ def create_dragon_detail_clips(output_dir, fps=14, dpi=100):
 
 
 def trajectory_animation_state(
-    frame_index, trajectories=240, fps=10, frames=224,
-    final_hold=3.0, batch_size=15,
+    frame_index, trajectories=480, fps=10, frames=320,
+    final_hold=3.2, batch_size=12,
 ):
     """Return synchronized route-count and representative-path state.
 
@@ -807,8 +840,8 @@ def _point_on_polyline(points, phase):
 
 
 def create_trajectory_ensemble_animation(
-    save_path, seed=12031, trajectories=240, fps=10, frames=224,
-    final_hold=3.0, batch_size=15,
+    save_path, seed=12031, trajectories=480, fps=10, frames=320,
+    final_hold=3.2, batch_size=12,
 ):
     """Animate dragon approaches with distinct-trajectory intersection counts."""
     golden_angle = np.pi * (3.0 - np.sqrt(5.0))
@@ -836,8 +869,15 @@ def create_trajectory_ensemble_animation(
     for path in paths:
         histogram, _, _ = np.histogram2d(path[:, 1], path[:, 0], bins=(bins, bins))
         contributions.append(histogram > 0)
-    cumulative = np.cumsum(np.asarray(contributions), axis=0)
+    contributions = np.asarray(contributions)
+    cumulative = np.cumsum(contributions, axis=0)
     final_frequency = cumulative[-1]
+    occupied_frequency = final_frequency[final_frequency > 0]
+    color_ceiling = max(
+        float(np.percentile(occupied_frequency, 98.5))
+        if occupied_frequency.size else 1.0,
+        1.0,
+    )
 
     edge_index = {tuple(sorted(edge)): index for index, edge in enumerate(DRAGON_EDGES)}
     route_edge_contributions = np.zeros((trajectories, len(DRAGON_EDGES)), dtype=int)
@@ -868,7 +908,7 @@ def create_trajectory_ensemble_animation(
         extent=(bins[0], bins[-1], bins[0], bins[-1]),
         cmap='viridis',
         norm=PowerNorm(
-            gamma=0.5, vmin=0.0, vmax=max(float(final_frequency.max()), 1.0),
+            gamma=0.64, vmin=0.0, vmax=color_ceiling, clip=True,
         ),
         interpolation='bilinear', alpha=0.74, zorder=2.8,
     )
@@ -878,7 +918,7 @@ def create_trajectory_ensemble_animation(
     )
     axis.add_collection(lines)
     active_edge = LineCollection(
-        [], linewidths=5.6, capstyle='round', joinstyle='round',
+        [], linewidths=3.6, capstyle='round', joinstyle='round',
         alpha=0.86, zorder=9.2,
     )
     axis.add_collection(active_edge)
@@ -913,8 +953,15 @@ def create_trajectory_ensemble_animation(
         vmax=max(maximum_edge_count, minimum_edge_count + 1.0),
         clip=True,
     )
-    frequency_axis.set_xlim(0, 100.0)
-    frequency_axis.set_xlabel('Seeded approaches using the legal edge (%)')
+    maximum_final_percentage = 100.0 * maximum_edge_count / trajectories
+    bar_axis_limit = min(
+        100.0,
+        max(35.0, 5.0 * np.ceil((maximum_final_percentage + 5.0) / 5.0)),
+    )
+    frequency_axis.set_xlim(0, bar_axis_limit)
+    frequency_axis.set_xlabel(
+        f'Share of the final {trajectories}-route ensemble (%)'
+    )
     frequency_axis.set_ylabel('Decoded path-node edge')
     frequency_axis.set_title(
         'Most-used legal navigation edges', fontsize=10.8, pad=8,
@@ -940,10 +987,22 @@ def create_trajectory_ensemble_animation(
             frame_index, trajectories=trajectories, fps=fps, frames=frames,
             final_hold=final_hold, batch_size=batch_size,
         )
-        current_frequency = cumulative[shown - 1]
+        featured = paths[featured_index]
+        featured_nodes = node_paths[featured_index]
+        point, angle, visible_prefix = _point_on_polyline(featured, local_phase)
+        current_frequency = cumulative[shown - 1].astype(float).copy()
+        if featured_index < shown:
+            current_frequency -= contributions[featured_index]
+            partial, _, _ = np.histogram2d(
+                visible_prefix[:, 1], visible_prefix[:, 0], bins=(bins, bins),
+            )
+            current_frequency += partial > 0
         image.set_data(current_frequency)
         recent_start = max(0, shown - 28)
-        recent_paths = paths[recent_start:shown]
+        recent_paths = [
+            paths[index] for index in range(recent_start, shown)
+            if index != featured_index
+        ]
         lines.set_segments(recent_paths)
         age = np.linspace(0.08, 1.0, len(recent_paths))
         line_colors = [
@@ -953,9 +1012,6 @@ def create_trajectory_ensemble_animation(
         ]
         lines.set_colors(line_colors)
 
-        featured = paths[featured_index]
-        featured_nodes = node_paths[featured_index]
-        point, angle, visible_prefix = _point_on_polyline(featured, local_phase)
         edge_fade = min(local_phase / 0.12, 1.0)
         dragon.set_alpha(0.35 + 0.65 * max(edge_fade, 0.0))
         local_points = visible_prefix[max(0, len(visible_prefix) - 23):]
@@ -969,11 +1025,14 @@ def create_trajectory_ensemble_animation(
         else:
             local_trail.set_segments([])
         active_frames = frames - int(round(final_hold * fps))
-        sprite_scale = (
-            1.0 + 0.018 * np.sin(2.0 * np.pi * frame_index / 7.0)
-            if frame_index < active_frames else 1.0
+        wing_phase = (
+            2.0 * np.pi * frame_index / 9.0
+            if frame_index < active_frames else -0.5 * np.pi
         )
-        dragon.update(point, angle, 'landing_approach', scale=sprite_scale)
+        dragon.update(
+            point, angle, 'landing_approach', scale=1.0,
+            wing_phase=wing_phase,
+        )
         _set_active_graph_edge(
             active_edge,
             _nearest_route_edge(point, featured_nodes),
@@ -982,12 +1041,14 @@ def create_trajectory_ensemble_animation(
 
         current_edge_counts = cumulative_edge_counts[shown - 1, selected_edge_indices]
         for bar, label, value in zip(bars, bar_value_texts, current_edge_counts):
-            percentage = 100.0 * float(value) / shown
+            percentage = 100.0 * float(value) / trajectories
             bar.set_width(percentage)
             bar.set_facecolor(plt.get_cmap('viridis')(bar_norm(float(value))))
-            label.set_x(min(percentage + 1.0, 96.0))
+            label.set_x(min(percentage + 0.6, bar_axis_limit - 3.5))
             label.set_text(f'{int(value):3d} routes  {percentage:4.1f}%')
-        count_text.set_text(f'{shown:03d} seeded approaches')
+        count_text.set_text(
+            f'{shown:03d}/{trajectories} exact routes  |  density capped at P98.5'
+        )
         return []
 
     animation = FuncAnimation(

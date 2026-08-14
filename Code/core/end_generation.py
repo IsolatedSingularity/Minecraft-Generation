@@ -250,22 +250,14 @@ def _sample_height_nearest(coordinates, height, block_x, block_z):
 
 
 def end_city_height_candidates(
-    world_seed, max_coordinate_blocks=3600, resolution=901,
+    world_seed, max_coordinate_blocks=3600, resolution=121,
 ):
-    """Evaluate deterministic End-city candidates with the exact sample gate.
-
-    Candidate placement, Java rotation selection, sample offsets, and the
-    minimum-height >= 60 decision follow Java 1.16.1. Sample heights come from
-    :func:`outer_island_height_model` and are therefore explicitly modeled.
-    """
+    """Evaluate End-city candidates against exact generated base heights."""
     from .structures import END_CITY, candidate_in_region
+    from .vanilla_terrain import VanillaTerrainSampler
 
     maximum_chunk = int(max_coordinate_blocks) // 16
     region_limit = math.ceil(maximum_chunk / END_CITY.spacing) + 1
-    coordinates, _, height = outer_island_height_model(
-        world_seed, max_coordinate_blocks=max_coordinate_blocks,
-        resolution=resolution,
-    )
     rotations = (
         ('NONE', 5, 5),
         ('CLOCKWISE_90', -5, 5),
@@ -297,25 +289,40 @@ def end_city_height_candidates(
                 (origin_x + offset_x, origin_z),
                 (origin_x + offset_x, origin_z + offset_z),
             )
-            sample_heights = tuple(
-                _sample_height_nearest(coordinates, height, x, z)
-                for x, z in sample_positions
-            )
-            minimum_height = min(sample_heights)
             item.update({
                 'rotation': rotation,
                 'sample_positions': sample_positions,
-                'sample_heights': sample_heights,
-                'model_min_height': minimum_height,
-                'qualified': minimum_height >= 60.0,
-                'height_gate': 'modeled four-sample WORLD_SURFACE_WG proxy',
             })
             values.append(item)
+
+    terrain = VanillaTerrainSampler(world_seed, 'end')
+    sample_x = np.asarray([
+        position[0] for item in values for position in item['sample_positions']
+    ], dtype=np.int64)
+    sample_z = np.asarray([
+        position[1] for item in values for position in item['sample_positions']
+    ], dtype=np.int64)
+    sampled = terrain.height_points(sample_x, sample_z).reshape(len(values), 4)
+    for item, heights in zip(values, sampled):
+        sample_heights = tuple(int(value) for value in heights)
+        minimum_height = min(sample_heights)
+        item.update({
+            'sample_heights': sample_heights,
+            'min_height': minimum_height,
+            'qualified': minimum_height >= 60,
+            'height_gate': 'four-sample WORLD_SURFACE_WG base height',
+        })
     values.sort(key=lambda item: (
         math.hypot(item['block_x'], item['block_z']),
         math.atan2(item['block_z'], item['block_x']),
     ))
-    return values, coordinates, height
+    resolution = int(resolution)
+    coordinates = np.rint(np.linspace(
+        -float(max_coordinate_blocks), float(max_coordinate_blocks), resolution,
+    )).astype(np.int64)
+    grid_x, grid_z = np.meshgrid(coordinates, coordinates)
+    height = terrain.height_points(grid_x, grid_z)
+    return values, coordinates.astype(float), np.ma.masked_where(height <= 0, height)
 
 
 def central_island_projection(
@@ -474,16 +481,15 @@ def outer_gateway_positions(world_seed, radius_blocks=1024, search_limit=2300):
 
 
 def end_city_candidates(world_seed, max_coordinate_blocks=3600):
-    """Return End-city grid candidates passing the modeled height audit.
+    """Return End-city grid candidates passing the generated-height audit.
 
     Candidate chunks use the Java 1.16.1 center-biased 20 by 20 grid with an
     11-chunk separation and salt 10387313. Rotation, four sample positions,
     their minimum, and the height-60 comparison match the source. Sample
-    values come from the documented 2D height proxy because this repository
-    does not reproduce the complete three-dimensional End heightmap.
+    values come from the ported three-dimensional End density generator.
     """
     values, _, _ = end_city_height_candidates(
-        world_seed, max_coordinate_blocks=max_coordinate_blocks,
+        world_seed, max_coordinate_blocks=max_coordinate_blocks, resolution=1,
     )
     return [item for item in values if item['qualified']]
 

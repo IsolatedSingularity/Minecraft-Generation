@@ -34,7 +34,7 @@ STRUCTURE_SCHEMATICS = {
         StructureSchematic('ruined_portal', 'Ruined portal', '#281633', '#B65AD2', 0.90),
         StructureSchematic('fortress', 'Nether fortress', '#6F2028', '#B8464E', 1.12),
         StructureSchematic('bastion', 'Bastion remnant', '#372C2B', '#9A7350', 1.18),
-        StructureSchematic('end_city', 'End city', '#B77AB2', '#E3B5D5', 1.18),
+        StructureSchematic('end_city', 'End City', '#B77AB2', '#E3B5D5', 1.18),
     )
 }
 

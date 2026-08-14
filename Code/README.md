@@ -12,10 +12,13 @@ The `core/` module provides centralized utilities for all generation algorithms:
 |--------|---------|
 | `constants.py` | Minecraft generation constants, colors, ring definitions |
 | `lcg.py` | Linear Congruential Generator (Java Random implementation) |
-| `noise.py` | Perlin noise generation for terrain simulation |
+| `noise.py` | Legacy Perlin helpers for historical figures |
+| `vanilla_noise.py` | Java 1.16.1 Perlin, octave, simplex, and Double Perlin samplers |
+| `vanilla_biomes.py` | Complete Overworld layer graph and Nether multi-noise selection |
+| `vanilla_terrain.py` | Three-dimensional density and base-height sampling |
 | `structures.py` | Exact Java 1.16.1 candidate-stage structure placement |
 | `end_generation.py` | End geometry, simplex fields, and 32-bit overflow rings |
-| `minecraft_visuals.py` | Illustrative pixel-art terrain backdrops for exact overlays |
+| `minecraft_visuals.py` | Source-faithful terrain samples and vanilla texture rendering |
 | `mathematical_foundations.py` | Exact LCG bit-state and weighted octave-composition figures |
 | `readme_diagrams.py` | Static non-interactive flow figures for the root README |
 
@@ -39,8 +42,8 @@ Real-time simulation of dragon behavior with:
 - Reduced top-down steering with source-derived yaw clamp, turn momentum, acceleration, and velocity retention
 - Enlarged, phase-coloured raster dragon plus audited fireball, growing breath, and damage-triggered Takeoff effects
 - Compact phase ovals with an explicit next-holding-path landing roll and polished crystal HUD
-- A crisp 240-route ensemble whose representative dragon is synchronized to an included route
-- Distinct-route percentages for the ten most-used decoded legal graph edges
+- A 480-route ensemble whose representative dragon is synchronized to its live density
+- Monotone distinct-route shares for the ten most-used decoded legal graph edges
 
 ```python
 class EnderDragonAI:
@@ -52,13 +55,13 @@ class EnderDragonAI:
 **Outputs**: `Plots/dragon_pathfinding_hero.gif`, detail clips, and `Plots/dragon_trajectory_ensemble.gif`
 
 #### `end_structure_generation.py`
-**Fixed-Seed End-City Qualification Visualization**
+**Fixed-Seed End City Qualification Visualization**
 
-- Two equal map panels with continuous projected outer-island footprints
+- Two equal map panels using generated End base heights
 - Exact 20 by 20 chunk placement regions and center-biased 9 by 9 candidate windows
 - Exact deterministic rotation, four-sample geometry, minimum, and height-60 gate
-- Viridis heatmap of the documented modeled `WORLD_SURFACE_WG` height field
-- Failed candidates, symbolic qualified ship glyphs, and visible map legends
+- Viridis heatmap of the generated `WORLD_SURFACE_WG` height field
+- Failed and qualified End City starts with matching visible legends
 
 **Output**: `Plots/end_structure_generation.png`
 
@@ -76,7 +79,8 @@ The generator shows every in-bounds random-spread candidate across a broad chunk
 
 - Eleven structure families with their own spacing, separation, salt, and offset distribution
 - Exact Java-compatible candidate rolls and direct pillager-outpost gates
-- Source-informed terrain used only as context, never as a fabricated biome filter
+- Exact seed-42 biome and base-height context, used only as context
+- Square 52,480 by 52,480 block overview
 - Fixed detail inset plus active region and candidate window
 
 **Output**: Plots/structure_placement.gif
@@ -84,14 +88,14 @@ The generator shows every in-bounds random-spread candidate across a broad chunk
 #### `seed_loading.py`
 **Java 1.16.1 Chunk Status Dependency Wave**
 
-Builds a source-informed terrain view through visible biome, noise, surface, feature, lighting, and completion layers beside a vanilla-style spawn tracker. The exact thirteen-status order and source-required 21 x 21 terminal dependency footprint remain intact. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Relative timing remains explicitly modeled.
+Reveals exact fixed-seed biome IDs, base heights, and vanilla-textured surfaces chunk by chunk beside a larger vanilla-style spawn tracker. The thirteen-status order and source-required 21 x 21 terminal dependency footprint remain intact. Only the center reaches `FULL`; distance one reaches `FEATURES`, distance two reaches `LIQUID_CARVERS`, and distances three through ten reach `STRUCTURE_STARTS`. Relative timing remains explicitly modeled.
 
 **Output**: `Plots/seed_loading.gif`
 
 #### `multi_structure_generation.py`
 **Java 1.16.1 Nether Candidate Layers**
 
-Shows every exact candidate inside the -500 to 500 chunk frame: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop classifies the five source biomes from their exact multi-noise prototypes using four proxy fields, with lava correctly separated as terrain. The 160-chunk-wide active inset preserves exact local grids and later biome-gate labels.
+Shows every exact candidate inside a square 52,480 by 52,480 block frame: the shared 27 x 27 fortress and bastion grid with its exact 2/5 versus 3/5 type roll, plus the independently enumerated 25 x 25 ruined-portal grid. The backdrop runs all four Double Perlin fields for the five source multi-noise biomes. Lava is separately sampled from density at Y=31. The 256-chunk-wide inset preserves the local grids and later biome-gate labels.
 
 **Output**: `Plots/multi_structure_generation.gif`
 
@@ -103,7 +107,7 @@ The generator follows the pre-1.19.3 Java ring iterator shared with the static s
 - 128 seeded candidates across eight rings
 - Ring counts 3, 6, 10, 15, 21, 28, 36, 9
 - First-ring candidate range 1,408 to 2,688 blocks
-- Approximate candidates shown before the 112-block biome search
+- Exact preliminary candidates shown before the 112-block biome search
 
 **Output**: Plots/stronghold_rings.png
 

@@ -1,43 +1,47 @@
-"""End-city candidates and fixed-seed qualification-prior visualization."""
+"""End City candidates and fixed-seed generated-height visualization."""
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.path import Path as MarkerPath
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Patch
 import numpy as np
+from PIL import Image
 
 from core.end_generation import (
     end_city_height_candidates,
     outer_gateway_positions,
-    outer_island_projection,
 )
-from core.end_visuals import ISLAND_CMAP, draw_central_island
-from core.structure_visuals import draw_structure_schematic
 from core.style import COLORS, apply_style, style_axis
 
 
 apply_style()
 
 
-END_CITY_MARKER = MarkerPath(
-    np.array([
-        [-1.0, 0.0], [-0.55, 0.42], [0.58, 0.30], [1.0, 0.0],
-        [0.58, -0.30], [-0.55, -0.42], [-1.0, 0.0],
-    ]),
-    [MarkerPath.MOVETO] + [MarkerPath.LINETO] * 5 + [MarkerPath.CLOSEPOLY],
-)
+def _end_surface_rgba(height, coordinates):
+    texture_path = (
+        Path(__file__).resolve().parents[1] / 'Assets' / 'minecraft_1_16_1'
+        / 'textures' / 'block' / 'end_stone.png'
+    )
+    texture = np.asarray(Image.open(texture_path).convert('RGB'), dtype=float) / 255.0
+    block_x, block_z = np.meshgrid(coordinates, coordinates)
+    columns = np.mod(block_x.astype(np.int64), 16)
+    rows = np.mod(block_z.astype(np.int64), 16)
+    output = np.zeros((*height.shape, 4), dtype=float)
+    output[..., :3] = texture[rows, columns]
+    values = height.filled(0.0).astype(float)
+    gradient_z, gradient_x = np.gradient(values)
+    shade = np.clip(0.93 + 0.018 * gradient_x - 0.022 * gradient_z, 0.72, 1.08)
+    output[..., :3] *= shade[..., None]
+    output[..., 3] = np.where(np.ma.getmaskarray(height), 0.0, 0.94)
+    return np.clip(output, 0.0, 1.0)
 
 
 def create_end_structure_generation(save_path, dpi=210, seed=42):
-    """Render equal-size End-city support and modeled height-gate panels."""
+    """Render exact End base terrain and the End City four-height gate."""
     limit = 3600.0
-    island_x, island_z, island_projection = outer_island_projection(
-        seed, max_coordinate_blocks=int(limit), resolution=901,
-    )
-    all_candidates, height_x, modeled_height = end_city_height_candidates(
-        seed, max_coordinate_blocks=int(limit), resolution=901,
+    all_candidates, height_x, generated_height = end_city_height_candidates(
+        seed, max_coordinate_blocks=int(limit), resolution=101,
     )
     cities = [item for item in all_candidates if item['qualified']]
     rejected = [item for item in all_candidates if not item['qualified']]
@@ -52,41 +56,34 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     probability_axis = figure.add_subplot(grid[0, 1])
     colorbar_axis = figure.add_subplot(grid[0, 2])
 
-    island_values = island_projection.filled(0.0)
-    island_rgba = ISLAND_CMAP(island_values)
-    island_visible = ~np.ma.getmaskarray(island_projection)
-    island_rgba[..., 3] = np.where(
-        island_visible, 0.50 + 0.46 * island_values, 0.0,
-    )
     axis.imshow(
-        island_rgba,
-        extent=(island_x[0], island_x[-1], island_z[0], island_z[-1]),
+        _end_surface_rgba(generated_height, height_x),
+        extent=(height_x[0], height_x[-1], height_x[0], height_x[-1]),
         origin='lower', interpolation='nearest', zorder=1,
     )
     axis.add_patch(Circle(
         (0, 0), 1024, fill=False, edgecolor=COLORS['end_stone'],
         linewidth=1.2, linestyle='--', alpha=0.82, zorder=3,
     ))
-    draw_central_island(axis, seed=seed, extent=180, resolution=121, alpha=0.98, zorder=4)
-
     axis.scatter(
         [item['x'] for item in outer_gateways],
         [item['z'] for item in outer_gateways],
         s=21, marker='D', c=COLORS['portal'], alpha=0.72,
         edgecolors=COLORS['text'], linewidths=0.35, zorder=8,
     )
-    for city in cities:
-        draw_structure_schematic(
-            axis, 'end_city', city['block_x'], city['block_z'],
-            size=76.0, zorder=7,
-        )
+    axis.scatter(
+        [item['block_x'] for item in cities],
+        [item['block_z'] for item in cities],
+        s=22, marker='s', c=COLORS['purpur'],
+        edgecolors=COLORS['text'], linewidths=0.36, alpha=0.94, zorder=7,
+    )
 
     axis.set_xlim(-limit, limit)
     axis.set_ylim(-limit, limit)
     axis.set_xlabel('Block X')
     axis.set_ylabel('Block Z')
     axis.set_title(
-        f'Outer-island support and {len(cities)} qualified model starts',
+        f'Generated End terrain and {len(cities)} qualified End City starts',
         fontsize=11.5, pad=45,
     )
     style_axis(axis, equal=True, grid=False)
@@ -98,14 +95,13 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
                 label='Modeled outer gateway endpoint',
             ),
             Line2D(
-                [], [], marker=END_CITY_MARKER, linestyle='none', markersize=9.0,
+                [], [], marker='s', linestyle='none', markersize=7.0,
                 markerfacecolor=COLORS['purpur'], markeredgecolor=COLORS['text'],
-                label='Qualified End-city candidate',
+                label='Qualified End City start',
             ),
-            Line2D(
-                [], [], marker='o', linestyle='none', markersize=7.0,
-                markerfacecolor=COLORS['end_stone'], markeredgecolor='#77745F',
-                alpha=0.86, label='Outer-island terrain support',
+            Patch(
+                facecolor=COLORS['end_stone'], edgecolor='#77745F',
+                alpha=0.86, label='Generated End-stone surface',
             ),
         ],
         loc='lower left', bbox_to_anchor=(0.0, 1.01), ncol=3,
@@ -115,16 +111,16 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
     )
 
     height_image = probability_axis.imshow(
-        modeled_height,
+        generated_height,
         extent=(
             height_x[0], height_x[-1], height_x[0], height_x[-1],
         ),
         origin='lower', cmap='viridis',
-        vmin=42.0, vmax=84.0,
+        vmin=0.0, vmax=84.0,
         interpolation='nearest', zorder=1,
     )
     probability_axis.contour(
-        height_x, height_x, modeled_height.filled(0.0), levels=[60.0],
+        height_x, height_x, generated_height.filled(0.0), levels=[60.0],
         colors=['#F4ECFF'], linewidths=0.72, alpha=0.68, zorder=2,
     )
     probability_axis.add_patch(Circle(
@@ -137,17 +133,18 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         s=12, marker='x', c='#7E8798', linewidths=0.48,
         alpha=0.58, zorder=3,
     )
-    for city in cities:
-        draw_structure_schematic(
-            probability_axis, 'end_city', city['block_x'], city['block_z'],
-            size=44.0, zorder=4, alpha=0.94,
-        )
+    probability_axis.scatter(
+        [item['block_x'] for item in cities],
+        [item['block_z'] for item in cities],
+        s=16, marker='s', c=COLORS['purpur'],
+        edgecolors=COLORS['text'], linewidths=0.32, alpha=0.92, zorder=4,
+    )
     probability_axis.set_xlim(-limit, limit)
     probability_axis.set_ylim(-limit, limit)
     probability_axis.set_xlabel('Block X')
     probability_axis.set_ylabel('Block Z')
     probability_axis.set_title(
-        'Modeled surface height and exact four-sample city gate',
+        'Generated surface height and four-sample End City gate',
         fontsize=11.5, pad=45,
     )
     style_axis(probability_axis, equal=True, grid=False)
@@ -156,16 +153,16 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         handles=[
             Line2D(
                 [], [], color='#F4ECFF', linewidth=1.5,
-                label='Modeled height = 60 contour',
+                label='Generated height = 60 contour',
             ),
             Line2D(
-                [], [], marker=END_CITY_MARKER, linestyle='none', markersize=9.0,
+                [], [], marker='s', linestyle='none', markersize=7.0,
                 markerfacecolor=COLORS['purpur'], markeredgecolor=COLORS['text'],
-                label='Qualified End-city candidate',
+                label='Qualified End City start',
             ),
             Line2D(
                 [], [], marker='x', linestyle='none', markersize=6.5,
-                color='#9AA3B3', label='Rejected End-city candidate',
+                color='#9AA3B3', label='Rejected End City start',
             ),
         ],
         loc='lower left', bbox_to_anchor=(0.0, 1.01), ncol=3,
@@ -178,9 +175,9 @@ def create_end_structure_generation(save_path, dpi=210, seed=42):
         height_image, cax=colorbar_axis, orientation='vertical',
     )
     colorbar.set_label(
-        'Modeled WORLD_SURFACE_WG height', fontsize=8.2, labelpad=7,
+        'WORLD_SURFACE_WG height', fontsize=8.2, labelpad=7,
     )
-    colorbar.set_ticks((42, 48, 54, 60, 66, 72, 78, 84))
+    colorbar.set_ticks((0, 20, 40, 60, 72, 84))
     colorbar.ax.tick_params(labelsize=7.4, pad=2)
     colorbar.outline.set_edgecolor(COLORS['grid'])
     figure.suptitle(
