@@ -5,6 +5,7 @@ import { cachePack, uncachePack, setPackOrder, restorePacks } from "../userCache
 import { proxyFetch, remoteName } from "../remote.js"
 import { warmIcons } from "../icons.js"
 import { useLock } from "./useLock.js"
+import builtin1161Url from "../assets/minecraft-1.16.1-builtins.zip?url"
 
 // index 0 = highest priority (prepareAssets first-wins order); pack bytes
 // stay outside the reactive state so large buffers aren't proxied
@@ -15,10 +16,17 @@ let builtinBytes = null
 let featureBytes = null
 let nextId = 1
 
-// The upstream app layers current-version generated bundles over the selected
-// jar. This version-locked integration intentionally uses only the user's
-// 1.16.1 jar and explicitly selected packs.
-async function loadBuiltin() {}
+// Only the fortress and stronghold source-piece sets are bundled. Their piece
+// names, weights, caps, and assembly rules were checked against the local
+// Minecraft Java 1.16.1 sources. The selected client JAR remains first in the
+// source stack; these generated pieces fill templates that Mojang does not ship
+// as standalone NBT resources.
+async function loadBuiltin() {
+  if (builtinBytes) return
+  const response = await fetch(builtin1161Url)
+  if (!response.ok) throw new Error(`1.16.1 built-ins failed to load (${response.status})`)
+  builtinBytes = new Uint8Array(await response.arrayBuffer())
+}
 
 const state = reactive({
   channel: new URLSearchParams(location.search).get("channel") === "snapshot" ? "snapshot" : "release",
@@ -64,7 +72,7 @@ function setChannelParam(ch) {
 // scene keeps its cached textures until the rebuild lands
 async function rebuildAssets(swap) {
   const lib = await loadLibrary()
-  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes).filter(Boolean)
+  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, builtinBytes).filter(Boolean)
   const prev = assets.value
   assets.value = sources.length ? await lib.prepareAssets(sources, { cache: true, defaults: "game" }) : null
   state.assetsVersion++

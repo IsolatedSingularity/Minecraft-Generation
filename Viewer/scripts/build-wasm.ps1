@@ -52,7 +52,7 @@ $arguments = @(
     '-s', 'ENVIRONMENT=worker',
     '-s', 'ALLOW_MEMORY_GROWTH=1',
     '-s', 'FILESYSTEM=0',
-    '-s', 'EXPORTED_FUNCTIONS=["_malloc","_free","_mc_create","_mc_destroy","_mc_biome_tile","_mc_height_tile","_mc_structures","_mc_structure_stride"]',
+    '-s', 'EXPORTED_FUNCTIONS=["_malloc","_free","_mc_create","_mc_destroy","_mc_biome_colors","_mc_biome_tile","_mc_height_tile","_mc_structures","_mc_structure_stride"]',
     '-s', 'EXPORTED_RUNTIME_METHODS=["cwrap","HEAP32","HEAPF32","HEAPU8"]',
     '-o', $output
 )

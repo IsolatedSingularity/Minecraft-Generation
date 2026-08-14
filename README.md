@@ -370,9 +370,9 @@ Isn't it?
 
 ## Interactive Java 1.16.1 Viewers
 
-The repository now includes two local, mouse-interactive browser tools. GitHub
-README files cannot execute JavaScript directly, so these previews link to the
-one-command local launcher and accuracy notes in
+The repository now includes two mouse-interactive browser tools. GitHub README
+files cannot execute WebAssembly or WebGL directly, so each preview opens the
+full GitHub Pages viewer; the same tools also run completely locally through
 [`Viewer/README.md`](Viewer/README.md).
 
 <table>
@@ -381,7 +381,7 @@ one-command local launcher and accuracy notes in
 
 ### Seed Atlas
 
-[![Interactive Java 1.16.1 seed map](Viewer/previews/seed-map.png)](Viewer/README.md#seed-atlas)
+[![Interactive Java 1.16.1 seed map](Viewer/previews/seed-map.png)](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 
 Pan and zoom across seed-accurate Cubiomes biome fields, enable lightweight
 terrain shading, change dimensions, and overlay major structure candidates.
@@ -391,7 +391,7 @@ terrain shading, change dimensions, and overlay major structure candidates.
 
 ### 3D Structure Viewer
 
-[![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](Viewer/README.md#3d-structures)
+[![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html)
 
 Load the local 1.16.1 client JAR, search hundreds of canonical templates, and
 drag to orbit textured structures without sending game files anywhere.
@@ -406,7 +406,9 @@ From the repository root:
 .\Viewer\start.ps1
 ```
 
-Then open `http://127.0.0.1:5173/seed-map.html` or
-`http://127.0.0.1:5173/local-loader.html`.
+Or open the live [Seed Atlas](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
+and [3D Structure Viewer](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html).
+The 3D page asks for the local 1.16.1 client JAR so copyrighted game textures
+stay on your machine; the selected file is never uploaded.
 
 </details>

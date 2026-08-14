@@ -30,6 +30,17 @@ int main(void)
 {
     CHECK(mc_structure_stride() == (int)sizeof(StructureHit), "structure ABI stride");
 
+    uint8_t colors[256][3];
+    CHECK(mc_biome_colors(&colors[0][0]) == 0, "Cubiomes biome palette export");
+    CHECK(
+        colors[ocean][0] == 0x00 && colors[ocean][1] == 0x00 && colors[ocean][2] == 0x70,
+        "Cubiomes dark ocean palette"
+    );
+    CHECK(
+        colors[deep_ocean][0] == 0x00 && colors[deep_ocean][1] == 0x00 && colors[deep_ocean][2] == 0x30,
+        "Cubiomes deep-ocean palette"
+    );
+
     ViewerContext *overworld = mc_create(0, 42, DIM_OVERWORLD);
     CHECK(overworld != NULL, "create Overworld context");
 

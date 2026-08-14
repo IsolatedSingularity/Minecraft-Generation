@@ -4,6 +4,7 @@
 
 #include "generator.h"
 #include "finders.h"
+#include "util.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
@@ -99,6 +100,13 @@ EXPORTED ViewerContext *mc_create(uint32_t seed_high, uint32_t seed_low, int dim
 EXPORTED void mc_destroy(ViewerContext *context)
 {
     free(context);
+}
+
+EXPORTED int mc_biome_colors(uint8_t *output)
+{
+    if (!output) return 1;
+    initBiomeColors((unsigned char (*)[3])output);
+    return 0;
 }
 
 EXPORTED int mc_biome_tile(

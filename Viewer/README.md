@@ -13,6 +13,11 @@ Both tools run locally. After the JavaScript dependencies are installed, the
 browser runtime makes no request to either reference site. The selected JAR
 stays in the browser tab and is not uploaded.
 
+GitHub Pages builds the same static bundle at:
+
+- `https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html`
+- `https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html`
+
 ![Seed map preview](previews/seed-map.png)
 
 ![3D structure preview](previews/structure-viewer.png)
@@ -40,8 +45,9 @@ Game Reference\01_upstream\minecraft-1.16.1-client.jar
 Then select **Load sources**. The filter buttons expose the main families,
 including villages, bastions, Nether fortresses, strongholds, ruined portals,
 shipwrecks, monuments, mansions, and End cities. The client JAR contains 866
-canonical 1.16.1 NBT templates; the viewer also exposes reference assemblies
-for multi-piece families.
+canonical 1.16.1 NBT templates. A minimal 43-file source-checked bundle restores
+the fortress and stronghold piece templates and masks that Mojang's client JAR
+does not ship as standalone resources.
 
 You can also start the server manually:
 
@@ -60,6 +66,8 @@ npm run dev -- --host 127.0.0.1
 - Switch between Overworld, Nether, and End.
 - Toggle biome tiles, terrain shading, the chunk grid, viability filtering, and
   individual structure families.
+- Hover the map to inspect the exact biome ID and open the biome legend to see
+  Cubiomes' full palette, including distinct dark and deep ocean colors.
 - Enter exact X/Z coordinates and select **Go**.
 - The URL fragment records seed, center, zoom, dimension, and active layers so
   a view can be copied or bookmarked.
@@ -70,6 +78,10 @@ npm run dev -- --host 127.0.0.1
   pan.
 - Search for a template or use a structure-family button, then choose **Show
   structure**.
+- For procedural fortress, stronghold, village, mansion, and End City entries,
+  use the viewer's **Level** and **Re-roll** controls to grow and regenerate the
+  multi-piece assembly. The bundled fortress and stronghold piece rules are the
+  families specifically checked against the local 1.16.1 Java sources.
 - Use **Blocks** to inspect block counts and the expand icon for fullscreen.
 - The full viewer also retains first-person walk and local-file workflows.
 
@@ -98,6 +110,7 @@ Python, a compiler, or Emscripten. Rebuilding them is optional:
 
 ```powershell
 cd Viewer
+npm run test:builtins
 npm run build:wasm
 npm run test:wasm
 npm run build
@@ -115,9 +128,14 @@ npm audit --audit-level=moderate
   `e61f90580cbdd883214a8054670dacae655e59c0`; its MIT license is preserved.
 - The Vue/Three structure application is based on the local reference snapshot
   at commit `cd129759973d893fad6a6663780907ca58a31a52`.
+- `src/assets/minecraft-1.16.1-builtins.zip` contains only the 13 fortress NBT
+  pieces and 15 stronghold NBT pieces plus their 15 random-block masks. The
+  generator piece weights, caps, depth/radius rules, and block IDs were checked
+  against the local Minecraft Java 1.16.1 source corpus. Rebuild it from the
+  local reference snapshot with `npm run build:builtins`.
 - `vendor/block-model-renderer/` contains the local browser renderer and its
   preserved license. No CDN module or hosted asset is required at runtime.
 
-Minecraft assets remain in the private, gitignored `Game Reference/` corpus.
-Do not stage or commit the client JAR. The only Minecraft-derived input used at
-runtime is the JAR the user explicitly chooses in their own browser tab.
+The client JAR remains in the private, gitignored `Game Reference/` corpus. Do
+not stage or commit it. GitHub Pages never hosts that JAR; the user explicitly
+chooses it in their own browser tab.

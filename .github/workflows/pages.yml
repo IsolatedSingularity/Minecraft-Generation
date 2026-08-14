@@ -1,0 +1,63 @@
+name: Interactive Viewers Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Viewer/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Viewer/package-lock.json
+
+      - name: Install viewer dependencies
+        working-directory: Viewer
+        run: npm ci
+
+      - name: Verify bundled structure pieces
+        working-directory: Viewer
+        run: npm run test:builtins
+
+      - name: Build static viewers
+        working-directory: Viewer
+        run: npm run build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload viewer site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Viewer/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

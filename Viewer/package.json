@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:builtins": "node scripts/build-1161-builtins.mjs",
     "build:wasm": "powershell -ExecutionPolicy Bypass -File scripts/build-wasm.ps1",
+    "test:builtins": "node tests/builtins-smoke.mjs",
     "test:wasm": "powershell -ExecutionPolicy Bypass -File scripts/test-wasm.ps1",
     "build": "vite build",
     "preview": "vite preview"

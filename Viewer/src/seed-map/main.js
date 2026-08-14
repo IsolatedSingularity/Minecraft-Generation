@@ -16,7 +16,7 @@ import Overlay from "ol/Overlay.js"
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style.js"
 import { FullScreen, ScaleLine, defaults as defaultControls } from "ol/control.js"
 
-import { DIMENSIONS, STRUCTURES } from "./biomes.js"
+import { biomeName, biomesForDimension, DIMENSIONS, STRUCTURES } from "./biomes.js"
 
 const WORLD_LIMIT = 33_554_432
 const TILE_SIZE = 256
@@ -26,7 +26,8 @@ const DEFAULT_TYPES = new Set(["village", "ruined_portal", "fortress", "bastion"
 const elements = Object.fromEntries([
   "seed-form", "seed", "dimension", "biomes-toggle", "terrain-toggle", "grid-toggle",
   "viable-only", "structure-list", "select-all", "clear-all", "goto-form", "goto-x",
-  "goto-z", "cursor", "status", "popup", "collapse-layers", "open-layers"
+  "goto-z", "cursor", "biome-readout", "biome-legend", "status", "popup",
+  "collapse-layers", "open-layers"
 ].map(id => [id, document.getElementById(id)]))
 
 const worker = new Worker(new URL("./mc1161-worker.js", import.meta.url), { type: "module" })
@@ -78,6 +79,9 @@ let seed = parseSeed(elements.seed.value)
 let selectedTypes = initial.selected
 let structureRequestToken = 0
 const structureCache = new Map()
+let biomeColors = null
+let biomeHoverTimer = null
+let biomeHoverToken = 0
 
 const projection = new Projection({
   code: "MINECRAFT:BLOCKS",
@@ -219,6 +223,25 @@ function renderStructureControls() {
   }))
 }
 
+function renderBiomeLegend() {
+  if (!biomeColors) return
+  const dimension = DIMENSIONS[elements.dimension.value]
+  elements["biome-legend"].replaceChildren(...biomesForDimension(dimension).map(([id, name]) => {
+    const row = document.createElement("div")
+    row.className = "biome-legend-row"
+    const swatch = document.createElement("span")
+    swatch.className = "biome-swatch"
+    swatch.style.background = `rgb(${biomeColors[id * 3]}, ${biomeColors[id * 3 + 1]}, ${biomeColors[id * 3 + 2]})`
+    const label = document.createElement("span")
+    label.textContent = name
+    const code = document.createElement("span")
+    code.className = "biome-id"
+    code.textContent = String(id)
+    row.append(swatch, label, code)
+    return row
+  }))
+}
+
 function updateGrid() {
   gridSource.clear()
   if (!elements["grid-toggle"].checked) return
@@ -332,6 +355,7 @@ elements["seed-form"].addEventListener("submit", event => {
 
 elements.dimension.addEventListener("change", () => {
   renderStructureControls()
+  renderBiomeLegend()
   refreshWorld()
 })
 
@@ -369,7 +393,28 @@ elements["collapse-layers"].addEventListener("click", () => document.body.classL
 elements["open-layers"].addEventListener("click", () => document.body.classList.remove("layers-collapsed"))
 
 map.on("pointermove", event => {
-  elements.cursor.textContent = `X ${Math.round(event.coordinate[0]).toLocaleString()} · Z ${Math.round(-event.coordinate[1]).toLocaleString()}`
+  const x = Math.round(event.coordinate[0])
+  const z = Math.round(-event.coordinate[1])
+  elements.cursor.textContent = `X ${x.toLocaleString()} / Z ${z.toLocaleString()}`
+  clearTimeout(biomeHoverTimer)
+  const token = ++biomeHoverToken
+  biomeHoverTimer = setTimeout(async () => {
+    try {
+      const response = await callWorker({
+        type: "biomePoint",
+        seed,
+        dimension: DIMENSIONS[elements.dimension.value],
+        x,
+        z,
+        y: sampleY(1)
+      })
+      if (token === biomeHoverToken)
+        elements["biome-readout"].textContent = `${biomeName(response.biome)} / ID ${response.biome}`
+    } catch (error) {
+      if (token === biomeHoverToken)
+        elements["biome-readout"].textContent = `Biome lookup failed: ${error.message}`
+    }
+  }, 70)
 })
 map.on("moveend", () => {
   updateGrid()
@@ -400,7 +445,9 @@ map.on("singleclick", event => {
 
 renderStructureControls()
 gridLayer.setVisible(elements["grid-toggle"].checked)
-callWorker({ type: "ready" }).then(() => {
+callWorker({ type: "ready" }).then(response => {
+  biomeColors = response.colors
+  renderBiomeLegend()
   elements.status.textContent = `Ready · Java 1.16.1 · seed ${seed}`
   updateStructures()
 }).catch(error => {

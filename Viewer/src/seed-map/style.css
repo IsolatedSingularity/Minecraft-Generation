@@ -77,6 +77,12 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 .toggle-row input, .structure-toggle input { accent-color: var(--green); }
 .subdued { color: var(--muted); }
 .layer-note { margin: 2px 0 8px 25px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.biome-details { margin: 7px 0 0 25px; color: var(--muted); font-size: 11px; }
+.biome-details summary { cursor: pointer; user-select: none; }
+.biome-legend { display: grid; gap: 4px; max-height: 210px; margin-top: 8px; overflow: auto; padding-right: 3px; }
+.biome-legend-row { display: grid; grid-template-columns: 11px 1fr auto; align-items: center; gap: 6px; }
+.biome-swatch { width: 10px; height: 10px; border: 1px solid rgba(255, 255, 255, .25); }
+.biome-id { color: #737d78; font: 9px ui-monospace, monospace; }
 .section-title { display: flex; align-items: center; gap: 5px; }
 .section-title h2 { margin-right: auto; }
 .section-title button { padding: 3px 7px; color: var(--muted); font-size: 10px; }
@@ -88,7 +94,7 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 .open-layers { display: none; position: fixed; z-index: 15; left: 14px; top: 78px; padding: 9px 12px; }
 .layers-collapsed .open-layers { display: block; }
 
-.goto-card, .cursor-readout, .status-card {
+.goto-card, .cursor-readout, .biome-readout, .status-card {
   position: fixed;
   z-index: 12;
   background: rgba(18, 21, 23, .9);
@@ -101,6 +107,7 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 .goto-card input { width: 82px; padding: 6px; font-family: ui-monospace, monospace; }
 .goto-card button { padding: 6px 10px; }
 .cursor-readout { right: 14px; bottom: 14px; padding: 7px 10px; border-radius: 4px; color: #d8ded8; font: 11px ui-monospace, monospace; }
+.biome-readout { right: 14px; bottom: 48px; padding: 7px 10px; border-radius: 4px; color: #c7d8bf; font: 11px ui-monospace, monospace; }
 .status-card { left: 304px; bottom: 14px; padding: 7px 10px; border-radius: 4px; color: #c7d8bf; font: 11px ui-monospace, monospace; }
 .layers-collapsed .status-card { left: 14px; }
 .map-popup { min-width: 180px; padding: 10px 12px; background: rgba(17, 20, 22, .96); border: 1px solid rgba(235, 239, 228, .28); border-radius: 5px; box-shadow: 0 10px 34px rgba(0, 0, 0, .45); }
@@ -129,5 +136,5 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
   .dimension-control { min-width: 92px; }
   .viewer-links { display: none; }
   .goto-card { top: auto; right: auto; left: 14px; bottom: 50px; }
-  .cursor-readout { display: none; }
+  .cursor-readout, .biome-readout { display: none; }
 }

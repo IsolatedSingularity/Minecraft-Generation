@@ -43,6 +43,10 @@
         <label class="toggle-row"><input id="terrain-toggle" type="checkbox" checked><span>Terrain shading</span></label>
         <p class="layer-note">Cubiomes <code>mapApproxHeight</code> shading appears at 1:4 and 1:1.</p>
         <label class="toggle-row"><input id="grid-toggle" type="checkbox"><span>Chunk grid</span></label>
+        <details class="biome-details">
+          <summary>Biome legend</summary>
+          <div id="biome-legend" class="biome-legend"></div>
+        </details>
       </section>
       <section>
         <div class="section-title"><h2>Structures</h2><button id="select-all" type="button">select</button><button id="clear-all" type="button">clear</button></div>
@@ -67,8 +71,9 @@
 
     <div id="cursor" class="cursor-readout">X 0 · Z 0</div>
     <div id="status" class="status-card">Loading Cubiomes WebAssembly…</div>
+    <div id="biome-readout" class="biome-readout">Biome loading...</div>
     <div id="popup" class="map-popup" hidden></div>
   </div>
-  <script type="module" src="/src/seed-map/main.js"></script>
+  <script type="module" src="./src/seed-map/main.js"></script>
 </body>
 </html>

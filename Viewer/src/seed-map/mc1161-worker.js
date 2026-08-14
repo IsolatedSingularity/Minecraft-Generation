@@ -1,6 +1,5 @@
 import createCubiomes from "./generated/mc1161.js"
 import wasmUrl from "./generated/mc1161.wasm?url"
-import { biomeColor } from "./biomes.js"
 
 const modulePromise = createCubiomes({
   locateFile: path => path.endsWith(".wasm") ? wasmUrl : path
@@ -16,15 +15,27 @@ function splitSeed(seedText) {
 
 async function api() {
   if (!apiPromise) {
-    apiPromise = modulePromise.then(module => ({
-      module,
-      create: module.cwrap("mc_create", "number", ["number", "number", "number"]),
-      destroy: module.cwrap("mc_destroy", null, ["number"]),
-      biomeTile: module.cwrap("mc_biome_tile", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
-      heightTile: module.cwrap("mc_height_tile", "number", ["number", "number", "number", "number", "number", "number"]),
-      structures: module.cwrap("mc_structures", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
-      stride: module.cwrap("mc_structure_stride", "number", [])()
-    }))
+    apiPromise = modulePromise.then(module => {
+      const bindings = {
+        module,
+        create: module.cwrap("mc_create", "number", ["number", "number", "number"]),
+        destroy: module.cwrap("mc_destroy", null, ["number"]),
+        biomeColors: module.cwrap("mc_biome_colors", "number", ["number"]),
+        biomeTile: module.cwrap("mc_biome_tile", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
+        heightTile: module.cwrap("mc_height_tile", "number", ["number", "number", "number", "number", "number", "number"]),
+        structures: module.cwrap("mc_structures", "number", ["number", "number", "number", "number", "number", "number", "number", "number"]),
+        stride: module.cwrap("mc_structure_stride", "number", [])()
+      }
+      const colorsPointer = module._malloc(256 * 3)
+      try {
+        const result = bindings.biomeColors(colorsPointer)
+        if (result) throw new Error(`Cubiomes biome palette failed (${result})`)
+        bindings.colors = new Uint8Array(module.HEAPU8.buffer, colorsPointer, 256 * 3).slice()
+      } finally {
+        module._free(colorsPointer)
+      }
+      return bindings
+    })
   }
   return apiPromise
 }
@@ -100,7 +111,10 @@ async function renderTile(message) {
     for (let y = 0; y < message.height; y++) {
       for (let x = 0; x < message.width; x++) {
         const index = y * message.width + x
-        const colour = message.biomes ? biomeColor(ids[index]) : [36, 39, 43]
+        const biomeId = ids[index]
+        const colour = message.biomes
+          ? bindings.colors.subarray(biomeId * 3, biomeId * 3 + 3)
+          : [36, 39, 43]
         let shade = 1
         if (heights) {
           const hx = Math.min(heightWidth - 2, Math.floor(x * message.scale / 4) + 1)
@@ -116,6 +130,28 @@ async function renderTile(message) {
     return rgba
   } finally {
     bindings.module._free(idsPointer)
+  }
+}
+
+async function biomePoint(message) {
+  const bindings = await api()
+  const context = await contextFor(message.seed, message.dimension)
+  const pointer = bindings.module._malloc(4)
+  try {
+    const result = bindings.biomeTile(
+      context,
+      1,
+      message.x,
+      message.z,
+      1,
+      1,
+      message.y,
+      pointer
+    )
+    if (result) throw new Error(`Cubiomes biome lookup failed (${result})`)
+    return bindings.module.HEAP32[pointer >> 2]
+  } finally {
+    bindings.module._free(pointer)
   }
 }
 
@@ -158,8 +194,8 @@ self.onmessage = async event => {
   const { id, type } = event.data
   try {
     if (type === "ready") {
-      await api()
-      self.postMessage({ id, ok: true })
+      const bindings = await api()
+      self.postMessage({ id, ok: true, colors: Array.from(bindings.colors) })
       return
     }
     if (type === "tile") {
@@ -170,6 +206,11 @@ self.onmessage = async event => {
     if (type === "structures") {
       const hits = await queryStructures(event.data)
       self.postMessage({ id, ok: true, hits })
+      return
+    }
+    if (type === "biomePoint") {
+      const biome = await biomePoint(event.data)
+      self.postMessage({ id, ok: true, biome })
       return
     }
     throw new Error(`Unknown worker request: ${type}`)
