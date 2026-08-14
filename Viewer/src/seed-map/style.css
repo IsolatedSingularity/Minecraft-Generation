@@ -41,11 +41,14 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 .brand strong { font-size: 13px; }
 .brand small { margin-top: 2px; color: var(--muted); font-size: 9px; }
 .seed-form { display: flex; align-items: end; gap: 7px; flex: 1; max-width: 620px; }
-.seed-form label, .dimension-control span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
+.seed-form label, .dimension-control > span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
 .seed-form input { width: min(330px, 42vw); padding: 8px 10px; font-family: ui-monospace, monospace; }
-.seed-form button, .dimension-control select { padding: 8px 12px; }
-.dimension-control { min-width: 132px; }
-.dimension-control select { width: 100%; margin-top: 3px; }
+.seed-form button { padding: 8px 12px; }
+.dimension-control { min-width: 272px; }
+.dimension-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-top: 3px; }
+.dimension-buttons button { padding: 8px 9px; color: var(--muted); font-size: 12px; }
+.dimension-buttons button[aria-pressed="true"] { color: var(--ink); border-color: rgba(141, 191, 120, .7); background: #30402f; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 .viewer-links { margin-left: auto; display: flex; gap: 4px; }
 .viewer-links a { padding: 8px 10px; color: var(--muted); text-decoration: none; border: 1px solid transparent; border-radius: 4px; font-size: 13px; }
 .viewer-links a.active { color: var(--ink); border-color: var(--line); background: #252a2c; }
@@ -125,7 +128,7 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 @media (max-width: 900px) {
   .topbar { gap: 8px; }
   .brand { min-width: auto; }
-  .brand > span:last-child, .dimension-control span { display: none; }
+  .brand > span:last-child, .dimension-control > span { display: none; }
   .viewer-links a { padding: 7px; font-size: 11px; }
   .seed-form label { display: none; }
   .layers-panel { width: min(290px, calc(100vw - 28px)); }
@@ -133,7 +136,8 @@ button:hover, a:hover { border-color: rgba(141, 191, 120, .6); }
 }
 
 @media (max-width: 620px) {
-  .dimension-control { min-width: 92px; }
+  .dimension-control { min-width: 216px; }
+  .dimension-buttons button { padding-inline: 5px; font-size: 10px; }
   .viewer-links { display: none; }
   .goto-card { top: auto; right: auto; left: 14px; bottom: 50px; }
   .cursor-readout, .biome-readout { display: none; }

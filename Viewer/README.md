@@ -5,13 +5,13 @@ This directory adds two mouse-interactive, browser-based tools to the project:
 - **Seed Atlas** — pan and zoom through Cubiomes biome output, optional
   `mapApproxHeight` terrain shading, a chunk grid, dimension switching, and
   structure candidate overlays.
-- **3D Structure Viewer** — load the local Minecraft 1.16.1 client JAR, search
-  its structure templates, and orbit, zoom, inspect, or walk through rendered
-  structures.
+- **3D Structure Viewer** — search the bundled Minecraft 1.16.1 structure
+  templates, and orbit, zoom, inspect, or walk through rendered structures.
 
 Both tools run locally. After the JavaScript dependencies are installed, the
-browser runtime makes no request to either reference site. The selected JAR
-stays in the browser tab and is not uploaded.
+browser runtime makes no request to either reference site. The 1.16.1
+blockstates, models, textures, and canonical structure templates required by
+the viewer are included in a dedicated nested asset pack.
 
 GitHub Pages builds the same static bundle at:
 
@@ -36,18 +36,13 @@ local Vite server. Open:
 - `http://127.0.0.1:5173/seed-map.html`
 - `http://127.0.0.1:5173/local-loader.html`
 
-For the 3D viewer, choose:
-
-```text
-Game Reference\01_upstream\minecraft-1.16.1-client.jar
-```
-
-Then select **Load sources**. The filter buttons expose the main families,
-including villages, bastions, Nether fortresses, strongholds, ruined portals,
-shipwrecks, monuments, mansions, and End cities. The client JAR contains 866
-canonical 1.16.1 NBT templates. A minimal 43-file source-checked bundle restores
-the fortress and stronghold piece templates and masks that Mojang's client JAR
-does not ship as standalone resources.
+The 3D catalog and textures load automatically. The filter buttons expose the
+main families, including villages, bastions, Nether fortresses, strongholds,
+ruined portals, shipwrecks, monuments, mansions, and End cities. The embedded
+pack contains all 866 canonical 1.16.1 NBT templates; a separate 43-file
+source-checked bundle restores the fortress and stronghold piece templates and
+masks that the client does not ship as standalone resources. The file controls
+remain available for optional JAR, resource-pack, or mod overrides.
 
 You can also start the server manually:
 
@@ -63,7 +58,8 @@ npm run dev -- --host 127.0.0.1
 
 - Drag to pan; use the wheel or `+`/`-` to zoom.
 - Enter any signed Java `long` seed and select **Apply**.
-- Switch between Overworld, Nether, and End.
+- Use the explicit Overworld, Nether, and End buttons. Each button replaces the
+  tile source with a fresh Cubiomes context for that dimension and seed.
 - Toggle biome tiles, terrain shading, the chunk grid, viability filtering, and
   individual structure families.
 - Structure overlays start disabled so the initial map is uncluttered; use
@@ -80,8 +76,8 @@ npm run dev -- --host 127.0.0.1
   pan.
 - Search for a template or use a structure-family button, then choose **Show
   structure**.
-- The public viewer keeps the 3D catalog covered until the selected 1.16.1
-  client JAR has finished loading, preventing model-less empty renders.
+- The public viewer loads its bundled 1.16.1 rendering assets before exposing
+  the 3D catalog, preventing model-less empty renders.
 - For procedural fortress, stronghold, village, mansion, and End City entries,
   use the viewer's **Level** and **Re-roll** controls to grow and regenerate the
   multi-piece assembly. The bundled fortress and stronghold piece rules are the
@@ -101,7 +97,7 @@ viability; they do not claim every final block survives terrain, neighboring
 features, or later world-generation checks. Terrain shading is Cubiomes'
 approximate height map, not a rendered world save.
 
-Raw NBT templates loaded from the 1.16.1 client JAR are version-exact. A
+Raw NBT templates in the bundled 1.16.1 client subset are version-exact. A
 multi-piece reference assembly is useful for understanding a large family, but
 it is not a claim that a particular world seed produces that exact arrangement.
 For block-for-block proof of a generated instance, load the corresponding world
@@ -115,6 +111,7 @@ Python, a compiler, or Emscripten. Rebuilding them is optional:
 ```powershell
 cd Viewer
 npm run test:builtins
+npm run test:client-assets
 npm run build:wasm
 npm run test:wasm
 npm run build
@@ -137,9 +134,13 @@ npm audit --audit-level=moderate
   generator piece weights, caps, depth/radius rules, and block IDs were checked
   against the local Minecraft Java 1.16.1 source corpus. Rebuild it from the
   local reference snapshot with `npm run build:builtins`.
+- `../Assets/minecraft_1_16_1/viewer/client_structure_assets.zip` contains
+  6,200 version-locked files: 764 blockstates, 2,485 models, 2,084 textures,
+  all 866 client structure templates, and `pack.mcmeta`. Rebuild it from the
+  local extracted 1.16.1 client with `npm run build:client-assets`.
 - `vendor/block-model-renderer/` contains the local browser renderer and its
   preserved license. No CDN module or hosted asset is required at runtime.
 
-The client JAR remains in the private, gitignored `Game Reference/` corpus. Do
-not stage or commit it. GitHub Pages never hosts that JAR; the user explicitly
-chooses it in their own browser tab.
+The complete client JAR remains in the private, gitignored `Game Reference/`
+corpus and is not committed. Only the dedicated rendering subset used by the
+public viewer is stored under `Assets/minecraft_1_16_1/viewer/`.

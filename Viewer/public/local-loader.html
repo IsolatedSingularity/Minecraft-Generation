@@ -33,18 +33,18 @@
 <header>
   <div class="row">
     <strong>3D STRUCTURE VIEWER</strong>
-    <span class="version">JAVA 1.16.1 · LOCAL JAR ASSETS</span>
-    <span class="hint">The selected jar stays in this browser tab. It is never uploaded.</span>
+    <span class="version">JAVA 1.16.1 · BUNDLED LOCAL ASSETS</span>
+    <span class="hint">The exact 1.16.1 base loads automatically. Optional files stay in this tab.</span>
     <a class="nav-link" href="./seed-map.html">Seed map</a>
   </div>
   <div class="row">
-    <label>Base client jar <input id="base" type="file" accept=".jar,.zip" /></label>
+    <label>Optional client override <input id="base" type="file" accept=".jar,.zip" /></label>
     <label>Overlay packs <input id="packs" type="file" accept=".jar,.zip" multiple /></label>
     <button id="load" disabled>Load sources</button>
   </div>
   <div class="row">
     <input id="filter" type="text" placeholder="Filter structures, e.g. village/plains or bastion" disabled />
-    <select id="structures" disabled><option>Load a jar first</option></select>
+    <select id="structures" disabled><option>Loading bundled catalog…</option></select>
     <button id="show" disabled>Show structure</button>
   </div>
   <div class="quick" aria-label="Main structure filters">
@@ -64,8 +64,8 @@
 <main id="viewer-shell">
   <div class="asset-gate">
     <div>
-      <strong>Load Minecraft Java 1.16.1 assets first</strong>
-      <p>Choose the 1.16.1 client JAR above, then select <b>Load sources</b>. Browser security prevents this public page from reading game files automatically; the selected file stays in this tab and is never uploaded.</p>
+      <strong>Loading Minecraft Java 1.16.1 structures</strong>
+      <p>The version-locked blockstates, models, textures, and structure templates are bundled with this viewer. No upload is required.</p>
     </div>
   </div>
   <iframe id="viewer" title="Mouse-draggable Minecraft structure renderer" src="./?manual"></iframe>
@@ -94,7 +94,8 @@
     if (m.event === 'ready') {
       ready = true
       load.disabled = !base.files.length
-      setStatus('Viewer ready. Choose your local Minecraft client jar.')
+      setStatus('Indexing bundled Java 1.16.1 structures…')
+      loadBundledCatalog()
       return
     }
     if (m.reply !== undefined) {
@@ -115,6 +116,24 @@
 
   async function fileBytes(file) {
     return await file.arrayBuffer()
+  }
+
+  async function loadBundledCatalog() {
+    try {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const r = await send('listStructures')
+        names = (r.names || []).slice().sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
+        if (names.length >= 800) break
+        await new Promise(resolve => setTimeout(resolve, 150))
+      }
+      if (!names.length) throw new Error('bundled structure catalog is empty')
+      viewerShell.classList.add('assets-ready')
+      filter.disabled = false
+      renderNames()
+    } catch (err) {
+      console.error(err)
+      setStatus(`ERROR: ${err.message}`)
+    }
   }
 
   function renderNames() {

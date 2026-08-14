@@ -28,8 +28,10 @@ do not prove that every final block survives later terrain and feature gates.
 
 ## 3D structures
 
-- Raw templates and textures come from the user-selected 1.16.1 client JAR in
-  the browser; the JAR is neither committed nor uploaded.
+- Raw templates and rendering assets come from a path-preserving subset of the
+  exact 1.16.1 client extraction. It contains all 866 canonical client
+  templates and the blockstates, models, and textures needed to render them.
+  The complete client JAR is not committed.
 - The clean, neutral dark-grid orbit presentation follows the Ewan Howell
   viewer snapshot used as the interaction baseline; the bright green grid from
   the discarded reference is not used.

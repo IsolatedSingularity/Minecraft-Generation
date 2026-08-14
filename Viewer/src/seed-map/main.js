@@ -84,6 +84,16 @@ const structureCache = new Map()
 let biomeColors = null
 let biomeHoverTimer = null
 let biomeHoverToken = 0
+const dimensionButtons = [...document.querySelectorAll("[data-dimension]")]
+
+function dimensionLabel() {
+  return elements.dimension.options[elements.dimension.selectedIndex]?.text ?? elements.dimension.value
+}
+
+function renderDimensionButtons() {
+  for (const button of dimensionButtons)
+    button.setAttribute("aria-pressed", String(button.dataset.dimension === elements.dimension.value))
+}
 
 const projection = new Projection({
   code: "MINECRAFT:BLOCKS",
@@ -278,17 +288,17 @@ async function updateStructures() {
 
   if (!mask) {
     structureSource.clear()
-    elements.status.textContent = `Java 1.16.1 · Cubiomes WASM · seed ${seed}`
+    elements.status.textContent = `${dimensionLabel()} · Java 1.16.1 · Cubiomes WASM · seed ${seed}`
     return
   }
   if (maxX - minX > 140_000 || maxZ - minZ > 140_000) {
     structureSource.clear()
-    elements.status.textContent = "Biome map ready · zoom in to calculate structure markers"
+    elements.status.textContent = `${dimensionLabel()} biome map ready · zoom in to calculate structure markers`
     return
   }
 
   const key = [seed, elements.dimension.value, minX, minZ, maxX, maxZ, mask].join(":")
-  elements.status.textContent = "Calculating Java 1.16.1 structures…"
+  elements.status.textContent = `Calculating ${dimensionLabel()} Java 1.16.1 structures…`
   try {
     let hits = structureCache.get(key)
     if (!hits) {
@@ -315,7 +325,7 @@ async function updateStructures() {
     }))
     structureSource.clear()
     structureSource.addFeatures(features)
-    elements.status.textContent = `Ready · ${features.length} markers · seed ${seed}`
+    elements.status.textContent = `Ready · ${dimensionLabel()} · ${features.length} markers · seed ${seed}`
   } catch (error) {
     if (token !== structureRequestToken) return
     elements.status.textContent = `Structure query failed: ${error.message}`
@@ -362,10 +372,20 @@ elements["seed-form"].addEventListener("submit", event => {
 })
 
 elements.dimension.addEventListener("change", () => {
+  renderDimensionButtons()
   renderStructureControls()
   renderBiomeLegend()
   refreshWorld()
 })
+
+for (const button of dimensionButtons) {
+  button.addEventListener("click", () => {
+    const next = button.dataset.dimension
+    if (!(next in DIMENSIONS) || next === elements.dimension.value) return
+    elements.dimension.value = next
+    elements.dimension.dispatchEvent(new Event("change"))
+  })
+}
 
 for (const id of ["biomes-toggle", "terrain-toggle"]) {
   elements[id].addEventListener("change", refreshWorld)
@@ -452,11 +472,12 @@ map.on("singleclick", event => {
 })
 
 renderStructureControls()
+renderDimensionButtons()
 gridLayer.setVisible(elements["grid-toggle"].checked)
 callWorker({ type: "ready" }).then(response => {
   biomeColors = response.colors
   renderBiomeLegend()
-  elements.status.textContent = `Ready · Java 1.16.1 · seed ${seed}`
+  elements.status.textContent = `Ready · ${dimensionLabel()} · Java 1.16.1 · seed ${seed}`
   updateStructures()
 }).catch(error => {
   elements.status.textContent = `Cubiomes failed to load: ${error.message}`

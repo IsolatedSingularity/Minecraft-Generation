@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "Viewer/**"
+      - "Assets/minecraft_1_16_1/viewer/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -37,7 +38,7 @@ jobs:
 
       - name: Verify bundled structure pieces
         working-directory: Viewer
-        run: npm run test:builtins
+        run: npm run test:builtins && npm run test:client-assets
 
       - name: Build static viewers
         working-directory: Viewer

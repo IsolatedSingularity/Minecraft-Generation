@@ -393,8 +393,8 @@ terrain shading, change dimensions, and overlay major structure candidates.
 
 [![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html)
 
-Load the local 1.16.1 client JAR, search hundreds of canonical templates, and
-drag to orbit textured structures without sending game files anywhere.
+Search 925 bundled Java 1.16.1 templates and generated entries, then drag to
+orbit textured structures without uploading or selecting game files.
 
 </td>
 </tr>
@@ -408,7 +408,8 @@ From the repository root:
 
 Or open the live [Seed Atlas](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 and [3D Structure Viewer](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html).
-The 3D page asks for the local 1.16.1 client JAR so copyrighted game textures
-stay on your machine; the selected file is never uploaded.
+The 3D page includes a version-locked rendering subset generated from the local
+1.16.1 reference corpus. A client JAR can still be selected as an optional
+override, but it is not required.
 
 </details>

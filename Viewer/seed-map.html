@@ -18,14 +18,19 @@
         <input id="seed" name="seed" inputmode="numeric" spellcheck="false" value="6090144754301628691">
         <button type="submit">Apply</button>
       </form>
-      <label class="dimension-control" for="dimension">
+      <div class="dimension-control">
         <span>Dimension</span>
-        <select id="dimension">
+        <div class="dimension-buttons" role="group" aria-label="Minecraft dimension">
+          <button type="button" data-dimension="overworld" aria-pressed="true">Overworld</button>
+          <button type="button" data-dimension="nether" aria-pressed="false">Nether</button>
+          <button type="button" data-dimension="end" aria-pressed="false">End</button>
+        </div>
+        <select id="dimension" class="visually-hidden" aria-label="Minecraft dimension">
           <option value="overworld">Overworld</option>
           <option value="nether">Nether</option>
           <option value="end">End</option>
         </select>
-      </label>
+      </div>
       <nav class="viewer-links" aria-label="Viewer navigation">
         <a class="active" href="./seed-map.html">Seed map</a>
         <a href="./local-loader.html">3D structures</a>

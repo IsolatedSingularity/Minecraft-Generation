@@ -6,6 +6,7 @@ import { proxyFetch, remoteName } from "../remote.js"
 import { warmIcons } from "../icons.js"
 import { useLock } from "./useLock.js"
 import builtin1161Url from "../assets/minecraft-1.16.1-builtins.zip?url"
+import client1161Url from "../../../Assets/minecraft_1_16_1/viewer/client_structure_assets.zip?url"
 
 // index 0 = highest priority (prepareAssets first-wins order); pack bytes
 // stay outside the reactive state so large buffers aren't proxied
@@ -13,19 +14,26 @@ const bytesById = new Map()
 let baseVirtual = false
 let baseBytes = null
 let builtinBytes = null
+let clientBytes = null
 let featureBytes = null
 let nextId = 1
 
 // Only the fortress and stronghold source-piece sets are bundled. Their piece
 // names, weights, caps, and assembly rules were checked against the local
-// Minecraft Java 1.16.1 sources. The selected client JAR remains first in the
-// source stack; these generated pieces fill templates that Mojang does not ship
-// as standalone NBT resources.
+// Minecraft Java 1.16.1 sources. The embedded client subset supplies the exact
+// blockstates, models, textures, and canonical templates. An optional selected
+// client JAR remains higher priority; generated pieces fill templates that the
+// client does not ship as standalone NBT resources.
 async function loadBuiltin() {
-  if (builtinBytes) return
-  const response = await fetch(builtin1161Url)
-  if (!response.ok) throw new Error(`1.16.1 built-ins failed to load (${response.status})`)
-  builtinBytes = new Uint8Array(await response.arrayBuffer())
+  if (builtinBytes && clientBytes) return
+  const [builtinResponse, clientResponse] = await Promise.all([
+    fetch(builtin1161Url),
+    fetch(client1161Url)
+  ])
+  if (!builtinResponse.ok) throw new Error(`1.16.1 built-ins failed to load (${builtinResponse.status})`)
+  if (!clientResponse.ok) throw new Error(`1.16.1 client assets failed to load (${clientResponse.status})`)
+  builtinBytes = new Uint8Array(await builtinResponse.arrayBuffer())
+  clientBytes = new Uint8Array(await clientResponse.arrayBuffer())
 }
 
 const state = reactive({
@@ -72,7 +80,7 @@ function setChannelParam(ch) {
 // scene keeps its cached textures until the rebuild lands
 async function rebuildAssets(swap) {
   const lib = await loadLibrary()
-  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, builtinBytes).filter(Boolean)
+  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, clientBytes, builtinBytes).filter(Boolean)
   const prev = assets.value
   assets.value = sources.length ? await lib.prepareAssets(sources, { cache: true, defaults: "game" }) : null
   state.assetsVersion++
@@ -350,7 +358,7 @@ const zipOnly = list => list.filter(s => s instanceof Uint8Array)
 const zipSources = () => zipOnly(allSources())
 const featureZipSources = () => zipOnly(featureSources())
 
-const allSources = () => state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, builtinBytes, featureBytes).filter(Boolean)
+const allSources = () => state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, clientBytes, builtinBytes, featureBytes).filter(Boolean)
 
 // stable identity of the loaded source set, for keying persisted per-state
 // caches; full content hashes, memoized per byte buffer
@@ -373,6 +381,7 @@ const sourcesIdentity = () => virtualSources() ? null : [
   state.baseId || "nobase",
   ...state.packs.map(p => p.name + "~" + fnvHash(bytesById.get(p.id))),
   "b:" + fnvHash(builtinBytes),
+  "c:" + fnvHash(clientBytes),
   "f:" + fnvHash(featureBytes)
 ].join("|")
 
