@@ -22,7 +22,7 @@ const WORLD_LIMIT = 33_554_432
 // Smaller tiles preserve per-pixel density accuracy while letting the map show
 // completed center tiles progressively instead of waiting on large 256px jobs.
 const TILE_SIZE = 128
-const RESOLUTIONS = [256, 64, 16, 4, 1]
+const RESOLUTIONS = [256, 64, 16, 8, 4, 2, 1]
 const DEFAULT_TYPES = new Set()
 
 const elements = Object.fromEntries([

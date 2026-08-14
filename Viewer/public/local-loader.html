@@ -12,7 +12,8 @@
     input[type=file] { max-width: 390px; }
     input[type=text] { flex: 1; min-width: 240px; padding: 7px 9px; background: #1b1b1b; border: 1px solid #444; color: #eee; }
     button, select, .nav-link { padding: 7px 10px; background: #242424; border: 1px solid #555; border-radius: 3px; color: #eee; }
-    .nav-link { margin-left: auto; text-decoration: none; }
+    .viewer-nav { margin-left: auto; display: flex; gap: 6px; }
+    .nav-link { text-decoration: none; }
     .version { color: #9fd28a; font: 11px ui-monospace, monospace; letter-spacing: .08em; }
     .quick { display: flex; gap: 5px; flex-wrap: wrap; }
     .quick button { padding: 4px 7px; color: #bdc6bf; font-size: 11px; }
@@ -37,9 +38,12 @@
 <header>
   <div class="row">
     <strong>3D STRUCTURE VIEWER</strong>
-    <span class="version">JAVA 1.16.1 · BUNDLED LOCAL ASSETS</span>
+    <span class="version">JAVA 1.16.1 + SELECTED 1.21 · BUNDLED LOCAL ASSETS</span>
     <span class="hint">The exact 1.16.1 base loads automatically. Optional files stay in this tab.</span>
-    <a class="nav-link" href="./seed-map.html">Seed map</a>
+    <nav class="viewer-nav" aria-label="Viewer navigation">
+      <a class="nav-link" href="./seed-map.html">Seed map</a>
+      <a class="nav-link" href="https://github.com/IsolatedSingularity/Minecraft-Generation">Back to repository</a>
+    </nav>
   </div>
   <div class="row">
     <label>Optional client override <input id="base" type="file" accept=".jar,.zip" /></label>
@@ -97,7 +101,7 @@
   const showAssembly = document.querySelector('#show-assembly')
   const rerollAssembly = document.querySelector('#reroll-assembly')
 
-  const ASSEMBLIES = [
+  const assemblyCatalog = [
     ['Bastions', 'Bridge bastion', 'minecraft/bastion/bridge/starting_pieces/entrance_base'],
     ['Bastions', 'Hoglin-stable bastion', 'minecraft/bastion/hoglin_stable/air_base'],
     ['Bastions', 'Housing-units bastion', 'minecraft/bastion/units/air_base'],
@@ -115,23 +119,30 @@
     ['Large procedural', 'Ocean monument', 'minecraft/builtin/ocean_monument'],
     ['Large procedural', 'Normal mineshaft', 'minecraft/builtin/mineshaft/normal/room'],
     ['Large procedural', 'Badlands mineshaft', 'minecraft/builtin/mineshaft/mesa/room'],
-    ['Large procedural', 'Pillager outpost', 'minecraft/pillager_outpost/base_plate'],
+    ['Large procedural', 'Pillager outpost watchtower', 'minecraft/pillager_outpost/watchtower'],
     ['Complete templates', 'Desert pyramid', 'minecraft/builtin/desert_pyramid'],
     ['Complete templates', 'Jungle temple', 'minecraft/builtin/jungle_temple'],
     ['Complete templates', 'Swamp hut', 'minecraft/builtin/swamp_hut'],
     ['Complete templates', 'Igloo with basement', 'minecraft/igloo/top'],
     ['Complete templates', 'Shipwreck with mast', 'minecraft/shipwreck/with_mast'],
     ['Complete templates', 'Giant ruined portal', 'minecraft/ruined_portal/giant_portal_1'],
+    ['Complete templates', 'Small ruined portal', 'minecraft/ruined_portal/portal_1'],
+    ['Complete templates', 'Dungeon', 'minecraft/builtin/dungeon'],
     ['Complete templates', 'Large cold ocean ruin', 'minecraft/underwater_ruin/big_brick_1'],
     ['Complete templates', 'Large warm ocean ruin', 'minecraft/underwater_ruin/big_warm_4'],
-    ['Complete templates', 'Overworld fossil', 'minecraft/fossil/skull_1']
+    ['Complete templates', 'Overworld fossil', 'minecraft/fossil/skull_1'],
+    ['Later Versions (Java 1.21)', 'Ancient City', 'minecraft/ancient_city/city_center/city_center_1'],
+    ['Later Versions (Java 1.21)', 'Trial Chamber', 'minecraft/trial_chambers/corridor/end_1']
   ]
-  const COMPLETE_CODE_GENERATED = new Set([
+  const directAssemblyPaths = new Set([
     'minecraft/builtin/desert_pyramid',
     'minecraft/builtin/jungle_temple',
     'minecraft/builtin/swamp_hut',
+    'minecraft/builtin/dungeon',
     'minecraft/features/end/exit_portal/active',
-    'minecraft/features/end/exit_portal/inactive'
+    'minecraft/features/end/exit_portal/inactive',
+    'minecraft/pillager_outpost/watchtower',
+    'minecraft/ruined_portal/portal_1'
   ])
 
   let nextId = 0
@@ -191,7 +202,7 @@
   }
 
   function renderAssemblies() {
-    const available = ASSEMBLIES.filter(([, , path]) => names.includes(path))
+    const available = assemblyCatalog.filter(([, , path]) => names.includes(path))
     const groups = new Map()
     for (const [group, label, path] of available) {
       if (!groups.has(group)) groups.set(group, [])
@@ -302,7 +313,7 @@
       setStatus('ERROR: assembly seed must be 1-8 hexadecimal digits')
       return
     }
-    if (COMPLETE_CODE_GENERATED.has(path)) {
+    if (directAssemblyPaths.has(path)) {
       structures.value = path
       setTimeout(() => show.click(), 0)
       return

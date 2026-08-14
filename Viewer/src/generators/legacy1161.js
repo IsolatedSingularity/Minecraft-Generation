@@ -119,3 +119,40 @@ export async function runJungleTemple1161(_load, { seed = 0x11610001 } = {}) {
   put("minecraft:chest",9,-3,10,{facing:"north",type:"single",waterlogged:"false"},{id:"minecraft:chest",LootTable:"minecraft:chests/jungle_temple"})
   return finish([12, 14, 15], [6, 0, 7])
 }
+
+// Source-shaped MonsterRoomFeature showcase. Vanilla's surrounding-stone
+// validation is terrain-dependent, so this standalone view begins after that
+// gate and preserves the room sizes, shell, mossy-floor roll, loot, and spawner.
+export async function runDungeon1161(_load, { seed = 0x11610001 } = {}) {
+  const { put, finish } = builder()
+  const random = rnd(seed)
+  const radiusX = 2 + Math.floor(random() * 2)
+  const radiusZ = 2 + Math.floor(random() * 2)
+  const sizeX = radiusX * 2 + 3
+  const sizeZ = radiusZ * 2 + 3
+  const centerX = radiusX + 1
+  const centerZ = radiusZ + 1
+  for (let z = 0; z < sizeZ; z++) for (let x = 0; x < sizeX; x++) {
+    put(random() < 0.75 ? "minecraft:mossy_cobblestone" : "minecraft:cobblestone", x, 0, z)
+    put("minecraft:cobblestone", x, 5, z)
+  }
+  for (let y = 1; y <= 4; y++) {
+    for (let x = 0; x < sizeX; x++) {
+      if (!(y <= 2 && Math.abs(x - centerX) <= 1)) put("minecraft:cobblestone", x, y, 0)
+      put("minecraft:cobblestone", x, y, sizeZ - 1)
+    }
+    for (let z = 1; z < sizeZ - 1; z++) {
+      put("minecraft:cobblestone", 0, y, z)
+      put("minecraft:cobblestone", sizeX - 1, y, z)
+    }
+  }
+  const chestNbt = { id: "minecraft:chest", LootTable: "minecraft:chests/simple_dungeon" }
+  put("minecraft:chest", 1, 1, centerZ, { facing: "east", type: "single", waterlogged: "false" }, chestNbt)
+  put("minecraft:chest", sizeX - 2, 1, centerZ, { facing: "west", type: "single", waterlogged: "false" }, chestNbt)
+  const mobs = ["minecraft:skeleton", "minecraft:zombie", "minecraft:zombie", "minecraft:spider"]
+  put("minecraft:spawner", centerX, 1, centerZ, undefined, {
+    id: "minecraft:mob_spawner",
+    SpawnData: { entity: { id: mobs[Math.floor(random() * mobs.length)] } }
+  })
+  return finish([sizeX, 6, sizeZ], [centerX, 1, centerZ])
+}

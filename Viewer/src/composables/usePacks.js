@@ -8,6 +8,7 @@ import { useLock } from "./useLock.js"
 import builtin1161Url from "../assets/minecraft-1.16.1-builtins.zip?url"
 import client1161Url from "../../../Assets/minecraft_1_16_1/viewer/client_structure_assets.zip?url"
 import worldgen1161Url from "../../../Assets/minecraft_1_16_1/viewer/worldgen_registry.zip?url"
+import laterStructureUrl from "../../../Assets/minecraft_later_versions/viewer/structure_assets.zip?url"
 
 // index 0 = highest priority (prepareAssets first-wins order); pack bytes
 // stay outside the reactive state so large buffers aren't proxied
@@ -17,6 +18,7 @@ let baseBytes = null
 let builtinBytes = null
 let clientBytes = null
 let worldgenBytes = null
+let laterStructureBytes = null
 let featureBytes = null
 let nextId = 1
 
@@ -27,18 +29,21 @@ let nextId = 1
 // client JAR remains higher priority; generated pieces fill templates that the
 // client does not ship as standalone NBT resources.
 async function loadBuiltin() {
-  if (builtinBytes && clientBytes && worldgenBytes) return
-  const [builtinResponse, clientResponse, worldgenResponse] = await Promise.all([
+  if (builtinBytes && clientBytes && worldgenBytes && laterStructureBytes) return
+  const [builtinResponse, clientResponse, worldgenResponse, laterStructureResponse] = await Promise.all([
     fetch(builtin1161Url),
     fetch(client1161Url),
-    fetch(worldgen1161Url)
+    fetch(worldgen1161Url),
+    fetch(laterStructureUrl)
   ])
   if (!builtinResponse.ok) throw new Error(`1.16.1 built-ins failed to load (${builtinResponse.status})`)
   if (!clientResponse.ok) throw new Error(`1.16.1 client assets failed to load (${clientResponse.status})`)
   if (!worldgenResponse.ok) throw new Error(`1.16.1 worldgen registry failed to load (${worldgenResponse.status})`)
+  if (!laterStructureResponse.ok) throw new Error(`later-version structures failed to load (${laterStructureResponse.status})`)
   builtinBytes = new Uint8Array(await builtinResponse.arrayBuffer())
   clientBytes = new Uint8Array(await clientResponse.arrayBuffer())
   worldgenBytes = new Uint8Array(await worldgenResponse.arrayBuffer())
+  laterStructureBytes = new Uint8Array(await laterStructureResponse.arrayBuffer())
 }
 
 const state = reactive({
@@ -85,7 +90,9 @@ function setChannelParam(ch) {
 // scene keeps its cached textures until the rebuild lands
 async function rebuildAssets(swap) {
   const lib = await loadLibrary()
-  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, worldgenBytes, clientBytes, builtinBytes).filter(Boolean)
+  // This overlay contains only paths absent from the 1.16.1 bundle. It adds
+  // the two later-version families without replacing primary-version assets.
+  let sources = state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, laterStructureBytes, worldgenBytes, clientBytes, builtinBytes).filter(Boolean)
   const prev = assets.value
   assets.value = sources.length ? await lib.prepareAssets(sources, { cache: true, defaults: "game" }) : null
   state.assetsVersion++
@@ -363,7 +370,7 @@ const zipOnly = list => list.filter(s => s instanceof Uint8Array)
 const zipSources = () => zipOnly(allSources())
 const featureZipSources = () => zipOnly(featureSources())
 
-const allSources = () => state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, worldgenBytes, clientBytes, builtinBytes, featureBytes).filter(Boolean)
+const allSources = () => state.packs.map(p => bytesById.get(p.id)).concat(baseBytes, laterStructureBytes, worldgenBytes, clientBytes, builtinBytes, featureBytes).filter(Boolean)
 
 // stable identity of the loaded source set, for keying persisted per-state
 // caches; full content hashes, memoized per byte buffer
@@ -388,6 +395,7 @@ const sourcesIdentity = () => virtualSources() ? null : [
   "b:" + fnvHash(builtinBytes),
   "c:" + fnvHash(clientBytes),
   "w:" + fnvHash(worldgenBytes),
+  "l:" + fnvHash(laterStructureBytes),
   "f:" + fnvHash(featureBytes)
 ].join("|")
 

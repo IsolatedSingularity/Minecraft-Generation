@@ -5,7 +5,7 @@ import { runMonument } from "./monument.js"
 import { mineshaftPieceGens, runMineshaftRoom, runMineshaftRoomMesa } from "./mineshaft.js"
 import { makeEndSpikeSize, runEndSpikes, runEndSpikesActive } from "./endspikes.js"
 import { runSwampHut } from "./swamphut.js"
-import { runDesertPyramid1161, runJungleTemple1161 } from "./legacy1161.js"
+import { runDesertPyramid1161, runDungeon1161, runJungleTemple1161 } from "./legacy1161.js"
 
 // nbt-less structures: the tree entry is synthesized, loads run the generator at seed 0
 export const GENERATED = {
@@ -15,6 +15,7 @@ export const GENERATED = {
   "minecraft/builtin/swamp_hut": runSwampHut,
   "minecraft/builtin/desert_pyramid": runDesertPyramid1161,
   "minecraft/builtin/jungle_temple": runJungleTemple1161,
+  "minecraft/builtin/dungeon": runDungeon1161,
   "minecraft/features/end/exit_portal/active": runEndSpikesActive,
   "minecraft/features/end/exit_portal/inactive": runEndSpikes
 }

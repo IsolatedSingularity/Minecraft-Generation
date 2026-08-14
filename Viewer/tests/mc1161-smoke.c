@@ -147,6 +147,14 @@ int main(void)
     }
     CHECK(nether_min >= 31 && nether_max <= 122, "Nether surface below roof and above lava");
     CHECK(nether_min < nether_max, "Nether density surface has local relief");
+    float nether_overview[16];
+    CHECK(
+        mc_height_tile(nether, 16, -8, -8, 4, 4, nether_overview) == 0,
+        "generate Nether 1:16 overview relief"
+    );
+    float nether_overview_exact = -1;
+    CHECK(mc_height_tile(nether, 1, -128, -128, 1, 1, &nether_overview_exact) == 0, "generate exact Nether overview point");
+    CHECK(fabs(nether_overview[0] - nether_overview_exact) < 0.001f, "Nether 1:16 sample matches its exact block point");
 
     int nether_count = mc_structures(
         nether,
@@ -175,6 +183,14 @@ int main(void)
     CHECK(mc_height_tile(end, 1, 500, 0, 1, 1, &end_gap) == 0, "generate End gap height");
     CHECK(end_center > 0, "End central island density at origin");
     CHECK(end_gap <= 0, "End void gap before outer islands");
+    float end_overview[16];
+    CHECK(
+        mc_height_tile(end, 16, -2, -2, 4, 4, end_overview) == 0,
+        "generate End 1:16 overview surface"
+    );
+    float end_center_exact = -1;
+    CHECK(mc_height_tile(end, 1, 8, 8, 1, 1, &end_center_exact) == 0, "generate exact End overview center");
+    CHECK(fabs(end_overview[10] - end_center_exact) < 0.001f, "End 1:16 sample matches its exact block center");
     mc_destroy(end);
 
     puts("PASS: Cubiomes Java 1.16.1 viewer smoke checks");

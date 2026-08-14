@@ -140,7 +140,7 @@ EXPORTED int mc_height_tile(
     float *output)
 {
     if (!context || !output || width <= 0 || height <= 0) return 1;
-    if (scale != 1 && scale != 2 && scale != 4 && scale != 8) return 2;
+    if (scale != 1 && scale != 2 && scale != 4 && scale != 8 && scale != 16) return 2;
     if (context->dimension == DIM_END) {
         return mapEndSurfaceHeight(
             output,
@@ -158,6 +158,39 @@ EXPORTED int mc_height_tile(
     if (context->dimension == DIM_NETHER) {
         const int first_x = sample_x * scale;
         const int first_z = sample_z * scale;
+        if (scale >= 4) {
+            double column[17];
+            for (int iz = 0; iz < height; iz++) {
+                const int block_z = first_z + iz * scale;
+                const int cell_z = floor_div(block_z, 4);
+                for (int ix = 0; ix < width; ix++) {
+                    const int block_x = first_x + ix * scale;
+                    const int cell_x = floor_div(block_x, 4);
+                    for (int cy = 0; cy <= 16; cy++) {
+                        double density = sampleSurfaceNoise(&context->surface, cell_x, cy, cell_z);
+                        double top = (16.0 - cy) / 3.0;
+                        if (top < 0.0) top = 0.0;
+                        if (top > 1.0) top = 1.0;
+                        density = 120.0 + top * (density - 120.0);
+                        double bottom = (cy + 1.0) / 4.0;
+                        if (bottom < 0.0) bottom = 0.0;
+                        if (bottom > 1.0) bottom = 1.0;
+                        column[cy] = 320.0 + bottom * (density - 320.0);
+                    }
+                    int saw_air = 0;
+                    int floor_y = 31;
+                    for (int y = 122; y >= 32; y--) {
+                        const int cy = y >> 3;
+                        const double dy = (y & 7) / 8.0;
+                        const double density = column[cy] + dy * (column[cy + 1] - column[cy]);
+                        if (density <= 0.0) saw_air = 1;
+                        else if (saw_air) { floor_y = y; break; }
+                    }
+                    output[iz * width + ix] = (float)floor_y;
+                }
+            }
+            return 0;
+        }
         const int last_x = first_x + (width - 1) * scale;
         const int last_z = first_z + (height - 1) * scale;
         const int cell_x0 = floor_div(first_x, 4);

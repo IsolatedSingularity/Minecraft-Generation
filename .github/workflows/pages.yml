@@ -6,6 +6,7 @@ on:
     paths:
       - "Viewer/**"
       - "Assets/minecraft_1_16_1/viewer/**"
+      - "Assets/minecraft_later_versions/viewer/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -38,7 +39,7 @@ jobs:
 
       - name: Verify bundled structure pieces
         working-directory: Viewer
-        run: npm run test:builtins && npm run test:client-assets && npm run test:worldgen-registry && npm run test:legacy1161
+        run: npm run test:builtins && npm run test:client-assets && npm run test:worldgen-registry && npm run test:later-assets && npm run test:legacy1161
 
       - name: Build static viewers
         working-directory: Viewer

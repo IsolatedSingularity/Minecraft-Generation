@@ -4,8 +4,9 @@ This directory adds two mouse-interactive, browser-based tools to the project:
 
 - **Seed Atlas** — pan and zoom through Cubiomes biome output, optional
   terrain shading, a chunk grid, dimension switching, and structure candidate
-  overlays. Close views use the 1.16.1 End density surface and Nether
-  navigable cave-floor density rather than the former broad approximation.
+  overlays. The normal 1:16 overview and close views use the 1.16.1 End
+  density surface and Nether navigable cave-floor density rather than the
+  former broad approximation.
 - **3D Structure Viewer** — search the bundled Minecraft 1.16.1 structure
   templates, and orbit, zoom, inspect, or walk through rendered structures.
 
@@ -40,7 +41,10 @@ local Vite server. Open:
 The 3D catalog and textures load automatically. The blue **Full assemblies**
 control exposes connected villages, all four bastion types, fortresses,
 strongholds, End cities and the End arena, mansions, monuments, mineshafts,
-outposts, temples, huts, ruins, shipwrecks, portals, and fossils. The ordinary
+outposts, temples, huts, ruins, shipwrecks, portals, dungeons, and fossils. A
+separately labelled **Later Versions (Java 1.21)** group adds Ancient Cities
+and Trial Chambers from 228 canonical templates and their shipped jigsaw pools.
+The ordinary
 filter buttons expose the main families, including villages, bastions, Nether fortresses, strongholds,
 ruined portals, shipwrecks, monuments, mansions, and End cities. The embedded
 pack contains all 866 canonical 1.16.1 NBT templates; a separate 43-file
@@ -64,6 +68,7 @@ npm run dev -- --host 127.0.0.1
 - Enter any signed Java `long` seed and select **Apply**.
 - Use the explicit Overworld, Nether, and End buttons. Each button replaces the
   tile source with a fresh Cubiomes context for that dimension and seed.
+- Use **Back to repository** from either viewer to return to the GitHub project.
 - Toggle biome tiles, terrain shading, the chunk grid, viability filtering, and
   individual structure families.
 - Structure overlays start disabled so the initial map is uncluttered; use
@@ -116,6 +121,11 @@ world seed produces that exact arrangement or processor/weathering roll.
 For block-for-block proof of a generated instance, load the corresponding world
 save or structure export in the full viewer.
 
+Ancient Cities and Trial Chambers are explicit Java 1.21 exceptions. Their raw
+templates, start depths, radii, pools, and processors come from the official
+1.21 client data, but their deterministic showcase seed is likewise not a
+natural world-seed oracle and terrain adaptation is not displayed.
+
 ## Build and verify
 
 The prebuilt WebAssembly files are committed, so ordinary users do not need
@@ -126,6 +136,7 @@ cd Viewer
 npm run test:builtins
 npm run test:client-assets
 npm run test:worldgen-registry
+npm run test:later-assets
 npm run test:legacy1161
 npm run build:wasm
 npm run test:wasm

@@ -34,6 +34,7 @@
       <nav class="viewer-links" aria-label="Viewer navigation">
         <a class="active" href="./seed-map.html">Seed map</a>
         <a href="./local-loader.html">3D structures</a>
+        <a href="https://github.com/IsolatedSingularity/Minecraft-Generation">Back to repository</a>
       </nav>
     </header>
 
@@ -46,7 +47,7 @@
         <h2>Terrain</h2>
         <label class="toggle-row"><input id="biomes-toggle" type="checkbox" checked><span>Biome backdrop</span></label>
         <label class="toggle-row"><input id="terrain-toggle" type="checkbox" checked><span>Terrain shading</span></label>
-        <p class="layer-note">At close zoom, Overworld uses Cubiomes height approximation; Nether and End use version-locked density surfaces at 1:4 and 1:1.</p>
+        <p class="layer-note">Overworld uses Cubiomes height approximation; Nether and End retain version-locked density shading through the normal 1:16 overview.</p>
         <label class="toggle-row"><input id="grid-toggle" type="checkbox"><span>Chunk grid</span></label>
         <details class="biome-details">
           <summary>Biome legend</summary>
@@ -62,6 +63,7 @@
         <h2>Exactness</h2>
         <p><strong>Biome tiles</strong> and candidate coordinates come from Cubiomes pinned to <code>MC_1_16_1</code>.</p>
         <p><strong>End void/islands</strong> use Cubiomes' 1.16.1 End density field. <strong>Nether relief</strong> shows the highest navigable cave floor below the bedrock roof.</p>
+        <p><code>BUILD 2026.08.14-DENSITY16</code></p>
         <p>Markers labelled <em>viable</em> pass Cubiomes biome checks. They are not claims about every final block.</p>
       </section>
     </aside>

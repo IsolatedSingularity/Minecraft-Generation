@@ -375,33 +375,45 @@ files cannot execute WebAssembly or WebGL directly, so each preview opens the
 full GitHub Pages viewer; the same tools also run completely locally through
 [`Viewer/README.md`](Viewer/README.md).
 
-<table>
-<tr>
-<td width="50%">
-
 ### Seed Atlas
 
 [![Interactive Java 1.16.1 seed map](Viewer/previews/seed-map.png)](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 
-Pan and zoom across seed-accurate Cubiomes biome fields, including the End
-density surface and Nether cave-floor relief, then optionally overlay major
-structure candidates. Structure overlays begin switched off.
+Enter any signed Java world seed, drag to pan, and use the mouse wheel to move
+from a dimension-wide overview into block-scale terrain. The Overworld uses
+Cubiomes' version-pinned biome and height paths. The Nether maps the highest
+navigable density floor beneath its bedrock roof, while the End preserves true
+void, the central island, and seed-dependent outer islands. Those exact-density
+surfaces remain visible at the normal 1:16 overview instead of appearing only
+after a deep zoom.
 
-</td>
-<td width="50%">
+Overworld, Nether, and End are explicit dimension controls. Structure families
+can be enabled individually, biome viability can be required, and the legend,
+chunk grid, coordinates, terrain shading, and biome backdrop remain independent.
+Every structure overlay starts switched off so a new seed opens as a clean map.
+
+[Open the full Seed Atlas](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 
 ### 3D Structure Viewer
 
 [![Mouse-draggable 3D Minecraft structure](Viewer/previews/structure-viewer.png)](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html)
 
-Search 930 bundled Java 1.16.1 templates and generated entries, or use the blue
-**Full assemblies** catalog for villages, all bastions, fortresses,
-strongholds, End structures, monuments, mansions, temples, and other major
-families. Drag to orbit without uploading or selecting game files.
+Drag to orbit, scroll to zoom, and right-drag to pan around block-model renders
+made from bundled game templates, models, blockstates, and textures. The blue
+**Full assemblies** catalog builds connected villages, all four bastion types,
+fortresses, strongholds, End structures, monuments, mansions, mineshafts,
+temples, the complete pillager watchtower, ruined portals, and dungeons. A seed
+field makes each procedural showcase repeatable, while the ordinary catalog
+still exposes individual pieces for inspection.
 
-</td>
-</tr>
-</table>
+The primary catalog remains Minecraft Java 1.16.1. A separately labelled
+**Later Versions (Java 1.21)** group adds full Ancient City and Trial Chamber
+assemblies from their canonical templates and pool definitions without mixing
+those structures into the project's 1.16.1 accuracy claims. Everything needed
+for these built-in views is local to the Pages bundle; optional JAR and pack
+controls remain available for experiments.
+
+[Open the full 3D Structure Viewer](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html)
 
 From the repository root:
 
@@ -411,8 +423,9 @@ From the repository root:
 
 Or open the live [Seed Atlas](https://isolatedsingularity.github.io/Minecraft-Generation/seed-map.html)
 and [3D Structure Viewer](https://isolatedsingularity.github.io/Minecraft-Generation/local-loader.html).
-The 3D page includes a version-locked rendering subset generated from the local
-1.16.1 reference corpus. A client JAR can still be selected as an optional
-override, but it is not required.
+Both viewers include **Back to repository** navigation. The 3D page includes a
+version-locked rendering subset generated from the local 1.16.1 reference
+corpus plus the narrow, labelled Java 1.21 exception described above. A client
+JAR can still be selected as an optional override, but it is not required.
 
 </details>

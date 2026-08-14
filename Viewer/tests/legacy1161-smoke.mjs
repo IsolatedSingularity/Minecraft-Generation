@@ -1,4 +1,4 @@
-import { runDesertPyramid1161, runJungleTemple1161 } from "../src/generators/legacy1161.js"
+import { runDesertPyramid1161, runDungeon1161, runJungleTemple1161 } from "../src/generators/legacy1161.js"
 import { runSwampHut } from "../src/generators/swamphut.js"
 import { runEndSpikesActive } from "../src/generators/endspikes.js"
 
@@ -12,6 +12,10 @@ const jungle = (await runJungleTemple1161(null, { seed: 0x11610001 })).structure
 if (jungle.size[0] !== 12 || jungle.size[2] !== 15 || nameCount(jungle, "minecraft:chest") !== 2 || nameCount(jungle, "minecraft:dispenser") !== 2)
   throw new Error("Jungle temple source-port invariant failed")
 
+const dungeon = (await runDungeon1161(null, { seed: 0x11610001 })).structure
+if (![7, 9].includes(dungeon.size[0]) || ![7, 9].includes(dungeon.size[2]) || nameCount(dungeon, "minecraft:chest") !== 2 || nameCount(dungeon, "minecraft:spawner") !== 1)
+  throw new Error("Dungeon source-port invariant failed")
+
 const hut = (await runSwampHut()).structure
 if (hut.size[0] !== 7 || hut.size[2] !== 9 || hut.entities.length !== 2)
   throw new Error("Swamp hut source-port invariant failed")
@@ -20,4 +24,4 @@ const arena = (await runEndSpikesActive(null, { seed: 0x11610001 })).structure
 if (arena.entities.length !== 10 || nameCount(arena, "minecraft:end_portal") === 0)
   throw new Error("End arena source-port invariant failed")
 
-console.log(`PASS: Java 1.16.1 code structures (${desert.blocks.length}/${jungle.blocks.length}/${hut.blocks.length}/${arena.blocks.length} blocks)`)
+console.log(`PASS: Java 1.16.1 code structures (${desert.blocks.length}/${jungle.blocks.length}/${dungeon.blocks.length}/${hut.blocks.length}/${arena.blocks.length} blocks)`)

@@ -683,7 +683,7 @@ int getEndSurfaceHeight(int mc, uint64_t seed, int x, int z)
 int mapEndSurfaceHeight(float *y, const EndNoise *en, const SurfaceNoise *sn,
     int x, int z, int w, int h, int scale, int ymin)
 {
-    if (scale != 1 && scale != 2 && scale != 4 && scale != 8)
+    if (scale != 1 && scale != 2 && scale != 4 && scale != 8 && scale != 16)
         return 1;
 
     int y0 = ymin >> 2;
@@ -691,6 +691,27 @@ int mapEndSurfaceHeight(float *y, const EndNoise *en, const SurfaceNoise *sn,
     if (y0 > 17) y0 = 17;
     int y1 = 18;
     int yn = y1 - y0 + 1;
+    if (scale == 16)
+    {
+        double *column = malloc(sizeof(double) * yn);
+        if (!column) return 1;
+        for (int j = 0; j < h; j++)
+        {
+            for (int i = 0; i < w; i++)
+            {
+                // A 1:16 display pixel is centred eight blocks from its
+                // corner, exactly on the next 1:8 End density column.
+                int cx = (x + i) * 2 + 1;
+                int cz = (z + j) * 2 + 1;
+                sampleNoiseColumnEnd(column, sn, en, cx, cz, y0, y1);
+                y[j*w+i] = getSurfaceHeight(
+                    column, column, column, column, y0, y1, 4, 0, 0
+                );
+            }
+        }
+        free(column);
+        return 0;
+    }
     double cellmid = scale > 1 ? scale / 16.0 : 0;
     int cellsiz = 8 / scale;
     int cx = floordiv(x, cellsiz);

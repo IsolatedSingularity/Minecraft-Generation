@@ -86,11 +86,10 @@ async function renderTile(message) {
     let heights = null
     let heightWidth = 0
     let directStride = 1
-    if (message.terrain && message.scale <= 4) {
+    if (message.terrain && message.scale <= 16) {
       const directSurface = message.dimension !== 0
-      // Preserve one density height per displayed pixel. Two workers process
-      // independent tiles concurrently; a dimension change terminates stale
-      // work so it cannot block the newly selected dimension.
+      // Preserve one density sample per displayed pixel through the ordinary
+      // overview zoom. The bounded worker pool keeps dimension changes quick.
       directStride = 1
       const blocksWide = message.width * message.scale
       const blocksHigh = message.height * message.scale

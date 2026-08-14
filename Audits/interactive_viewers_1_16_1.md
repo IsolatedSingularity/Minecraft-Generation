@@ -15,9 +15,10 @@ not change or certify the older static structure-generation plots in `Code/`.
 - Colors now come directly from Cubiomes `initBiomeColors`; there is no separate
   hand-tuned JavaScript palette. In particular, ocean is `#000070` and deep
   ocean is `#000030`.
-- At close zoom the End calls Cubiomes `mapEndSurfaceHeight`; zero-height pixels
-  remain void. The Nether uses the exact 1.16.1 cave-generator octave stack and
-  slide parameters, then reports the highest navigable floor below Y=122.
+- Through the normal 1:16 overview and at close zoom, the End calls Cubiomes
+  `mapEndSurfaceHeight`; zero-height pixels remain void. The Nether uses the
+  exact 1.16.1 cave-generator octave stack and slide parameters, then reports
+  the highest navigable floor below Y=122.
 - The WASM smoke fixture checks independent known seed-42 biome and structure
   coordinates, repeat determinism, non-flat bounded Nether relief, central End
   land plus the void gap, all 128 strongholds, and the dark-water palette.
@@ -54,6 +55,9 @@ Candidate markers do not prove every final block survives later generation.
   direct source ports because those structures have no canonical client NBT.
   Smoke tests check dimensions and characteristic chests, TNT, dispensers,
   entities, portal blocks, and ten End crystals.
+- A separately labelled Java 1.21 overlay adds the canonical Ancient City and
+  Trial Chamber templates, pools, processors, and missing rendering assets.
+  These are explicit later-version exceptions, not 1.16.1 claims.
 
 ### Boundary
 
