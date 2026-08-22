@@ -1,0 +1,15 @@
+category,title,url,license,use
+official,Xaero's World Map - CurseForge,https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map,,"Official description, cave FAQ, world-save conversion, directories, developer Maven coordinates, current releases"
+official,Xaero Maven root,https://chocolateminecraft.com/maven/xaero/map/,,Official developer artifacts
+official-artifact,Xaero World Map common 1.21.11 / 1.44.2,https://chocolateminecraft.com/maven/xaero/map/xaeroworldmap-common-1.21.11/1.44.2/xaeroworldmap-common-1.21.11-1.44.2.jar,,Modern common implementation artifact for licensed/local inspection
+official-artifact,Xaero World Map common 1.21.11 / 1.44.2 directory,https://chocolateminecraft.com/maven/xaero/map/xaeroworldmap-common-1.21.11/1.44.2/,,Artifact plus MD5/SHA1/SHA256/SHA512 and POM
+historical,Xaero World Map 1.10.1 for Forge 1.16.1,https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3037469,,"Historical 1.16.1 release, file metadata/changelog"
+historical,Xaero World Map 1.10.0 for Forge 1.16.1,https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3030184,,Historical 1.16.1 world-identification/server feature
+historical,Xaero World Map 1.9.0 for Forge 1.16.1,https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3024239,,Historical heightmap/zoom/chunk-loading change
+public-code,XaeroPlus,https://github.com/rfresh2/XaeroPlus,MIT,Public mixin anchors expose Xaero class/method surface and rendering interactions
+public-code,XaerosMapFormat,https://github.com/DanDucky/XaerosMapFormat,GPL-3.0,"C++ parser/writer/renderer for Xaero map save formats, biome tint support"
+public-code,kotlin-xaero-mapmerger,https://github.com/talamus/kotlin-xaero-mapmerger,,Detailed modern 6.8 region.xaero format plan and palette behavior
+public-code,xaero-world-map-bridge,https://github.com/billstark001/xaero-world-map-bridge,MIT,Current Xaero compatibility verification and javap-based inspection pattern
+public-code,MapSyncer for Xaero's World Map,https://github.com/RuoChennn/MapSyncer-for-XaeroWorldmap,,Modern server/world-save conversion and client-path integration
+public-code,JMtoXaero,https://github.com/Entropy5/JMtoXaero,,Legacy Xaero region writer/converter and color/height/transparency observations
+public-spec,voxelmap-cache Xaero format notes,https://github.com/Gjum/voxelmap-cache/blob/master/xaero-format.md,,Legacy region.xaero layout and pixel bitfield documentation

@@ -1,0 +1,33 @@
+{
+  "schema": "xaero-inspired-column-pixel-v1",
+  "ColumnPixel": {
+    "x": "int",
+    "z": "int",
+    "y": "int",
+    "topHeight": "int",
+    "baseState": "namespaced block-state key|null",
+    "biome": "namespaced biome key|null",
+    "overlays": [
+      {
+        "state": "namespaced block-state key",
+        "alpha": "0..255",
+        "light": "0..15"
+      }
+    ],
+    "blockLight": "0..15",
+    "skyLight": "0..15",
+    "caveDepth": "int",
+    "flags": [
+      "UNKNOWN",
+      "CAVE",
+      "FLUID",
+      "HAS_OVERLAY",
+      "ROOF_SKIPPED"
+    ]
+  },
+  "VerticalVisibilityProfile": {
+    "x": "int",
+    "z": "int",
+    "candidates": "SurfaceCandidate[] sorted descending y"
+  }
+}

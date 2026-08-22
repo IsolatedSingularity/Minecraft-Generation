@@ -1,0 +1,89 @@
+[
+  {
+    "category": "official",
+    "title": "Xaero's World Map - CurseForge",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map",
+    "use": "Official description, cave FAQ, world-save conversion, directories, developer Maven coordinates, current releases"
+  },
+  {
+    "category": "official",
+    "title": "Xaero Maven root",
+    "url": "https://chocolateminecraft.com/maven/xaero/map/",
+    "use": "Official developer artifacts"
+  },
+  {
+    "category": "official-artifact",
+    "title": "Xaero World Map common 1.21.11 / 1.44.2",
+    "url": "https://chocolateminecraft.com/maven/xaero/map/xaeroworldmap-common-1.21.11/1.44.2/xaeroworldmap-common-1.21.11-1.44.2.jar",
+    "use": "Modern common implementation artifact for licensed/local inspection"
+  },
+  {
+    "category": "official-artifact",
+    "title": "Xaero World Map common 1.21.11 / 1.44.2 directory",
+    "url": "https://chocolateminecraft.com/maven/xaero/map/xaeroworldmap-common-1.21.11/1.44.2/",
+    "use": "Artifact plus MD5/SHA1/SHA256/SHA512 and POM"
+  },
+  {
+    "category": "historical",
+    "title": "Xaero World Map 1.10.1 for Forge 1.16.1",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3037469",
+    "use": "Historical 1.16.1 release, file metadata/changelog"
+  },
+  {
+    "category": "historical",
+    "title": "Xaero World Map 1.10.0 for Forge 1.16.1",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3030184",
+    "use": "Historical 1.16.1 world-identification/server feature"
+  },
+  {
+    "category": "historical",
+    "title": "Xaero World Map 1.9.0 for Forge 1.16.1",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3024239",
+    "use": "Historical heightmap/zoom/chunk-loading change"
+  },
+  {
+    "category": "public-code",
+    "title": "XaeroPlus",
+    "url": "https://github.com/rfresh2/XaeroPlus",
+    "license": "MIT",
+    "use": "Public mixin anchors expose Xaero class/method surface and rendering interactions"
+  },
+  {
+    "category": "public-code",
+    "title": "XaerosMapFormat",
+    "url": "https://github.com/DanDucky/XaerosMapFormat",
+    "license": "GPL-3.0",
+    "use": "C++ parser/writer/renderer for Xaero map save formats, biome tint support"
+  },
+  {
+    "category": "public-code",
+    "title": "kotlin-xaero-mapmerger",
+    "url": "https://github.com/talamus/kotlin-xaero-mapmerger",
+    "use": "Detailed modern 6.8 region.xaero format plan and palette behavior"
+  },
+  {
+    "category": "public-code",
+    "title": "xaero-world-map-bridge",
+    "url": "https://github.com/billstark001/xaero-world-map-bridge",
+    "license": "MIT",
+    "use": "Current Xaero compatibility verification and javap-based inspection pattern"
+  },
+  {
+    "category": "public-code",
+    "title": "MapSyncer for Xaero's World Map",
+    "url": "https://github.com/RuoChennn/MapSyncer-for-XaeroWorldmap",
+    "use": "Modern server/world-save conversion and client-path integration"
+  },
+  {
+    "category": "public-code",
+    "title": "JMtoXaero",
+    "url": "https://github.com/Entropy5/JMtoXaero",
+    "use": "Legacy Xaero region writer/converter and color/height/transparency observations"
+  },
+  {
+    "category": "public-spec",
+    "title": "voxelmap-cache Xaero format notes",
+    "url": "https://github.com/Gjum/voxelmap-cache/blob/master/xaero-format.md",
+    "use": "Legacy region.xaero layout and pixel bitfield documentation"
+  }
+]

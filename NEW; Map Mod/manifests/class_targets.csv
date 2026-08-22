@@ -1,0 +1,18 @@
+class,reason
+xaero.map.MapProcessor,world/dimension/multiworld orchestration; leaf-region selection
+xaero.map.MapWriter,column scan; block/fluid/overlay/cave logic
+xaero.map.region.MapPixel,final pixel color resolution
+xaero.map.region.MapRegion,512x512 semantic region
+xaero.map.region.MapTileChunk,region subcontainer / texture update
+xaero.map.region.MapTile,16x16 semantic tile
+xaero.map.region.OverlayBuilder,transparent/fluid overlay construction
+xaero.map.region.LayeredRegionManager,region levels/layers
+xaero.map.region.LeveledRegion,leveled region and cache texture saving
+xaero.map.region.texture.LeafRegionTexture,leaf render texture / height cache
+xaero.map.region.texture.RegionTexture,render texture hierarchy
+xaero.map.cache.BlockStateShortShapeCache,block state compact/shape cache
+xaero.map.file.MapSaveLoad,region ZIP serialization
+xaero.map.file.RegionDetection,world-save region discovery
+xaero.map.world.MapWorld,map-world and current dimension
+xaero.map.world.MapDimension,dimension/world-save state
+xaero.map.gui.GuiMap,"map UI, zoom, cave UI interaction"

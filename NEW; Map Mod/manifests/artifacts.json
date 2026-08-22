@@ -1,0 +1,20 @@
+[
+  {
+    "name": "modern_common",
+    "minecraft": "1.21.11",
+    "xaero": "1.44.2",
+    "loader": "common",
+    "url": "https://chocolateminecraft.com/maven/xaero/map/xaeroworldmap-common-1.21.11/1.44.2/xaeroworldmap-common-1.21.11-1.44.2.jar",
+    "status": "official Maven artifact; acquire with supplied script"
+  },
+  {
+    "name": "historical_1_16_1",
+    "minecraft": "1.16.1",
+    "xaero": "1.10.1",
+    "loader": "Forge",
+    "curseforge_file_id": 3037469,
+    "filename": "XaerosWorldMap_1.10.1_Forge_1.16.1.jar",
+    "url": "https://www.curseforge.com/minecraft/mc-mods/xaeros-world-map/files/3037469",
+    "status": "historical official release; use your local/licensed copy for inspection"
+  }
+]
