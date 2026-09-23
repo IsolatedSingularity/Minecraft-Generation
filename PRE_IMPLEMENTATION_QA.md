@@ -144,6 +144,18 @@ P0-1 therefore can coexist with green tests and apparently valid structure GIFs.
 
 **Timing:** before publishing/relying on regenerated scientific visuals.
 
+#### P1-5. Seed Atlas worker crashes can leave requests permanently pending
+
+**Status:** strong static/control-flow bug; runtime trigger still needs browser reproduction.
+
+`resetWorker()` installs `worker.onmessage` but no `worker.onerror` or `worker.onmessageerror` handler. Each `callWorker()` stores a promise in the global `pending` map and only removes it when a normal message arrives or when the user later changes seed/dimension and `resetWorker()` rejects everything.
+
+If a worker dies because of a WASM trap, allocation failure, browser worker failure, or malformed transferable/message state, its outstanding tile/biome/structure request has no completion path. The UI can therefore retain a loading tile/status indefinitely, leak the pending entry, and keep dispatching later work to a dead worker.
+
+**Smallest acceptance criterion:** deliberately terminate or throw inside one worker while tile, biome hover, and structure requests are outstanding. Every promise must reject promptly, the dead worker must be removed/replaced or the pool must fail closed, and later requests must still settle.
+
+**Timing:** fix before treating the worker pool as production-robust, especially alongside P1-1 large-view stress tests.
+
 ### P2: cleanup, ambiguity, and deferred risks
 
 #### P2-1. Multiple tracked surfaces look authoritative to an autonomous agent
@@ -191,7 +203,29 @@ Seed parsing is strict, but hash restoration uses `Number(... ) || 0` for X/Z. V
 
 Acceptance: malformed, NaN, Infinity, huge finite, and world-edge hash URLs should restore to a bounded deterministic state without exceptions.
 
-#### P2-6. Showcase randomness must remain quarantined from future parity work
+#### P2-6. Persisted occlusion-cache identity is only a 32-bit FNV fingerprint
+
+**Status:** low-probability but real cache-collision risk.
+
+`usePacks.js` describes `sourcesIdentity()` as using "full content hashes", but `fnvHash()` is a single 32-bit FNV-1a value plus byte length. That key is used by `useBuild.js` to load persisted IndexedDB occlusion data. Two same-length pack byte streams with the same 32-bit FNV value can therefore share a persisted cache key even though their model data differ.
+
+This is not a practical concern for ordinary vanilla assets, but it is an avoidable stale/wrong-cache path for arbitrary local or remote packs and contradicts the stronger provenance language in the comment.
+
+**Smallest acceptance criterion:** either use a collision-resistant content identity for persisted cache keys or store enough metadata/content verification to reject mismatched cache entries. A deliberately constructed same-length hash collision must not import the other pack's occlusion data.
+
+**Timing:** defer unless persistent custom-pack caching is important in the next phase; do not describe the current key as a full content hash.
+
+#### P2-7. Malformed NBT lengths are not defensively bounded before allocation/iteration
+
+**Status:** credible local-input robustness risk; not reproduced here.
+
+`Viewer/src/nbt.js` trusts signed list/array lengths and string lengths while advancing its cursor, allocating arrays, and iterating payloads. Truncated, negative-length, or intentionally huge NBT can therefore fall through to generic `DataView`/array errors or excessive work instead of a bounded parser rejection. The same viewer accepts local JAR/resource-pack inputs, so corrupt files are a realistic failure mode even without hostile intent.
+
+**Smallest acceptance criterion:** fuzz truncated roots, negative/huge list and array lengths, invalid tag IDs, gzip truncation, palette indexes outside range, and structures with absurd sizes. Fail quickly with a controlled parse error and no persistent state mutation.
+
+**Timing:** deferred unless the next phase expands arbitrary file import, but include in viewer hardening.
+
+#### P2-8. Showcase randomness must remain quarantined from future parity work
 
 **Status:** architectural guardrail, not a current defect by itself.
 
