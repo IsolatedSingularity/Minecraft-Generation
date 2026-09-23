@@ -225,7 +225,21 @@ This is not a practical concern for ordinary vanilla assets, but it is an avoida
 
 **Timing:** deferred unless the next phase expands arbitrary file import, but include in viewer hardening.
 
-#### P2-8. Showcase randomness must remain quarantined from future parity work
+#### P2-8. Seed Atlas map extent exceeds Java 1.16.1's maximum world-border radius
+
+**Status:** statically proven UI/accuracy-boundary mismatch.
+
+`Viewer/src/seed-map/main.js` sets `WORLD_LIMIT = 33_554_432` and uses that as the OpenLayers extent. Java 1.16.1's `WorldBorder` has a dedicated maximum-world-border-radius contract, and the vanilla maximum/default hard radius is 29,999,984 blocks. The 33,554,432 value is instead a familiar noise/precision scale in this codebase, not the vanilla playable world-border limit.
+
+This means Seed Atlas can present several million blocks of coordinates beyond the normal Java 1.16.1 world-border domain without explaining that it has switched from "world map" semantics to extrapolated generator/math semantics.
+
+Reference: Fabric Yarn 1.16.1 `WorldBorder` API and Mojang issue MC-70076.
+
+**Smallest acceptance criterion:** either clamp ordinary map navigation/querying to the Java 1.16.1 world-border radius, or explicitly expose an "extended mathematical sampling" mode that labels coordinates outside it. Boundary tests should cover exactly ±29,999,984 and the first coordinate beyond the accepted range.
+
+**Timing:** deferred UI/accuracy cleanup unless world-edge behavior is part of the next phase.
+
+#### P2-9. Showcase randomness must remain quarantined from future parity work
 
 **Status:** architectural guardrail, not a current defect by itself.
 
